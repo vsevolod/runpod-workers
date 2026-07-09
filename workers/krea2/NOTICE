@@ -1,0 +1,12 @@
+This worker vendors inference code adapted from:
+
+  krea-ai/krea-2  https://github.com/krea-ai/krea-2
+  (see LICENSE.md upstream; model weights under Krea 2 Community License)
+
+FP8 DiT weights (not included in this repository):
+
+  AlperKTS/Krea2_FP8  https://huggingface.co/AlperKTS/Krea2_FP8
+
+Handler structure inspired by:
+
+  runpod-workers/worker-sdxl  https://github.com/runpod-workers/worker-sdxl

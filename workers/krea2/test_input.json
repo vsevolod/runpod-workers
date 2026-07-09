@@ -1,0 +1,12 @@
+{
+  "input": {
+    "prompt": "a red apple on a wooden table, soft daylight",
+    "width": 1024,
+    "height": 1024,
+    "seed": 42,
+    "num_inference_steps": 8,
+    "guidance_scale": 0.0,
+    "mu": 1.15,
+    "num_images": 1
+  }
+}

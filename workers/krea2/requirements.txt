@@ -1,0 +1,15 @@
+# Runtime deps for Krea 2 Turbo FP8 RunPod worker.
+# Torch is installed separately in the Dockerfile (CUDA wheel).
+
+runpod>=1.7.9
+transformers==4.57.1
+safetensors>=0.4.0
+accelerate>=1.0.0
+pillow>=10.0.0
+einops>=0.7.0
+diffusers>=0.32.0
+huggingface-hub>=0.26.0
+hf_transfer>=0.1.0
+numpy>=1.24.0
+sentencepiece>=0.2.0
+protobuf>=4.0.0
