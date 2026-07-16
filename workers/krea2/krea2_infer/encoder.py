@@ -1,4 +1,8 @@
-"""Qwen3-VL text conditioner (from krea-ai/krea-2, extended for local cache)."""
+"""Qwen3-VL text conditioner.
+
+Adapted from krea-ai/krea-2 and modified for local cache/model loading.
+Licensed under Apache-2.0; see ../LICENSES/KREA-2-APACHE-2.0.txt.
+"""
 
 from __future__ import annotations
 

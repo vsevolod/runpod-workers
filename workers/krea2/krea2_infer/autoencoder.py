@@ -1,4 +1,8 @@
-"""Qwen-Image VAE wrapper (from krea-ai/krea-2, extended for local weights)."""
+"""Qwen-Image VAE wrapper.
+
+Adapted from krea-ai/krea-2 and modified to support local VAE weights.
+Licensed under Apache-2.0; see ../LICENSES/KREA-2-APACHE-2.0.txt.
+"""
 
 from __future__ import annotations
 

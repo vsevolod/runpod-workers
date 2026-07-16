@@ -25,13 +25,25 @@ workers/krea2/
 
 ## Network volume
 
-Mount the same datacenter volume on the endpoint. Example:
+Mount the same datacenter volume on the endpoint.
+
+### Disk budget (this worker, not Comfy)
+
+| Component | Source | ~size |
+|-----------|--------|------:|
+| DiT Turbo FP8 | `krea2_turbo_fp8.safetensors` (AlperKTS) | ~12 GB |
+| Text encoder | HF `Qwen/Qwen3-VL-4B-Instruct` (bf16 snapshot) | ~8–10 GB |
+| VAE | `qwen_image_vae.safetensors` and/or HF `Qwen/Qwen-Image` | ~0.3 GB |
+| **Total** | | **~20–23 GB** |
+| Recommended volume | models + HF cache slack (+ future LoRA) | **≥25–30 GB** |
+
+`≥40 GB` is only “plenty of headroom”, not a hard requirement.
 
 ```text
 /runpod-volume/krea2/
   krea2_turbo_fp8.safetensors     # required (~12 GB)
   qwen_image_vae.safetensors      # optional if HF VAE cache is warm
-/runpod-volume/hf/                # optional HF_HOME for offline TE/VAE
+/runpod-volume/hf/                # HF_HOME: TE (+ VAE) cache, required for offline/fast start
 ```
 
 Bootstrap on a Pod with the volume attached:
@@ -43,7 +55,17 @@ export HF_HOME=/runpod-volume/hf
 python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volume/hf
 ```
 
-> **Note:** Comfy-oriented `qwen3vl_4b_fp8_scaled.safetensors` is **not** used by this worker. Text encoding goes through Hugging Face `Qwen3VLForConditionalGeneration` (official krea-2 path). Cache that model on the volume via `download_weights.py` so cold starts do not re-download ~8 GB.
+### Comfy FP8 TE is not used
+
+| File | Used here? |
+|------|------------|
+| `krea2_turbo_fp8.safetensors` | **Yes** (DiT) |
+| `qwen_image_vae.safetensors` | Optional (else HF VAE) |
+| `qwen3vl_4b_fp8_scaled.safetensors` (~5.2 GB) | **No** — ComfyUI `text_encoders/` format |
+
+Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. Cache the HF model on the volume so cold starts do not re-download it.
+
+Comfy packing is better for minimum VRAM/disk; this worker optimizes for a thin API (`prompt` JSON) and the official sampler path. A future improvement is loading the 5.2 GB FP8 TE inside this thin worker without bringing in full ComfyUI.
 
 ## Endpoint env
 
@@ -59,12 +81,14 @@ python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volum
 
 ## Deploy (RunPod)
 
-1. Create Network Volume (≥40 GB free: FP8 DiT + TE + VAE + slack).
-2. Run `download_weights.py` on a Pod with that volume.
-3. **Serverless → New Endpoint → GitHub**
-   - Dockerfile: `workers/krea2/Dockerfile`
+Repo may be **public or private** (connect GitHub in RunPod for private). Do not commit tokens or weights.
+
+1. Create Network Volume (**≥25–30 GB** free: FP8 DiT + HF TE + VAE; more if LoRAs).
+2. Run `download_weights.py` on a **Pod** (not serverless) with that volume attached.
+3. **Serverless → New Endpoint → GitHub** (not an always-on Pod for serving)
+   - Dockerfile: `workers/krea2/Dockerfile` (build context = monorepo root)
    - GPU: **24 GB** class
-   - Attach the volume
+   - Attach the volume (same DC)
    - Container disk: 20+ GB
    - FlashBoot: on
    - Active workers: `0` (or `1` for warm)
@@ -89,6 +113,8 @@ Request:
 ```
 
 Turbo defaults: **8 steps**, **CFG 0**, **mu 1.15**. Width/height multiples of **16** (1024–2048).
+
+These map to Comfy “node knobs” (sampler steps/cfg, latent size, seed). What is **not** per-request today: which DiT/TE/VAE files (fixed by volume/env), sampler algorithm (official krea-2 Euler flow-matching), LoRA.
 
 Response:
 
@@ -133,6 +159,12 @@ You still need GPU + `MODEL_DIR` mount to actually generate.
 
 ## License
 
-- Worker scaffolding: use under the same terms as your deployment; SDXL worker inspiration is MIT upstream.
-- Krea 2 weights / community license: https://www.krea.ai/krea-2-licensing  
-  Commercial use may require contacting opensource@krea.ai.
+- Third-party licenses and attribution are documented in [`NOTICE`](NOTICE).
+- Vendored Krea 2 inference code is licensed under
+  [Apache-2.0](LICENSES/KREA-2-APACHE-2.0.txt).
+- Portions adapted from RunPod `worker-sdxl` are licensed under
+  [MIT](LICENSES/RUNPOD-WORKER-SDXL-MIT.txt).
+- These third-party license files do not grant a license to the original code
+  in this repository.
+- Model weights are not included. Krea 2 weights and derivatives are governed
+  by the [Krea 2 Community License](https://www.krea.ai/krea-2-licensing).

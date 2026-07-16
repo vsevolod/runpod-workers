@@ -1,12 +1,47 @@
-This worker vendors inference code adapted from:
+Third-party software notices for workers/krea2
 
-  krea-ai/krea-2  https://github.com/krea-ai/krea-2
-  (see LICENSE.md upstream; model weights under Krea 2 Community License)
+Krea 2 inference code
+---------------------
 
-FP8 DiT weights (not included in this repository):
+Portions of workers/krea2/krea2_infer are copied or adapted from:
 
-  AlperKTS/Krea2_FP8  https://huggingface.co/AlperKTS/Krea2_FP8
+  krea-ai/krea-2
+  https://github.com/krea-ai/krea-2
+  upstream revision cf3c9102c924168699b90d97a2cb15059d761488
 
-Handler structure inspired by:
+The upstream inference code is licensed under the Apache License 2.0. A copy
+of that license is provided in LICENSES/KREA-2-APACHE-2.0.txt.
 
-  runpod-workers/worker-sdxl  https://github.com/runpod-workers/worker-sdxl
+The following files are copied without functional modifications:
+
+  krea2_infer/mmdit.py
+  krea2_infer/sampling.py
+
+The following files contain modifications or adaptations:
+
+  krea2_infer/autoencoder.py -- local VAE weight loading
+  krea2_infer/encoder.py     -- local cache and text-encoder loading
+  krea2_infer/pipeline.py    -- FP8 loading and RunPod-oriented pipeline
+
+RunPod worker-sdxl
+------------------
+
+Portions of handler.py are adapted from:
+
+  runpod-workers/worker-sdxl
+  https://github.com/runpod-workers/worker-sdxl
+
+Copyright (c) 2025 RunPod
+
+The adapted portions are licensed under the MIT License. A copy of that
+license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
+
+Model weights
+-------------
+
+Model weights are not included in this repository. Krea 2 weights and the
+FP8 derivative distributed by AlperKTS are subject to the Krea 2 Community
+License:
+
+  https://www.krea.ai/krea-2-licensing
+  https://huggingface.co/AlperKTS/Krea2_FP8

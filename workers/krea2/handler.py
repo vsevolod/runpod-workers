@@ -1,4 +1,8 @@
-"""RunPod serverless handler — Krea 2 Turbo FP8 (thin worker, no ComfyUI)."""
+"""RunPod serverless handler — Krea 2 Turbo FP8 (thin worker, no ComfyUI).
+
+Portions are adapted from runpod-workers/worker-sdxl under the MIT License;
+see LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
+"""
 
 from __future__ import annotations
 

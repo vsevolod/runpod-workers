@@ -3,8 +3,20 @@
 План создания **своего** RunPod Serverless worker для генерации изображений Krea 2 (Turbo, FP8), на каркасе официального [runpod-workers/worker-sdxl](https://github.com/runpod-workers/worker-sdxl).
 
 **Дата:** 2026-07-09  
-**Статус:** план (не реализован)  
+**Статус:** MVP worker реализован в `workers/krea2/` (деплой/volume — руками)  
 **Связано:** [2026-07-08-runpod-flux-schnell.md](./2026-07-08-runpod-flux-schnell.md) (фаза 1 ComfyUI / Schnell — отдельный MVP)
+
+> **As implemented (важно):** thin worker идёт по **официальному krea-2**, не по Comfy pack.
+>
+> | | Comfy / AlperKTS README | Этот worker (`workers/krea2`) |
+> |--|-------------------------|------------------------------|
+> | DiT | `krea2_turbo_fp8.safetensors` ~12 GB | то же |
+> | Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` ~5.2 GB | **HF** `Qwen/Qwen3-VL-4B-Instruct` ~8–10 GB |
+> | VAE | `qwen_image_vae.safetensors` | local и/или HF |
+> | Диск | ~18–19 GB | **~20–23 GB** (+ slack → volume ≥25–30 GB) |
+> | GPU MVP | 16 GB с unload | **24 GB** all-resident |
+>
+> Comfy-TE **не** класть на volume «для этого worker’а» — он его не читает. Подробнее: [`workers/krea2/README.md`](../workers/krea2/README.md).
 
 ---
 
@@ -41,12 +53,16 @@
 
 Источник: https://huggingface.co/AlperKTS/Krea2_FP8/tree/main
 
+**Comfy-oriented pack** (как в README AlperKTS / native ComfyUI):
+
 | Файл | ~размер | Назначение |
 |------|---------|------------|
 | `krea2_turbo_fp8.safetensors` | ~12–13 GB | DiT / diffusion (Turbo, FP8) |
-| `qwen3vl_4b_fp8_scaled.safetensors` | ~5.3 GB | Text encoder (Qwen3-VL 4B, FP8) |
+| `qwen3vl_4b_fp8_scaled.safetensors` | ~5.3 GB | Text encoder **для Comfy** (не thin krea-2 path) |
 | `qwen_image_vae.safetensors` | ~0.3 GB | VAE |
-| **Итого на диске** | **~18–19 GB** | vs ~35 GB full bf16 tree |
+| **Итого (Comfy)** | **~18–19 GB** | vs ~35 GB full bf16 tree |
+
+**Фактический thin worker** дополнительно (вместо Comfy TE) тянет HF TE — см. блок *As implemented* выше.
 
 Официальный full-precision Turbo: [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) — **не** класть в production-образ; только fallback / сравнение качества.
 
@@ -206,12 +222,12 @@ Response (как у SDXL worker):
 
 ### Шаг 0 — Подготовка RunPod
 
-- [ ] Network Volume в выбранном DC (место под ≥25 GB: модели + запас LoRA)
-- [ ] Скачать на volume 3 файла из [AlperKTS/Krea2_FP8](https://huggingface.co/AlperKTS/Krea2_FP8/tree/main)
+- [ ] Network Volume в выбранном DC (**≥25–30 GB**: DiT FP8 + HF TE + VAE; 40 GB — только запас)
+- [ ] Bootstrap: `workers/krea2/download_weights.py` → DiT (+ optional VAE file) + HF snapshot TE
 - [ ] Зафиксировать пути, например:
-  - `/runpod-volume/krea2/krea2_turbo_fp8.safetensors`
-  - `/runpod-volume/krea2/qwen3vl_4b_fp8_scaled.safetensors`
-  - `/runpod-volume/krea2/qwen_image_vae.safetensors`
+  - `/runpod-volume/krea2/krea2_turbo_fp8.safetensors` (**нужен**)
+  - `/runpod-volume/krea2/qwen_image_vae.safetensors` (опционально)
+  - `HF_HOME=/runpod-volume/hf` → `Qwen/Qwen3-VL-4B-Instruct` (**нужен**, не Comfy TE 5.2 GB)
 - [ ] API key уже есть (фаза Schnell)
 
 ### Шаг 1 — Репозиторий worker’а
