@@ -29,7 +29,6 @@ class QwenAutoencoder(nn.Module):
     ):
         super().__init__()
         from diffusers import AutoencoderKLQwenImage
-        from safetensors.torch import load_file
 
         path = Path(vae_path) if vae_path else None
         if path is not None and path.is_file():
@@ -37,21 +36,22 @@ class QwenAutoencoder(nn.Module):
             try:
                 self.ae = AutoencoderKLQwenImage.from_single_file(str(path))
             except Exception as err:
+                # Local Comfy/community packs often use non-Diffusers key names
+                # (e.g. encoder.downsamples.*). Do not overlay them onto a HF
+                # config with strict=False — that silently corrupts the VAE.
                 logger.warning(
-                    "from_single_file failed (%s); falling back to repo config + state_dict",
+                    "from_single_file failed for %s (%s); ignoring local file "
+                    "and loading clean VAE from %s/%s",
+                    path,
                     err,
+                    repo_id,
+                    subfolder,
                 )
                 self.ae = AutoencoderKLQwenImage.from_pretrained(
                     repo_id,
                     subfolder=subfolder,
                     local_files_only=local_files_only,
                 )
-                state = load_file(str(path))
-                missing, unexpected = self.ae.load_state_dict(state, strict=False)
-                if missing:
-                    logger.warning("VAE missing keys (first 10): %s", missing[:10])
-                if unexpected:
-                    logger.warning("VAE unexpected keys (first 10): %s", unexpected[:10])
         else:
             logger.info(
                 "Loading VAE from Hugging Face %s/%s (local_files_only=%s)",

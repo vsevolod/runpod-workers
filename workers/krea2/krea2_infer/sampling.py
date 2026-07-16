@@ -1,10 +1,40 @@
-"""Functional flow-matching sampler for the K2 MMDiT (no Scheduler class)."""
+"""Functional flow-matching sampler for the K2 MMDiT (no Scheduler class).
 
+Adapted from krea-ai/krea-2 and modified to offload the text encoder to CPU
+after prompt encoding so DiT sampling and VAE decode fit on 24 GB GPUs.
+Licensed under Apache-2.0; see ../LICENSES/KREA-2-APACHE-2.0.txt.
+"""
+
+from __future__ import annotations
+
+import logging
 import math
 
 import torch
 from einops import rearrange, repeat
 from PIL import Image
+
+logger = logging.getLogger(__name__)
+
+
+def _module_device(module: torch.nn.Module) -> torch.device:
+    try:
+        return next(module.parameters()).device
+    except StopIteration:
+        return torch.device("cpu")
+
+
+def _offload_encoder_to_cpu(encoder: torch.nn.Module) -> None:
+    """Move text encoder off GPU after conditioning; free VRAM for DiT + VAE.
+
+    TE stays on CPU until the next request moves it back for encode.
+    """
+    device = _module_device(encoder)
+    if device.type != "cuda":
+        return
+    logger.info("Offloading text encoder to CPU (free VRAM for DiT/VAE)")
+    encoder.to("cpu")
+    torch.cuda.empty_cache()
 
 
 def roundup(value, multiple, name):
@@ -104,6 +134,13 @@ def sample(
         dim=0,
     )
 
+    # TE is left on CPU after the previous job; move on only for encode.
+    # Conditioning tensors stay on GPU after offload.
+    target = torch.device(device)
+    if target.type == "cuda" and _module_device(encoder).type != "cuda":
+        logger.info("Moving text encoder to %s for encode", target)
+        encoder.to(target)
+
     # Positive (conditional) text conditioning.
     txt, txtmask = encoder(prompts)
     x, pos, mask = prepare(noise, txt.shape[1], patch, txtmask)
@@ -113,6 +150,12 @@ def sample(
     if cfg:
         untxt, untxtmask = encoder(negative_prompts)
         _, unpos, unmask = prepare(noise, untxt.shape[1], patch, untxtmask)
+
+    # TE (~8 GB bf16) is not needed after conditioning tensors are built.
+    # Offload so DiT sample + VAE decode fit on 24 GB cards (all-resident OOMs).
+    # Stay on CPU until the next request (do not reload here — wastes VRAM/time,
+    # especially after OOM).
+    _offload_encoder_to_cpu(encoder)
 
     # min_res/max_res define the (x1,y1)-(x2,y2) interpolation endpoints for `mu`.
     x1 = (minres // (ae.compression * patch)) ** 2

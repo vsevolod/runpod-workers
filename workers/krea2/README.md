@@ -78,6 +78,8 @@ Comfy packing is better for minimum VRAM/disk; this worker optimizes for a thin 
 | `HF_HOME` | (hf default) | Put on volume for faster/offline loads |
 | `LOCAL_FILES_ONLY` | unset | `1` after cache is warm |
 | `BUCKET_ENDPOINT_URL` | unset | If set, upload via RunPod S3 helpers instead of base64 |
+| `TORCH_COMPILE_DISABLE` | `1` (Dockerfile) | Skip torch.compile / Inductor (no gcc in image) |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (Dockerfile) | Reduce CUDA allocator fragmentation |
 
 ## Deploy (RunPod)
 
@@ -153,7 +155,7 @@ You still need GPU + `MODEL_DIR` mount to actually generate.
 
 ## Design notes
 
-- **All resident (24 GB):** TE + DiT + VAE stay on GPU. No TE unload in this MVP.
+- **VRAM (24 GB):** TE + DiT + VAE load on GPU; after prompt encode the text encoder is offloaded to CPU and stays there until the next encode so DiT sampling and VAE decode fit (all-resident OOMs at decode).
 - **FP8 DiT:** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
 - **Not in MVP:** LoRA, Comfy workflows, baking 18 GB into the image layer.
 

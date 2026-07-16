@@ -15,13 +15,14 @@ of that license is provided in LICENSES/KREA-2-APACHE-2.0.txt.
 The following files are copied without functional modifications:
 
   krea2_infer/mmdit.py
-  krea2_infer/sampling.py
 
 The following files contain modifications or adaptations:
 
-  krea2_infer/autoencoder.py -- local VAE weight loading
+  krea2_infer/autoencoder.py -- local VAE weight loading; ignore incompatible
+                               single-file packs and use clean HF VAE
   krea2_infer/encoder.py     -- local cache and text-encoder loading
   krea2_infer/pipeline.py    -- FP8 loading and RunPod-oriented pipeline
+  krea2_infer/sampling.py    -- offload text encoder to CPU after encode
 
 RunPod worker-sdxl
 ------------------

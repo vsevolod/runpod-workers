@@ -124,7 +124,10 @@ def generate_image(job: dict):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         return {
-            "error": "CUDA out of memory. Use a 24 GB+ GPU or lower resolution.",
+            "error": (
+                "CUDA out of memory. Need ~24 GB with TE offload after encode, "
+                "or a larger GPU / lower resolution."
+            ),
             "refresh_worker": True,
         }
     except FileNotFoundError as err:

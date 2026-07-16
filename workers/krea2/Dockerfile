@@ -55,7 +55,8 @@ COPY workers/krea2/krea2_infer /app/krea2_infer
 
 ENV MODEL_DIR=/runpod-volume/krea2 \
     PYTHONPATH=/app \
-    TORCH_COMPILE_DISABLE=1
+    TORCH_COMPILE_DISABLE=1 \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # No weight download at build time — mount Network Volume at runtime.
 CMD ["python", "-u", "/app/handler.py"]

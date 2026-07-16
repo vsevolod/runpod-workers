@@ -242,7 +242,7 @@ def load_pipeline(
     dtype: torch.dtype = torch.bfloat16,
     local_files_only: bool | None = None,
 ) -> Krea2Pipeline:
-    """Load TE + DiT + VAE once (all resident — target ~24 GB GPU)."""
+    """Load TE + DiT + VAE once (TE is offloaded to CPU after each encode)."""
     model_dir = Path(model_dir or os.environ.get("MODEL_DIR", "/runpod-volume/krea2"))
     text_encoder_id = text_encoder_id or os.environ.get(
         "TEXT_ENCODER_ID", DEFAULT_TEXT_ENCODER_ID
