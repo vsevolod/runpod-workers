@@ -1,4 +1,9 @@
-"""Load Krea 2 Turbo (FP8 DiT + Qwen TE + VAE) for resident 24 GB inference."""
+"""Load Krea 2 Turbo (FP8 DiT + Qwen TE + VAE) for resident inference.
+
+Adapted from krea-ai/krea-2 inference.py and modified for FP8 loading and the
+RunPod worker pipeline. Licensed under Apache-2.0; see
+../LICENSES/KREA-2-APACHE-2.0.txt.
+"""
 
 from __future__ import annotations
 
@@ -111,14 +116,24 @@ def load_dit(
     has_fp8 = any(_is_fp8_tensor(v) for v in state.values() if isinstance(v, torch.Tensor))
     logger.info("DiT state dict tensors: %d (fp8_present=%s)", len(state), has_fp8)
 
-    try:
-        mmdit.load_state_dict(state, strict=True, assign=True)
-    except RuntimeError as err:
+    # AlperKTS / Comfy FP8 exports may include surplus LastLayer tensors
+    # (e.g. last.down.weight, last.up.weight) that official SingleStreamDiT
+    # does not use. Load non-strict, but fail hard on missing required keys.
+    incompatible = mmdit.load_state_dict(state, strict=False, assign=True)
+    if incompatible.missing_keys:
+        preview = ", ".join(incompatible.missing_keys[:20])
+        more = len(incompatible.missing_keys) - 20
+        suffix = f" (+{more} more)" if more > 0 else ""
         raise RuntimeError(
-            f"Failed to load DiT weights from {dit_path}. "
-            "Keys may not match official krea-2 SingleStreamDiT. "
-            f"Original error: {err}"
-        ) from err
+            f"Failed to load DiT weights from {dit_path}: "
+            f"missing {len(incompatible.missing_keys)} key(s): {preview}{suffix}"
+        )
+    if incompatible.unexpected_keys:
+        logger.warning(
+            "Ignoring %d unexpected DiT key(s) (common on community FP8 packs): %s",
+            len(incompatible.unexpected_keys),
+            incompatible.unexpected_keys,
+        )
 
     if has_fp8:
         # Preserve per-tensor dtypes (FP8 + high-precision norms/biases).
