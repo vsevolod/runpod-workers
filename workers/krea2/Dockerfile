@@ -54,7 +54,8 @@ COPY workers/krea2/schemas.py \
 COPY workers/krea2/krea2_infer /app/krea2_infer
 
 ENV MODEL_DIR=/runpod-volume/krea2 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    TORCH_COMPILE_DISABLE=1
 
 # No weight download at build time — mount Network Volume at runtime.
 CMD ["python", "-u", "/app/handler.py"]
