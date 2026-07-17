@@ -5,6 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import torch
+import torch.nn as nn
+from safetensors.torch import save_file
+
 _MISSING_MODULE = object()
 _CANONICAL_PACKAGE_BEFORE = sys.modules.get("krea2_infer", _MISSING_MODULE)
 _CANONICAL_LORA_BEFORE = sys.modules.get("krea2_infer.lora", _MISSING_MODULE)
@@ -37,7 +41,76 @@ def _load_lora_module():
 _lora = _load_lora_module()
 LoRACatalog = _lora.LoRACatalog
 LoRAError = _lora.LoRAError
+LoRALoader = _lora.LoRALoader
+LoRASelection = _lora.LoRASelection
 normalize_lora_requests = _lora.normalize_lora_requests
+
+
+class _Node(nn.Module):
+    pass
+
+
+def _linear(in_features=3, out_features=2):
+    return nn.Linear(in_features, out_features, bias=False)
+
+
+class _TinyKreaModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        block = _Node()
+        block.attn = _Node()
+        block.attn.wq = _linear()
+        block.attn.wk = _linear()
+        block.attn.wv = _linear()
+        block.attn.gate = _linear()
+        block.attn.wo = _linear()
+        block.mlp = _Node()
+        block.mlp.gate = _linear()
+        block.mlp.up = _linear()
+        block.mlp.down = _linear()
+        self.blocks = nn.ModuleList([block])
+
+        self.txtfusion = _Node()
+        self.txtfusion.layerwise_blocks = nn.ModuleList([self._fusion_block()])
+        self.txtfusion.refiner_blocks = nn.ModuleList([self._fusion_block()])
+        self.txtfusion.projector = _linear()
+        self.first = _linear()
+        self.tmlp = nn.Sequential(_linear(), nn.Identity(), _linear())
+        self.tproj = nn.Sequential(nn.Identity(), _linear())
+        self.txtmlp = nn.Sequential(nn.Identity(), _linear(), nn.Identity(), _linear())
+        self.last = _Node()
+        self.last.linear = _linear()
+
+    @staticmethod
+    def _fusion_block():
+        block = _Node()
+        block.attn = _Node()
+        block.attn.wq = _linear()
+        block.attn.wk = _linear()
+        block.attn.wv = _linear()
+        block.attn.gate = _linear()
+        block.attn.wo = _linear()
+        block.mlp = _Node()
+        block.mlp.gate = _linear()
+        block.mlp.up = _linear()
+        block.mlp.down = _linear()
+        return block
+
+
+def _selection(path, name="public-adapter", strength=0.75):
+    return LoRASelection(name=name, strength=strength, path=path)
+
+
+def _pair(base, *, rank=1, in_features=3, out_features=2, native=False):
+    if native:
+        return {
+            f"{base}.lora_down.weight": torch.ones(rank, in_features),
+            f"{base}.lora_up.weight": torch.ones(out_features, rank),
+        }
+    return {
+        f"{base}.lora_A.weight": torch.ones(rank, in_features),
+        f"{base}.lora_B.weight": torch.ones(out_features, rank),
+    }
 
 
 class TestModuleIsolationTest(unittest.TestCase):
@@ -261,6 +334,298 @@ class NormalizeLoRARequestsTest(unittest.TestCase):
         for item in ({}, {"strength": 1.0}, {"name": ""}, {"name": 1}):
             with self.subTest(item=item), self.assertRaises(LoRAError):
                 normalize_lora_requests([item], self.catalog)
+
+
+class LoRALoaderTest(unittest.TestCase):
+    def setUp(self):
+        self.temp_directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_directory.name)
+        self.model = _TinyKreaModel()
+        self.loader = LoRALoader(self.model)
+
+    def tearDown(self):
+        self.temp_directory.cleanup()
+
+    def _save(self, tensors, filename="private-file-name.safetensors"):
+        path = self.root / filename
+        save_file(tensors, path)
+        return path
+
+    def _assert_rejected(self, tensors, *, name="public-adapter"):
+        path = self._save(tensors)
+        with self.assertRaises(LoRAError) as raised:
+            self.loader.load((_selection(path, name=name),))
+        message = str(raised.exception)
+        self.assertIn(name, message)
+        self.assertNotIn(str(path), message)
+        self.assertNotIn(str(self.root), message)
+        return message
+
+    def test_loads_diffusers_pair_with_alpha_and_preserves_request_fields(self):
+        base = "transformer.transformer_blocks.0.attn.to_q"
+        tensors = _pair(base, rank=2)
+        tensors[f"{base}.alpha"] = torch.tensor(6.0)
+        path = self._save(tensors)
+
+        prepared = self.loader.load((_selection(path, name="cinematic", strength=1.25),))
+
+        self.assertIsInstance(prepared, tuple)
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual(prepared[0].name, "cinematic")
+        self.assertEqual(prepared[0].strength, 1.25)
+        self.assertEqual(len(prepared[0].layers), 1)
+        layer = prepared[0].layers[0]
+        self.assertEqual(layer.target, "blocks.0.attn.wq")
+        self.assertEqual(layer.scale, 3.0)
+        torch.testing.assert_close(layer.down, tensors[f"{base}.lora_A.weight"])
+        torch.testing.assert_close(layer.up, tensors[f"{base}.lora_B.weight"])
+
+    def test_loads_native_pair_with_default_scale(self):
+        base = "blocks.0.attn.wq"
+        tensors = _pair(base, rank=2, native=True)
+        path = self._save(tensors)
+
+        prepared = self.loader.load((_selection(path),))
+
+        self.assertEqual(prepared[0].layers[0].target, base)
+        self.assertEqual(prepared[0].layers[0].scale, 1.0)
+
+    def test_resolves_all_supported_diffusers_target_families_and_prefixes(self):
+        mappings = (
+            ("transformer_blocks.0.attn.to_q", "blocks.0.attn.wq"),
+            ("transformer_blocks.0.attn.to_k", "blocks.0.attn.wk"),
+            ("transformer_blocks.0.attn.to_v", "blocks.0.attn.wv"),
+            ("transformer_blocks.0.attn.to_gate", "blocks.0.attn.gate"),
+            ("transformer_blocks.0.attn.to_out.0", "blocks.0.attn.wo"),
+            ("transformer_blocks.0.attn.to_out", "blocks.0.attn.wo"),
+            ("transformer_blocks.0.ff.gate", "blocks.0.mlp.gate"),
+            ("transformer_blocks.0.ff.up", "blocks.0.mlp.up"),
+            ("transformer_blocks.0.ff.down", "blocks.0.mlp.down"),
+            (
+                "text_fusion.layerwise_blocks.0.attn.to_q",
+                "txtfusion.layerwise_blocks.0.attn.wq",
+            ),
+            (
+                "text_fusion.refiner_blocks.0.ff.down",
+                "txtfusion.refiner_blocks.0.mlp.down",
+            ),
+            ("img_in", "first"),
+            ("time_embed.linear_1", "tmlp.0"),
+            ("time_embed.linear_2", "tmlp.2"),
+            ("time_mod_proj", "tproj.1"),
+            ("txt_in.linear_1", "txtmlp.1"),
+            ("txt_in.linear_2", "txtmlp.3"),
+            ("text_fusion.projector", "txtfusion.projector"),
+            ("final_layer.linear", "last.linear"),
+        )
+        prefixes = ("", "transformer.", "diffusion_model.")
+
+        for source, expected in mappings:
+            for prefix in prefixes:
+                with self.subTest(source=source, prefix=prefix):
+                    base = f"{prefix}{source}"
+                    path = self._save(_pair(base), filename="mapping.safetensors")
+
+                    prepared = self.loader.load((_selection(path),))
+
+                    self.assertEqual(prepared[0].layers[0].target, expected)
+
+    def test_returns_multiple_prepared_adapters_in_request_order(self):
+        first_path = self._save(
+            _pair("blocks.0.attn.wq", native=True),
+            filename="first.safetensors",
+        )
+        second_path = self._save(
+            _pair("blocks.0.attn.wk", native=True),
+            filename="second.safetensors",
+        )
+
+        prepared = self.loader.load(
+            (
+                _selection(first_path, name="first", strength=0.5),
+                _selection(second_path, name="second", strength=1.5),
+            )
+        )
+
+        self.assertEqual(tuple(item.name for item in prepared), ("first", "second"))
+        self.assertEqual(tuple(item.strength for item in prepared), (0.5, 1.5))
+
+    def test_layers_are_sorted_by_resolved_target(self):
+        tensors = {}
+        tensors.update(_pair("blocks.0.attn.wv", native=True))
+        tensors.update(_pair("blocks.0.attn.wq", native=True))
+        path = self._save(tensors)
+
+        prepared = self.loader.load((_selection(path),))
+
+        self.assertEqual(
+            tuple(layer.target for layer in prepared[0].layers),
+            ("blocks.0.attn.wq", "blocks.0.attn.wv"),
+        )
+
+    def test_rejects_unknown_target(self):
+        self._assert_rejected(_pair("transformer.unknown_target"))
+
+    def test_rejects_incomplete_pair(self):
+        self._assert_rejected(
+            {"blocks.0.attn.wq.lora_down.weight": torch.ones(1, 3)}
+        )
+
+    def test_rejects_duplicate_half_across_suffix_conventions(self):
+        tensors = _pair("blocks.0.attn.wq", native=True)
+        tensors["blocks.0.attn.wq.lora_A.weight"] = torch.ones(1, 3)
+        self._assert_rejected(tensors)
+
+    def test_rejects_pairs_mixed_across_suffix_conventions(self):
+        mixed_pairs = (
+            {
+                "blocks.0.attn.wq.lora_A.weight": torch.ones(1, 3),
+                "blocks.0.attn.wq.lora_up.weight": torch.ones(2, 1),
+            },
+            {
+                "blocks.0.attn.wq.lora_down.weight": torch.ones(1, 3),
+                "blocks.0.attn.wq.lora_B.weight": torch.ones(2, 1),
+            },
+        )
+        for tensors in mixed_pairs:
+            with self.subTest(keys=tuple(tensors)):
+                self._assert_rejected(tensors)
+
+    def test_rejects_non_2d_weights(self):
+        for key, value in (
+            ("blocks.0.attn.wq.lora_down.weight", torch.ones(3)),
+            ("blocks.0.attn.wq.lora_up.weight", torch.ones(2)),
+        ):
+            with self.subTest(key=key):
+                tensors = _pair("blocks.0.attn.wq", native=True)
+                tensors[key] = value
+                self._assert_rejected(tensors)
+
+    def test_rejects_non_floating_point_weights(self):
+        base = "blocks.0.attn.wq"
+        for dtype in (torch.int64, torch.bool):
+            for suffix, shape in (
+                (".lora_A.weight", (1, 3)),
+                (".lora_B.weight", (2, 1)),
+            ):
+                with self.subTest(dtype=dtype, suffix=suffix):
+                    tensors = _pair(base)
+                    tensors[f"{base}{suffix}"] = torch.ones(shape, dtype=dtype)
+                    self._assert_rejected(tensors)
+
+    def test_rejects_zero_rank_weights(self):
+        self._assert_rejected(
+            _pair("blocks.0.attn.wq", rank=0, native=True)
+        )
+
+    def test_rejects_dimension_or_rank_mismatch(self):
+        invalid_pairs = (
+            {
+                "blocks.0.attn.wq.lora_down.weight": torch.ones(1, 4),
+                "blocks.0.attn.wq.lora_up.weight": torch.ones(2, 1),
+            },
+            {
+                "blocks.0.attn.wq.lora_down.weight": torch.ones(1, 3),
+                "blocks.0.attn.wq.lora_up.weight": torch.ones(3, 1),
+            },
+            {
+                "blocks.0.attn.wq.lora_down.weight": torch.ones(1, 3),
+                "blocks.0.attn.wq.lora_up.weight": torch.ones(2, 2),
+            },
+        )
+        for tensors in invalid_pairs:
+            with self.subTest(shapes=tuple(t.shape for t in tensors.values())):
+                self._assert_rejected(tensors)
+
+    def test_rejects_non_scalar_or_non_finite_alpha(self):
+        base = "blocks.0.attn.wq"
+        for alpha in (torch.ones(2), torch.tensor(float("nan")), torch.tensor(float("inf"))):
+            with self.subTest(alpha=alpha):
+                tensors = _pair(base, native=True)
+                tensors[f"{base}.alpha"] = alpha
+                self._assert_rejected(tensors)
+
+    def test_rejects_boolean_alpha(self):
+        base = "blocks.0.attn.wq"
+        tensors = _pair(base, native=True)
+        tensors[f"{base}.alpha"] = torch.tensor(True)
+
+        self._assert_rejected(tensors)
+
+    def test_accepts_integral_alpha(self):
+        base = "blocks.0.attn.wq"
+        tensors = _pair(base, rank=2, native=True)
+        tensors[f"{base}.alpha"] = torch.tensor(6, dtype=torch.int64)
+        path = self._save(tensors)
+
+        prepared = self.loader.load((_selection(path),))
+
+        self.assertEqual(prepared[0].layers[0].scale, 3.0)
+
+    def test_rejects_unmatched_alpha(self):
+        self._assert_rejected({"blocks.0.attn.wq.alpha": torch.tensor(1.0)})
+
+    def test_rejects_no_layers(self):
+        self._assert_rejected({})
+
+    def test_rejects_any_unconsumed_tensor_key(self):
+        tensors = _pair("blocks.0.attn.wq", native=True)
+        tensors["metadata.unexpected"] = torch.tensor(1.0)
+        self._assert_rejected(tensors)
+
+    def test_file_controlled_keys_are_not_exposed_in_errors(self):
+        secret_key = "/private/volume/secret.tensor"
+        long_key = f"private-{'x' * 10_000}.tensor"
+        for key in (secret_key, long_key):
+            with self.subTest(key_length=len(key)):
+                tensors = _pair("blocks.0.attn.wq", native=True)
+                tensors[key] = torch.tensor(1.0)
+
+                message = self._assert_rejected(tensors)
+
+                self.assertNotIn(key, message)
+                self.assertNotIn("/private/volume", message)
+                self.assertLess(len(message), 256)
+
+    def test_file_controlled_target_bases_are_not_exposed_in_errors(self):
+        secret_base = "/private/volume/secret-target"
+        malformed_files = (
+            _pair(secret_base, native=True),
+            {f"{secret_base}.alpha": torch.tensor(1.0)},
+            {f"{secret_base}.lora_down.weight": torch.ones(1, 3)},
+        )
+        for tensors in malformed_files:
+            with self.subTest(keys=tuple(tensors)):
+                message = self._assert_rejected(tensors)
+
+                self.assertNotIn(secret_base, message)
+                self.assertNotIn("/private/volume", message)
+                self.assertLess(len(message), 256)
+
+    def test_duplicate_resolved_target_error_does_not_expose_tensor_targets(self):
+        first_base = "transformer_blocks.0.attn.to_out"
+        second_base = "transformer_blocks.0.attn.to_out.0"
+        tensors = _pair(first_base)
+        tensors.update(_pair(second_base))
+
+        message = self._assert_rejected(tensors)
+
+        self.assertNotIn(first_base, message)
+        self.assertNotIn(second_base, message)
+        self.assertNotIn("blocks.0.attn.wo", message)
+        self.assertLess(len(message), 256)
+
+    def test_wraps_corrupted_safetensors_error_without_exposing_path(self):
+        path = self.root / "secret-corrupted-file.safetensors"
+        path.write_bytes(b"not safetensors")
+
+        with self.assertRaises(LoRAError) as raised:
+            self.loader.load((_selection(path, name="public-adapter"),))
+
+        message = str(raised.exception)
+        self.assertIn("public-adapter", message)
+        self.assertNotIn(str(path), message)
+        self.assertNotIn(str(self.root), message)
 
 
 if __name__ == "__main__":
