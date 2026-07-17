@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Sequence
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from safetensors.torch import load_file
 
 from .autoencoder import QwenAutoencoder
 from .encoder import Qwen3VLConditioner, TextEncoderConfig
+from .lora import LoRACatalog, LoRASelection
+from .lora_runtime import LoRAManager, is_fp8_tensor
 from .mmdit import SingleMMDiTConfig, SingleStreamDiT
 from .sampling import sample
 
@@ -55,12 +55,6 @@ VAE_CANDIDATES = (
     "vae.safetensors",
 )
 
-FP8_DTYPES = set()
-for _name in ("float8_e4m3fn", "float8_e5m2"):
-    if hasattr(torch, _name):
-        FP8_DTYPES.add(getattr(torch, _name))
-
-
 def _resolve_path(model_dir: Path, explicit: str | None, candidates: Sequence[str]) -> Path | None:
     if explicit:
         path = Path(explicit)
@@ -74,34 +68,6 @@ def _resolve_path(model_dir: Path, explicit: str | None, candidates: Sequence[st
     return None
 
 
-def _is_fp8_tensor(t: torch.Tensor) -> bool:
-    return t.dtype in FP8_DTYPES
-
-
-def _patch_fp8_linears(module: nn.Module, compute_dtype: torch.dtype) -> int:
-    """Keep FP8 weights on GPU; cast to compute dtype only inside Linear.forward."""
-    patched = 0
-    for m in module.modules():
-        if not isinstance(m, nn.Linear):
-            continue
-        if not _is_fp8_tensor(m.weight):
-            continue
-        weight = m.weight
-        bias = m.bias
-
-        def make_forward(w: torch.Tensor, b: torch.Tensor | None, dtype: torch.dtype):
-            def forward(x: torch.Tensor) -> torch.Tensor:
-                w_c = w.to(dtype=dtype)
-                b_c = None if b is None else b.to(dtype=dtype)
-                return F.linear(x.to(dtype=dtype), w_c, b_c)
-
-            return forward
-
-        m.forward = make_forward(weight, bias, compute_dtype)  # type: ignore[method-assign]
-        patched += 1
-    return patched
-
-
 def load_dit(
     dit_path: Path,
     *,
@@ -113,7 +79,7 @@ def load_dit(
         mmdit = SingleStreamDiT(SINGLE_MMDIT_LARGE_WIDE)
 
     state = load_file(str(dit_path), device="cpu")
-    has_fp8 = any(_is_fp8_tensor(v) for v in state.values() if isinstance(v, torch.Tensor))
+    has_fp8 = any(is_fp8_tensor(v) for v in state.values() if isinstance(v, torch.Tensor))
     logger.info("DiT state dict tensors: %d (fp8_present=%s)", len(state), has_fp8)
 
     # AlperKTS / Comfy FP8 exports may include surplus LastLayer tensors
@@ -138,8 +104,6 @@ def load_dit(
     if has_fp8:
         # Preserve per-tensor dtypes (FP8 + high-precision norms/biases).
         mmdit = mmdit.to(device=device)
-        n = _patch_fp8_linears(mmdit, compute_dtype)
-        logger.info("Patched %d FP8 Linear layers for cast-on-forward", n)
     else:
         mmdit = mmdit.to(device=device, dtype=compute_dtype)
 
@@ -195,6 +159,7 @@ class Krea2Pipeline:
     encoder: Qwen3VLConditioner
     device: torch.device
     dtype: torch.dtype = torch.bfloat16
+    loras: LoRAManager | None = None
 
     @torch.inference_mode()
     def generate(
@@ -209,12 +174,16 @@ class Krea2Pipeline:
         mu: float | None = 1.15,
         num_images: int = 1,
         negative_prompt: str | None = None,
+        loras: Sequence[LoRASelection] = (),
     ):
         prompts = [prompt] * num_images
         negatives = None
         if negative_prompt is not None and guidance > 0:
             negatives = [negative_prompt] * num_images
 
+        if loras and self.loras is None:
+            raise RuntimeError("LoRA manager is not configured")
+        lora_activation = self.loras.activation(loras) if loras else None
         return sample(
             self.dit,
             self.ae,
@@ -229,6 +198,7 @@ class Krea2Pipeline:
             guidance=guidance,
             seed=seed,
             mu=mu,
+            lora_activation=lora_activation,
         )
 
 
@@ -241,9 +211,11 @@ def load_pipeline(
     device: str | torch.device | None = None,
     dtype: torch.dtype = torch.bfloat16,
     local_files_only: bool | None = None,
+    lora_dir: str | Path | None = None,
 ) -> Krea2Pipeline:
     """Load TE + DiT + VAE once (TE is offloaded to CPU after each encode)."""
     model_dir = Path(model_dir or os.environ.get("MODEL_DIR", "/runpod-volume/krea2"))
+    lora_dir = Path(lora_dir or os.environ.get("LORA_DIR", "") or model_dir / "loras")
     text_encoder_id = text_encoder_id or os.environ.get(
         "TEXT_ENCODER_ID", DEFAULT_TEXT_ENCODER_ID
     )
@@ -283,6 +255,8 @@ def load_pipeline(
         )
 
     dit = load_dit(resolved_dit, device=device, compute_dtype=dtype)
+    lora_catalog = LoRACatalog.scan(lora_dir)
+    lora_manager = LoRAManager(dit, lora_catalog, dtype)
     ae = load_autoencoder(
         resolved_vae, device=device, dtype=dtype, local_files_only=local_files_only
     )
@@ -301,4 +275,11 @@ def load_pipeline(
             total / (1024**3),
         )
 
-    return Krea2Pipeline(dit=dit, ae=ae, encoder=encoder, device=device, dtype=dtype)
+    return Krea2Pipeline(
+        dit=dit,
+        ae=ae,
+        encoder=encoder,
+        device=device,
+        loras=lora_manager,
+        dtype=dtype,
+    )
