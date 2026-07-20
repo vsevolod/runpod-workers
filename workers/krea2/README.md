@@ -35,7 +35,7 @@ Mount the same datacenter volume on the endpoint.
 | Text encoder | HF `Qwen/Qwen3-VL-4B-Instruct` (bf16 snapshot) | ~8–10 GB |
 | VAE | HF `Qwen/Qwen-Image` `vae/` (preferred); optional local single-file | ~0.3 GB |
 | **Total** | | **~20–23 GB** |
-| Recommended volume | models + HF cache slack (+ future LoRA) | **≥25–30 GB** |
+| Recommended volume | models + HF cache slack (+ LoRA files) | **≥25–30 GB** |
 
 `≥40 GB` is only “plenty of headroom”, not a hard requirement.
 
@@ -43,8 +43,16 @@ Mount the same datacenter volume on the endpoint.
 /runpod-volume/krea2/
   krea2_turbo_fp8.safetensors     # required (~12 GB)
   qwen_image_vae.safetensors      # optional; ignored if not Diffusers-compatible
+  loras/                          # optional runtime LoRA adapters
+    lora_a.safetensors
+    lora_b.safetensors
 /runpod-volume/hf/                # HF_HOME: TE + clean VAE cache
 ```
+
+Place standard text-to-image Krea 2 LoRA `.safetensors` files in `loras/` (or
+`$LORA_DIR`). The worker scans **only top-level** `*.safetensors` stems at
+process start into an allowlist; files are loaded only when selected for a job.
+After adding or removing adapters, restart warm workers so they re-scan.
 
 Bootstrap on a Pod with the volume attached:
 
@@ -72,6 +80,7 @@ Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` fro
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `MODEL_DIR` | `/runpod-volume/krea2` | DiT / optional VAE files |
+| `LORA_DIR` | `/runpod-volume/krea2/loras` | Directory of pre-placed LoRA `.safetensors` (scanned once at start) |
 | `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path |
 | `VAE_PATH` | auto under `MODEL_DIR` | Override VAE safetensors path |
 | `TEXT_ENCODER_ID` | `Qwen/Qwen3-VL-4B-Instruct` | HF id or local snapshot path |
@@ -134,14 +143,25 @@ Request:
     "seed": 42,
     "num_inference_steps": 8,
     "guidance_scale": 0.0,
-    "mu": 1.15
+    "mu": 1.15,
+    "loras": [
+      {"name": "lora_a", "strength": 0.8},
+      {"name": "lora_b"}
+    ]
   }
 }
 ```
 
 Turbo defaults: **8 steps**, **CFG 0**, **mu 1.15**. Width/height multiples of **16** (1024–2048).
 
-These map to Comfy “node knobs” (sampler steps/cfg, latent size, seed). What is **not** per-request today: which DiT/TE/VAE files (fixed by volume/env), sampler algorithm (official krea-2 Euler flow-matching), LoRA.
+Optional `loras` (default `[]`):
+
+- At most **4** items; names must be unique catalog IDs (exact filename stem, no path/URL/`.safetensors` suffix).
+- `strength` is optional (default **1.0**), finite number in **0.0..2.0**; `0.0` skips that adapter.
+- Standard text-to-image LoRA only (A/B or up/down pairs). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
+- Unknown names or invalid shapes fail the job with a safe error (no `refresh_worker`).
+
+What is **not** per-request: which DiT/TE/VAE files (fixed by volume/env), sampler algorithm (official krea-2 Euler flow-matching).
 
 Response:
 
@@ -151,7 +171,11 @@ Response:
     "images": ["data:image/png;base64,..."],
     "seed": 42,
     "width": 1024,
-    "height": 1024
+    "height": 1024,
+    "loras": [
+      {"name": "lora_a", "strength": 0.8},
+      {"name": "lora_b", "strength": 1.0}
+    ]
   }
 }
 ```
@@ -183,7 +207,8 @@ You still need GPU + `MODEL_DIR` mount to actually generate.
 - **VRAM (24 GB):** TE + DiT + VAE load on GPU; after prompt encode the text encoder is offloaded to **CPU** and stays there until the next encode so DiT sampling and VAE decode fit (all-resident OOMs at decode with ~2–3 GiB free).
 - **FP8 DiT:** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
 - **VAE:** prefer clean HF Diffusers weights; do not overlay incompatible Comfy key names with `strict=False`.
-- **Not in MVP:** LoRA, Comfy workflows, baking 18 GB into the image layer.
+- **Runtime LoRA:** up to four pre-placed adapters applied only during DiT denoise (base FP8 weights unchanged); released before VAE decode.
+- **Not in MVP:** Comfy workflows, baking 18 GB into the image layer.
 
 ## License
 
