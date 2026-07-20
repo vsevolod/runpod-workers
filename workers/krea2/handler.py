@@ -110,6 +110,11 @@ def generate_image(job: dict):
 
     try:
         loras = MODELS.pipe.loras.normalize(job_input["loras"])
+        if loras:
+            logger.info(
+                "LoRA request: %s",
+                ", ".join(f"{item.name}@{item.strength:g}" for item in loras),
+            )
         images = MODELS.pipe.generate(
             prompt=str(prompt),
             width=width,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from dataclasses import dataclass
 from typing import Sequence
@@ -18,6 +19,8 @@ from .lora import (
     PreparedLoRA,
     normalize_lora_requests,
 )
+
+logger = logging.getLogger(__name__)
 
 
 _ACTIVE_ATTR = "_krea2_active_lora_layers"
@@ -258,6 +261,19 @@ class LoRAManager:
     def normalize(self, raw: object) -> tuple[LoRASelection, ...]:
         return normalize_lora_requests(raw, self.catalog)
 
-    def activation(self, selections: Sequence[LoRASelection]) -> LoRAActivation:
+    def load_prepared(
+        self, selections: Sequence[LoRASelection]
+    ) -> tuple[PreparedLoRA, ...]:
         prepared = self._loader.load(selections)
+        for adapter in prepared:
+            logger.info(
+                "Loaded LoRA %s strength=%.3f layers=%d",
+                adapter.name,
+                adapter.strength,
+                len(adapter.layers),
+            )
+        return prepared
+
+    def activation(self, selections: Sequence[LoRASelection]) -> LoRAActivation:
+        prepared = self.load_prepared(selections)
         return self._registry.activate(prepared)
