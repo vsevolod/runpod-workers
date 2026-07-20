@@ -18,6 +18,7 @@ from runpod.serverless.utils import rp_cleanup, rp_upload
 from runpod.serverless.utils.rp_validator import validate
 
 from krea2_infer import load_pipeline
+from krea2_infer.lora import LoRAError
 from schemas import INPUT_SCHEMA
 
 logging.basicConfig(
@@ -108,6 +109,7 @@ def generate_image(job: dict):
         }
 
     try:
+        loras = MODELS.pipe.loras.normalize(job_input["loras"])
         images = MODELS.pipe.generate(
             prompt=str(prompt),
             width=width,
@@ -118,7 +120,11 @@ def generate_image(job: dict):
             mu=float(job_input["mu"]) if job_input["mu"] is not None else None,
             num_images=int(job_input["num_images"]),
             negative_prompt=job_input.get("negative_prompt"),
+            loras=loras,
         )
+    except LoRAError as err:
+        logger.warning("Invalid LoRA request: %s", err)
+        return {"error": str(err)}
     except torch.cuda.OutOfMemoryError:
         logger.exception("CUDA OOM during generation")
         if torch.cuda.is_available():
@@ -154,6 +160,7 @@ def generate_image(job: dict):
         "seed": int(seed),
         "width": width,
         "height": height,
+        "loras": [selection.as_dict() for selection in loras],
     }
 
 

@@ -49,4 +49,9 @@ INPUT_SCHEMA = {
         "default": 1,
         "constraints": lambda n: isinstance(n, int) and 1 <= n <= 4,
     },
+    "loras": {
+        "type": list,
+        "required": False,
+        "default": [],
+    },
 }

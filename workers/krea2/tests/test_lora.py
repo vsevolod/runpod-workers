@@ -628,5 +628,15 @@ class LoRALoaderTest(unittest.TestCase):
         self.assertNotIn(str(self.root), message)
 
 
+class LoRASchemaTests(unittest.TestCase):
+    def test_loras_is_an_optional_list_with_empty_default(self):
+        # Import from the worker package root (PYTHONPATH=workers/krea2).
+        from schemas import INPUT_SCHEMA
+
+        self.assertIs(INPUT_SCHEMA["loras"]["type"], list)
+        self.assertFalse(INPUT_SCHEMA["loras"]["required"])
+        self.assertEqual(INPUT_SCHEMA["loras"]["default"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
