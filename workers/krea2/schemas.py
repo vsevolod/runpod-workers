@@ -1,6 +1,11 @@
 """RunPod input validation schema for Krea 2 Turbo."""
 
 INPUT_SCHEMA = {
+    "type": {
+        "type": str,
+        "required": False,
+        "default": "image_generate",
+    },
     "prompt": {
         "type": str,
         "required": True,
@@ -48,6 +53,26 @@ INPUT_SCHEMA = {
         "required": False,
         "default": 1,
         "constraints": lambda n: isinstance(n, int) and 1 <= n <= 4,
+    },
+    "images": {
+        "type": list,
+        "required": False,
+        "default": [],
+    },
+    "grounding_px": {
+        "type": int,
+        "required": False,
+        "default": 768,
+    },
+    "ref_boost": {
+        "type": float,
+        "required": False,
+        "default": 1.0,
+    },
+    "fit_mode": {
+        "type": str,
+        "required": False,
+        "default": "fit",
     },
     "loras": {
         "type": list,
