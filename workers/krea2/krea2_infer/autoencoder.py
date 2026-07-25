@@ -76,6 +76,24 @@ class QwenAutoencoder(nn.Module):
             torch.tensor(self.ae.latents_std).view(1, -1, 1, 1, 1),
         )
 
+    def encode(self, x: Tensor) -> Tensor:
+        """(B,C,H,W) pixels in model scale → (B,C,H/8,W/8) normalized latents.
+
+        Decode does: rearrange to 5D, (x * std) + mean, ae.decode.
+        Encode: ae.encode → mode(), (z - mean) / std, drop temporal dim.
+        """
+        x = rearrange(x, "b c h w -> b c 1 h w")
+        encoded = self.ae.encode(x)
+        if hasattr(encoded, "latent_dist"):
+            latent = encoded.latent_dist.mode()
+        else:
+            # Some Diffusers versions expose `.latent` without `.latent_dist`.
+            latent = encoded.latent
+        mean = self.latents_mean.to(device=latent.device, dtype=latent.dtype)
+        std = self.latents_std.to(device=latent.device, dtype=latent.dtype)
+        latent = (latent - mean) / std
+        return rearrange(latent, "b c 1 h w -> b c h w")
+
     def decode(self, x: Tensor) -> Tensor:
         x = rearrange(x, "b c h w -> b c 1 h w")
         x = (x * self.latents_std) + self.latents_mean
