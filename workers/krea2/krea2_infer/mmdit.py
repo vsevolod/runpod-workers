@@ -37,9 +37,26 @@ def attention(
     scale: float | None = None,
     gqa: bool = False,
 ) -> Tensor:
-    with sdpa_kernel(SDPBackend.CUDNN_ATTENTION):
+    # q: (B, H, L, D), k/v: (B, H_kv, L, D)
+    use_gqa = gqa
+    backends = [SDPBackend.CUDNN_ATTENTION]
+    if mask is not None and mask.dtype != torch.bool:
+        # dense float path (ref_boost): materialize full heads
+        rep = q.shape[1] // k.shape[1]
+        if rep > 1:
+            k = k.repeat_interleave(rep, dim=1)
+            v = v.repeat_interleave(rep, dim=1)
+        use_gqa = False
+        # CUDA inference: never MATH (materializes L×L and OOMs at edit resolutions).
+        # MATH is only for CPU unit tests / CPU device.
+        if q.device.type == "cuda":
+            backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION]
+        else:
+            backends = [SDPBackend.MATH]
+
+    with sdpa_kernel(backends):
         x = F.scaled_dot_product_attention(
-            q, k, v, attn_mask=mask, scale=scale, enable_gqa=gqa
+            q, k, v, attn_mask=mask, scale=scale, enable_gqa=use_gqa
         )
     return rearrange(x, "B H L D -> B L (H D)")
 
@@ -47,6 +64,56 @@ def attention(
 def _mask(mask: Tensor) -> Tensor:
     """Expand a (B, L) key-padding mask into a (B, 1, L, L) attention mask."""
     return mask.unsqueeze(1).unsqueeze(2) * mask.unsqueeze(1).unsqueeze(3)
+
+
+def _bool_mask_to_additive(mask: Tensor, dtype: torch.dtype) -> Tensor:
+    """(B, L) bool key-pad → (B, 1, L, L) additive float mask (-inf on invalid keys)."""
+    # Use true -inf so SDPA treats keys as fully masked (finfo.min is not isneginf).
+    # broadcast invalid keys across all query positions
+    # valid: True keeps 0; False → -inf
+    key_ok = mask[:, None, None, :]  # (B, 1, 1, L)
+    return torch.zeros(
+        mask.shape[0],
+        1,
+        mask.shape[1],
+        mask.shape[1],
+        device=mask.device,
+        dtype=dtype,
+    ).masked_fill(~key_ok, float("-inf"))
+
+
+def pad_seq_and_bias(
+    combined_len: int,
+    mask: Tensor | None,
+    pos: Tensor,
+    attn_bias: Tensor | None,
+    multiple: int = 256,
+) -> tuple[int, Tensor | None, Tensor, Tensor | None]:
+    padlen = (-combined_len) % multiple
+    if padlen:
+        pos = F.pad(pos, (0, 0, 0, padlen))
+        if mask is not None:
+            mask = F.pad(mask, (0, padlen), value=False)
+        if attn_bias is not None:
+            attn_bias = F.pad(attn_bias, (0, padlen, 0, padlen), value=0.0)
+    return padlen, mask, pos, attn_bias
+
+
+def select_attn_mask(
+    mask: Tensor | None,
+    attn_bias: Tensor | None,
+    *,
+    dtype: torch.dtype,
+) -> Tensor | None:
+    """Mirror SingleStreamDiT.forward FINAL branches."""
+    if attn_bias is None:
+        if mask is None:
+            return None
+        return _mask(mask)
+    if mask is None:
+        return attn_bias.to(dtype=dtype)
+    additive = _bool_mask_to_additive(mask, dtype)
+    return additive + attn_bias.to(dtype=dtype, device=additive.device)
 
 
 def temb(
@@ -383,12 +450,16 @@ class SingleStreamDiT(nn.Module):
         t: Tensor,
         pos: Tensor,
         mask: Tensor | None = None,
+        attn_bias: Tensor | None = None,
     ) -> Tensor:
         img = self.first(img)
         t = self.tmlp(temb(t, self.config.tdim, device=img.device, dtype=img.dtype))
         tvec = self.tproj(t)
 
-        txtmask = _mask(mask[:, : context.shape[1]])
+        if mask is None:
+            txtmask = None
+        else:
+            txtmask = _mask(mask[:, : context.shape[1]])
 
         context = self.txtfusion(context, mask=txtmask)
         context = self.txtmlp(context)
@@ -401,15 +472,35 @@ class SingleStreamDiT(nn.Module):
         _padlen = (-fulllen) % 256
         if _padlen > 0:
             combined = F.pad(combined, (0, 0, 0, _padlen))
-            mask = F.pad(mask, (0, _padlen), value=False)
             pos = F.pad(pos, (0, 0, 0, _padlen))
+            if mask is not None:
+                mask = F.pad(mask, (0, _padlen), value=False)
+            if attn_bias is not None:
+                # pad last two dims: (left, right, top, bottom) on (..., H, W)
+                attn_bias = F.pad(attn_bias, (0, _padlen, 0, _padlen), value=0.0)
 
-        mask = _mask(mask)
+        # FINAL attn_mask selection (locked):
+        # 1) generate / edit without ref_boost: legacy bool path via _mask
+        # 2) ref_boost: float path (bool pad → additive -inf, then + bias)
+        # 3) mask is None: pass bias alone or None
+        if attn_bias is None:
+            if mask is None:
+                attn_mask = None
+            else:
+                attn_mask = _mask(mask)  # LEGACY generate path — do not convert to float
+        else:
+            if mask is None:
+                attn_mask = attn_bias.to(dtype=combined.dtype)
+            else:
+                attn_mask = _bool_mask_to_additive(mask, combined.dtype)
+                attn_mask = attn_mask + attn_bias.to(
+                    dtype=attn_mask.dtype, device=attn_mask.device
+                )
 
         freqs = self.posemb(pos)
 
         for block in self.blocks:
-            combined = block(combined, tvec, freqs, mask)
+            combined = block(combined, tvec, freqs, attn_mask)
 
         final = self.last(combined, t)
         output = final[:, txtlen : txtlen + imglen, :]
