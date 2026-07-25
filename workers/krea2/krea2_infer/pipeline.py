@@ -16,7 +16,10 @@ from typing import Sequence
 import torch
 from safetensors.torch import load_file
 
+from PIL import Image
+
 from .autoencoder import QwenAutoencoder
+from .edit_sampling import sample_edit
 from .encoder import Qwen3VLConditioner, TextEncoderConfig
 from .lora import LoRACatalog, LoRASelection
 from .lora_runtime import LoRAManager, is_fp8_tensor
@@ -198,6 +201,51 @@ class Krea2Pipeline:
             guidance=guidance,
             seed=seed,
             mu=mu,
+            lora_activation=lora_activation,
+        )
+
+    @torch.inference_mode()
+    def edit(
+        self,
+        prompt: str,
+        source: Image.Image,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        steps: int = 8,
+        guidance: float = 0.0,
+        seed: int = 0,
+        mu: float | None = 1.15,
+        negative_prompt: str | None = None,
+        grounding_px: int = 768,
+        ref_boost: float = 1.0,
+        fit_mode: str = "fit",
+        loras: Sequence[LoRASelection] = (),
+    ):
+        if loras and self.loras is None:
+            raise RuntimeError("LoRA manager is not configured")
+        # Edit never uses resolution-auto mu (would depend on wrong seq_len).
+        if mu is None:
+            mu = 1.15
+        lora_activation = self.loras.activation(loras) if loras else None
+        return sample_edit(
+            self.dit,
+            self.ae,
+            self.encoder,
+            prompt,
+            source,
+            negative_prompt=negative_prompt,
+            device=str(self.device),
+            dtype=self.dtype,
+            width=width,
+            height=height,
+            steps=steps,
+            guidance=guidance,
+            seed=seed,
+            mu=mu,
+            grounding_px=grounding_px,
+            ref_boost=ref_boost,
+            fit_mode=fit_mode,
             lora_activation=lora_activation,
         )
 

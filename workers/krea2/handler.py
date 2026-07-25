@@ -19,6 +19,7 @@ from runpod.serverless.utils.rp_validator import validate
 
 from krea2_infer import load_pipeline
 from krea2_infer.lora import LoRAError
+from krea2_infer.request import RequestError, normalize_job_input
 from schemas import INPUT_SCHEMA
 
 logging.basicConfig(
@@ -78,55 +79,74 @@ def _images_to_base64_data_urls(images) -> list[str]:
 
 @torch.inference_mode()
 def generate_image(job: dict):
-    """Generate image(s) from text prompt. RunPod handler entrypoint."""
+    """Generate or edit image(s). RunPod handler entrypoint."""
     try:
         job_input = job["input"]
     except (KeyError, TypeError):
         return {"error": "Job must contain an 'input' object"}
 
+    raw_keys = set(job_input.keys())
     validated = validate(job_input, INPUT_SCHEMA)
     if "errors" in validated:
         return {"error": validated["errors"]}
-    job_input = validated["validated_input"]
+    validated_input = validated["validated_input"]
 
-    prompt = job_input["prompt"]
-    if not prompt or not str(prompt).strip():
-        return {"error": "prompt must be a non-empty string"}
+    try:
+        norm = normalize_job_input(validated_input, raw_keys=raw_keys)
+    except RequestError as err:
+        return {"error": str(err)}
 
-    seed = job_input["seed"]
+    seed = norm.seed
     if seed is None:
         seed = int.from_bytes(os.urandom(4), "big")
 
-    width = int(job_input["width"])
-    height = int(job_input["height"])
-    # Latent grid must be multiple of 16 (ae.compression 8 * patch 2).
-    # Official sampler pads up; we still reject misaligned sizes for predictable output.
-    if width % 16 != 0 or height % 16 != 0:
-        return {
-            "error": (
-                f"width and height must be multiples of 16 (got {width}x{height})"
-            )
-        }
-
     try:
-        loras = MODELS.pipe.loras.normalize(job_input["loras"])
+        loras = MODELS.pipe.loras.normalize(validated_input["loras"])
         if loras:
             logger.info(
                 "LoRA request: %s",
                 ", ".join(f"{item.name}@{item.strength:g}" for item in loras),
             )
-        images = MODELS.pipe.generate(
-            prompt=str(prompt),
-            width=width,
-            height=height,
-            steps=int(job_input["num_inference_steps"]),
-            guidance=float(job_input["guidance_scale"]),
-            seed=int(seed),
-            mu=float(job_input["mu"]) if job_input["mu"] is not None else None,
-            num_images=int(job_input["num_images"]),
-            negative_prompt=job_input.get("negative_prompt"),
-            loras=loras,
-        )
+
+        if norm.type == "image_generate":
+            images = MODELS.pipe.generate(
+                prompt=norm.prompt,
+                width=int(norm.width),
+                height=int(norm.height),
+                steps=int(norm.num_inference_steps),
+                guidance=float(norm.guidance_scale),
+                seed=int(seed),
+                mu=float(norm.mu) if norm.mu is not None else None,
+                num_images=int(norm.num_images),
+                negative_prompt=norm.negative_prompt,
+                loras=loras,
+            )
+            out_w, out_h = int(norm.width), int(norm.height)
+        elif norm.type == "image_edit":
+            if not loras:
+                logger.warning(
+                    "image_edit without loras; identity edit quality will be poor"
+                )
+            # edit pins mu: None → 1.15 inside sample_edit
+            edit_mu = float(norm.mu) if norm.mu is not None else 1.15
+            images = MODELS.pipe.edit(
+                prompt=norm.prompt,
+                source=norm.images[0],
+                width=norm.width,
+                height=norm.height,
+                steps=int(norm.num_inference_steps),
+                guidance=float(norm.guidance_scale),
+                seed=int(seed),
+                mu=edit_mu,
+                negative_prompt=norm.negative_prompt,
+                grounding_px=int(norm.grounding_px),
+                ref_boost=float(norm.ref_boost),
+                fit_mode=str(norm.fit_mode),
+                loras=loras,
+            )
+            out_w, out_h = images[0].size  # PIL (W, H)
+        else:
+            return {"error": f"unsupported type: {norm.type}"}
     except LoRAError as err:
         logger.warning("Invalid LoRA request: %s", err)
         return {"error": str(err)}
@@ -137,7 +157,7 @@ def generate_image(job: dict):
         return {
             "error": (
                 "CUDA out of memory. Need ~24 GB with TE offload after encode, "
-                "or a larger GPU / lower resolution."
+                "or a larger GPU / lower resolution. Edit uses ~2× image tokens."
             ),
             "refresh_worker": True,
         }
@@ -159,14 +179,24 @@ def generate_image(job: dict):
         logger.exception("Upload/save failed; falling back to in-memory base64")
         image_urls = _images_to_base64_data_urls(images)
 
-    return {
+    payload = {
         "images": image_urls,
         "image_url": image_urls[0],
         "seed": int(seed),
-        "width": width,
-        "height": height,
+        "width": out_w,
+        "height": out_h,
+        "type": norm.type,
         "loras": [selection.as_dict() for selection in loras],
     }
+    if norm.type == "image_edit":
+        payload.update(
+            {
+                "grounding_px": norm.grounding_px,
+                "ref_boost": norm.ref_boost,
+                "fit_mode": norm.fit_mode,
+            }
+        )
+    return payload
 
 
 runpod.serverless.start({"handler": generate_image})
