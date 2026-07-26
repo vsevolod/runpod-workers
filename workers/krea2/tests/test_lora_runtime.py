@@ -24,11 +24,9 @@ _PACKAGE_NAME = "_krea2_lora_runtime_contract_tests"
 
 
 def _load_contract_modules():
-    module_names = (
-        _PACKAGE_NAME,
-        f"{_PACKAGE_NAME}.lora",
-        f"{_PACKAGE_NAME}.lora_runtime",
-    )
+    # lora_runtime depends on int8_linear → convrot for the INT8 Linear path.
+    short_names = ("convrot", "int8_linear", "lora", "lora_runtime")
+    module_names = (_PACKAGE_NAME, *(f"{_PACKAGE_NAME}.{n}" for n in short_names))
     previous = {
         name: sys.modules.get(name, _MISSING_MODULE) for name in module_names
     }
@@ -39,8 +37,8 @@ def _load_contract_modules():
     sys.modules[_PACKAGE_NAME] = package
 
     try:
-        loaded = []
-        for short_name in ("lora", "lora_runtime"):
+        loaded = {}
+        for short_name in short_names:
             module_name = f"{_PACKAGE_NAME}.{short_name}"
             spec = importlib.util.spec_from_file_location(
                 module_name,
@@ -51,8 +49,8 @@ def _load_contract_modules():
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
-            loaded.append(module)
-        return tuple(loaded)
+            loaded[short_name] = module
+        return loaded["lora"], loaded["lora_runtime"]
     finally:
         for name, old_module in previous.items():
             if old_module is _MISSING_MODULE:
@@ -275,6 +273,27 @@ class RuntimeLinearRegistryTest(unittest.TestCase):
         torch.testing.assert_close(model.linear(x), expected)
         self.assertEqual(model.linear.weight.dtype, fp8_dtype)
         self.assertEqual(model.linear.bias.dtype, fp8_dtype)
+
+    def test_int8_base_weight_uses_int8_path_and_keeps_storage(self):
+        model = nn.Module()
+        model.linear = nn.Linear(4, 2, bias=True)
+        w_fp = torch.tensor(
+            [[1.0, -1.0, 0.5, 0.25], [0.5, 1.0, -0.5, 2.0]], dtype=torch.float32
+        )
+        # Simple per-row quant
+        scale = (w_fp.abs().amax(dim=-1, keepdim=True) / 127.0).clamp(min=1e-30)
+        q = (w_fp / scale).round().clamp(-128, 127).to(torch.int8)
+        bias = torch.tensor([0.1, -0.2])
+        model.linear.weight = nn.Parameter(q, requires_grad=False)
+        model.linear.bias = nn.Parameter(bias, requires_grad=False)
+        model.linear.register_buffer("weight_scale", scale)
+        model.linear._use_convrot = False
+        x = torch.tensor([[1.0, 2.0, -1.0, 0.5]])
+        expected = F.linear(x, q.float() * scale, bias)
+
+        RuntimeLinearRegistry.patch(model, torch.float32)
+        torch.testing.assert_close(model.linear(x), expected, atol=1e-4, rtol=1e-4)
+        self.assertEqual(model.linear.weight.dtype, torch.int8)
 
     def test_activation_cleans_state_after_normal_and_exceptional_exit(self):
         model = nn.Module()

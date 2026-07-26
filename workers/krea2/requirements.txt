@@ -1,5 +1,6 @@
-# Runtime deps for Krea 2 Turbo FP8 RunPod worker.
+# Runtime deps for Krea 2 Turbo RunPod worker (FP8 / INT8 ConvRot DiT).
 # Torch is installed separately in the Dockerfile (CUDA wheel).
+# INT8 path uses torch._int_mm (no extra package required).
 
 runpod>=1.7.9
 transformers==4.57.1

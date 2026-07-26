@@ -17,15 +17,25 @@ _MISSING_MODULE = object()
 
 
 def _load_contract_modules():
+    # pipeline / lora_runtime pull int8 + dit_quant; edit_sampling is stubbed.
+    real_short_names = (
+        "dit_quant",
+        "convrot",
+        "int8_linear",
+        "sampling",
+        "lora",
+        "lora_runtime",
+        "pipeline",
+    )
+    stub_short_names = (
+        "autoencoder",
+        "encoder",
+        "mmdit",
+        "edit_sampling",
+    )
     module_names = (
         _PACKAGE_NAME,
-        f"{_PACKAGE_NAME}.autoencoder",
-        f"{_PACKAGE_NAME}.encoder",
-        f"{_PACKAGE_NAME}.mmdit",
-        f"{_PACKAGE_NAME}.sampling",
-        f"{_PACKAGE_NAME}.lora",
-        f"{_PACKAGE_NAME}.lora_runtime",
-        f"{_PACKAGE_NAME}.pipeline",
+        *(f"{_PACKAGE_NAME}.{n}" for n in (*stub_short_names, *real_short_names)),
     )
     previous = {
         name: sys.modules.get(name, _MISSING_MODULE) for name in module_names
@@ -62,9 +72,13 @@ def _load_contract_modules():
     mmdit.SingleStreamDiT = type("SingleStreamDiT", (nn.Module,), {})
     sys.modules[mmdit.__name__] = mmdit
 
+    edit_sampling = types.ModuleType(f"{_PACKAGE_NAME}.edit_sampling")
+    edit_sampling.sample_edit = lambda *args, **kwargs: None
+    sys.modules[edit_sampling.__name__] = edit_sampling
+
     try:
-        loaded = []
-        for short_name in ("sampling", "lora", "lora_runtime", "pipeline"):
+        loaded = {}
+        for short_name in real_short_names:
             module_name = f"{_PACKAGE_NAME}.{short_name}"
             spec = importlib.util.spec_from_file_location(
                 module_name,
@@ -75,8 +89,13 @@ def _load_contract_modules():
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
-            loaded.append(module)
-        return tuple(loaded)
+            loaded[short_name] = module
+        return (
+            loaded["sampling"],
+            loaded["lora"],
+            loaded["lora_runtime"],
+            loaded["pipeline"],
+        )
     finally:
         for name, old_module in previous.items():
             if old_module is _MISSING_MODULE:

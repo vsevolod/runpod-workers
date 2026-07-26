@@ -1,6 +1,6 @@
-"""Load Krea 2 Turbo (FP8 DiT + Qwen TE + VAE) for resident inference.
+"""Load Krea 2 Turbo (FP8 or INT8-ConvRot DiT + Qwen TE + VAE) for resident inference.
 
-Adapted from krea-ai/krea-2 inference.py and modified for FP8 loading and the
+Adapted from krea-ai/krea-2 inference.py and modified for FP8 / INT8 loading and the
 RunPod worker pipeline. Licensed under Apache-2.0; see
 ../LICENSES/KREA-2-APACHE-2.0.txt.
 """
@@ -19,8 +19,19 @@ from safetensors.torch import load_file
 from PIL import Image
 
 from .autoencoder import QwenAutoencoder
+from .dit_quant import (
+    MODE_FP8,
+    MODE_INT8_CONVROT,
+    dit_candidates_for,
+    resolve_dit_quant,
+)
 from .edit_sampling import sample_edit
 from .encoder import Qwen3VLConditioner, TextEncoderConfig
+from .int8_linear import (
+    apply_int8_side_tensors,
+    partition_int8_state_dict,
+    state_dict_has_int8_tensorwise,
+)
 from .lora import LoRACatalog, LoRASelection
 from .lora_runtime import LoRAManager, is_fp8_tensor
 from .mmdit import SingleMMDiTConfig, SingleStreamDiT
@@ -48,15 +59,13 @@ DEFAULT_TEXT_ENCODER_ID = "Qwen/Qwen3-VL-4B-Instruct"
 DEFAULT_VAE_REPO = "Qwen/Qwen-Image"
 DEFAULT_VAE_SUBFOLDER = "vae"
 
-DIT_CANDIDATES = (
-    "krea2_turbo_fp8.safetensors",
-    "krea2_turbo.safetensors",
-    "oss_turbo.safetensors",
-)
+# Back-compat alias (FP8 / default path filenames).
+DIT_CANDIDATES = tuple(dit_candidates_for(MODE_FP8))
 VAE_CANDIDATES = (
     "qwen_image_vae.safetensors",
     "vae.safetensors",
 )
+
 
 def _resolve_path(model_dir: Path, explicit: str | None, candidates: Sequence[str]) -> Path | None:
     if explicit:
@@ -71,23 +80,20 @@ def _resolve_path(model_dir: Path, explicit: str | None, candidates: Sequence[st
     return None
 
 
-def load_dit(
+def _load_state_dict_into_dit(
+    mmdit: SingleStreamDiT,
+    state: dict[str, torch.Tensor],
     dit_path: Path,
-    *,
-    device: torch.device,
-    compute_dtype: torch.dtype = torch.bfloat16,
-) -> SingleStreamDiT:
-    logger.info("Loading DiT from %s", dit_path)
-    with torch.device("meta"):
-        mmdit = SingleStreamDiT(SINGLE_MMDIT_LARGE_WIDE)
-
-    state = load_file(str(dit_path), device="cpu")
-    has_fp8 = any(is_fp8_tensor(v) for v in state.values() if isinstance(v, torch.Tensor))
-    logger.info("DiT state dict tensors: %d (fp8_present=%s)", len(state), has_fp8)
-
-    # AlperKTS / Comfy FP8 exports may include surplus LastLayer tensors
+) -> None:
+    # AlperKTS / Comfy exports may include surplus LastLayer tensors
     # (e.g. last.down.weight, last.up.weight) that official SingleStreamDiT
     # does not use. Load non-strict, but fail hard on missing required keys.
+    #
+    # INT8: assign=True replaces Parameter data with int8 tensors. nn.Linear
+    # defaults to requires_grad=True, and PyTorch rejects non-floating
+    # Parameters that require grad ("Only Tensors of floating point and
+    # complex dtype can require gradients"). Inference never needs grad.
+    mmdit.requires_grad_(False)
     incompatible = mmdit.load_state_dict(state, strict=False, assign=True)
     if incompatible.missing_keys:
         preview = ", ".join(incompatible.missing_keys[:20])
@@ -99,16 +105,69 @@ def load_dit(
         )
     if incompatible.unexpected_keys:
         logger.warning(
-            "Ignoring %d unexpected DiT key(s) (common on community FP8 packs): %s",
+            "Ignoring %d unexpected DiT key(s) (common on community packs): %s",
             len(incompatible.unexpected_keys),
             incompatible.unexpected_keys,
         )
 
-    if has_fp8:
-        # Preserve per-tensor dtypes (FP8 + high-precision norms/biases).
+
+def load_dit(
+    dit_path: Path,
+    *,
+    device: torch.device,
+    compute_dtype: torch.dtype = torch.bfloat16,
+    quant_mode: str | None = None,
+) -> SingleStreamDiT:
+    """Load DiT weights.
+
+    ``quant_mode`` (or env ``DIT_QUANT``):
+      * ``fp8`` (default) — FP8/BF16 storage; FP8 Linear cast to compute dtype.
+      * ``int8_convrot`` — int8_tensorwise + online ConvRot; INT8 GEMM when available.
+    """
+    mode = resolve_dit_quant(quant_mode)
+    logger.info("Loading DiT from %s (DIT_QUANT=%s)", dit_path, mode)
+    with torch.device("meta"):
+        mmdit = SingleStreamDiT(SINGLE_MMDIT_LARGE_WIDE)
+
+    state = load_file(str(dit_path), device="cpu")
+    has_fp8 = any(is_fp8_tensor(v) for v in state.values() if isinstance(v, torch.Tensor))
+    has_int8 = state_dict_has_int8_tensorwise(state)
+    logger.info(
+        "DiT state dict tensors: %d (fp8_present=%s, int8_tensorwise=%s)",
+        len(state),
+        has_fp8,
+        has_int8,
+    )
+
+    if mode == MODE_INT8_CONVROT:
+        if not has_int8:
+            raise RuntimeError(
+                f"DIT_QUANT={MODE_INT8_CONVROT} but {dit_path} has no int8_tensorwise "
+                f"weights (expected int8 .weight + .weight_scale). "
+                f"Place krea2_turbo_int8_convrot.safetensors or set DIT_PATH."
+            )
+        weight_state, side = partition_int8_state_dict(state)
+        _load_state_dict_into_dit(mmdit, weight_state, dit_path)
+        n_int8 = apply_int8_side_tensors(mmdit, side, weight_state)
+        logger.info("Configured %d INT8 tensorwise Linear layer(s)", n_int8)
+        if n_int8 == 0:
+            raise RuntimeError(
+                f"DIT_QUANT={MODE_INT8_CONVROT} but no Linear layers received int8 weights"
+            )
+        # Preserve per-tensor dtypes (int8 weights + fp norms/biases).
         mmdit = mmdit.to(device=device)
     else:
-        mmdit = mmdit.to(device=device, dtype=compute_dtype)
+        if has_int8:
+            raise RuntimeError(
+                f"DIT_QUANT={MODE_FP8} but {dit_path} looks like int8_tensorwise. "
+                f"Set DIT_QUANT=int8_convrot to enable the INT8 ConvRot path."
+            )
+        _load_state_dict_into_dit(mmdit, state, dit_path)
+        if has_fp8:
+            # Preserve per-tensor dtypes (FP8 + high-precision norms/biases).
+            mmdit = mmdit.to(device=device)
+        else:
+            mmdit = mmdit.to(device=device, dtype=compute_dtype)
 
     return mmdit.eval().requires_grad_(False)
 
@@ -163,6 +222,7 @@ class Krea2Pipeline:
     device: torch.device
     dtype: torch.dtype = torch.bfloat16
     loras: LoRAManager | None = None
+    quant_mode: str = MODE_FP8
 
     @torch.inference_mode()
     def generate(
@@ -260,13 +320,21 @@ def load_pipeline(
     dtype: torch.dtype = torch.bfloat16,
     local_files_only: bool | None = None,
     lora_dir: str | Path | None = None,
+    quant_mode: str | None = None,
 ) -> Krea2Pipeline:
-    """Load TE + DiT + VAE once (TE is offloaded to CPU after each encode)."""
+    """Load TE + DiT + VAE once (TE is offloaded to CPU after each encode).
+
+    DiT quant path is selected by ``quant_mode`` or env ``DIT_QUANT``
+    (``fp8`` default, ``int8_convrot`` for INT8 ConvRot).
+    """
     model_dir = Path(model_dir or os.environ.get("MODEL_DIR", "/runpod-volume/krea2"))
     lora_dir = Path(lora_dir or os.environ.get("LORA_DIR", "") or model_dir / "loras")
     text_encoder_id = text_encoder_id or os.environ.get(
         "TEXT_ENCODER_ID", DEFAULT_TEXT_ENCODER_ID
     )
+    mode = resolve_dit_quant(quant_mode)
+    dit_candidates = dit_candidates_for(mode)
+
     if local_files_only is None:
         local_files_only = os.environ.get("LOCAL_FILES_ONLY", "").lower() in {
             "1",
@@ -283,12 +351,12 @@ def load_pipeline(
         raise RuntimeError("CUDA device requested but torch.cuda.is_available() is False")
 
     resolved_dit = _resolve_path(
-        model_dir, dit_path or os.environ.get("DIT_PATH"), DIT_CANDIDATES
+        model_dir, dit_path or os.environ.get("DIT_PATH"), dit_candidates
     )
     if resolved_dit is None:
         raise FileNotFoundError(
-            f"DiT weights not found under {model_dir}. Expected one of: "
-            f"{', '.join(DIT_CANDIDATES)}. Set DIT_PATH or MODEL_DIR."
+            f"DiT weights not found under {model_dir} for DIT_QUANT={mode}. "
+            f"Expected one of: {', '.join(dit_candidates)}. Set DIT_PATH or MODEL_DIR."
         )
 
     resolved_vae = _resolve_path(
@@ -302,7 +370,10 @@ def load_pipeline(
             DEFAULT_VAE_SUBFOLDER,
         )
 
-    dit = load_dit(resolved_dit, device=device, compute_dtype=dtype)
+    logger.info("Resolved DiT path=%s quant_mode=%s", resolved_dit, mode)
+    dit = load_dit(
+        resolved_dit, device=device, compute_dtype=dtype, quant_mode=mode
+    )
     lora_catalog = LoRACatalog.scan(lora_dir)
     lora_manager = LoRAManager(dit, lora_catalog, dtype)
     ae = load_autoencoder(
@@ -330,4 +401,5 @@ def load_pipeline(
         device=device,
         loras=lora_manager,
         dtype=dtype,
+        quant_mode=mode,
     )

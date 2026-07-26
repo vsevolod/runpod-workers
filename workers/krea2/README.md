@@ -1,14 +1,15 @@
-# RunPod worker — Krea 2 Turbo FP8
+# RunPod worker — Krea 2 Turbo (FP8 / INT8 ConvRot)
 
 Thin serverless worker: text-to-image **and** identity image edit via dual
 conditioning. No ComfyUI.
 
 | | |
 |--|--|
-| **Model** | [AlperKTS/Krea2_FP8](https://huggingface.co/AlperKTS/Krea2_FP8) DiT + official [krea-ai/krea-2](https://github.com/krea-ai/krea-2) sampler |
+| **Model (default)** | [AlperKTS/Krea2_FP8](https://huggingface.co/AlperKTS/Krea2_FP8) DiT + official [krea-ai/krea-2](https://github.com/krea-ai/krea-2) sampler |
+| **Model (optional)** | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) `krea2_turbo_int8_convrot.safetensors` via `DIT_QUANT=int8_convrot` |
 | **Text encoder** | [Qwen/Qwen3-VL-4B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct) (HF, bf16) |
 | **VAE** | Clean Diffusers VAE from [Qwen/Qwen-Image](https://huggingface.co/Qwen/Qwen-Image) (`vae/`); local Comfy single-file is tried first and **ignored** if keys do not match |
-| **GPU** | **24 GB** class (TE offload after encode; all-resident OOMs at VAE decode) |
+| **GPU** | **24 GB** class (TE offload after encode; all-resident OOMs at VAE decode). INT8 path is preferred on **RTX 30xx (Ampere)** |
 | **Template patterns** | [worker-sdxl](https://github.com/runpod-workers/worker-sdxl) |
 
 ## Layout
@@ -21,7 +22,7 @@ workers/krea2/
 ├── download_weights.py     # volume bootstrap (not baked into image)
 ├── test_input.json
 ├── requirements.txt
-└── krea2_infer/            # vendored krea-2 + FP8 loader
+└── krea2_infer/            # vendored krea-2 + FP8 / INT8 loaders
 ```
 
 ## Network volume
@@ -33,21 +34,23 @@ Mount the same datacenter volume on the endpoint.
 | Component | Source | ~size |
 |-----------|--------|------:|
 | DiT Turbo FP8 | `krea2_turbo_fp8.safetensors` (AlperKTS) | ~12 GB |
+| DiT Turbo INT8 ConvRot (optional) | `krea2_turbo_int8_convrot.safetensors` (Comfy-Org) | ~13.5 GB |
 | Text encoder | HF `Qwen/Qwen3-VL-4B-Instruct` (bf16 snapshot) | ~8–10 GB |
 | VAE | HF `Qwen/Qwen-Image` `vae/` (preferred); optional local single-file | ~0.3 GB |
-| **Total** | | **~20–23 GB** |
-| Recommended volume | models + HF cache slack (+ LoRA files) | **≥25–30 GB** |
+| **Total (FP8 path)** | | **~20–23 GB** |
+| Recommended volume | models + HF cache slack (+ LoRA / second DiT) | **≥25–30 GB** |
 
 `≥40 GB` is only “plenty of headroom”, not a hard requirement.
 
 ```text
 /runpod-volume/krea2/
-  krea2_turbo_fp8.safetensors     # required (~12 GB)
-  qwen_image_vae.safetensors      # optional; ignored if not Diffusers-compatible
-  loras/                          # optional runtime LoRA adapters
+  krea2_turbo_fp8.safetensors              # default path (~12 GB)
+  krea2_turbo_int8_convrot.safetensors     # optional; needs DIT_QUANT=int8_convrot
+  qwen_image_vae.safetensors               # optional; ignored if not Diffusers-compatible
+  loras/                                   # optional runtime LoRA adapters
     lora_a.safetensors
     lora_b.safetensors
-/runpod-volume/hf/                # HF_HOME: TE + clean VAE cache
+/runpod-volume/hf/                         # HF_HOME: TE + clean VAE cache
 ```
 
 Place Krea 2 adapter `.safetensors` files in `loras/` (or `$LORA_DIR`): standard
@@ -63,7 +66,11 @@ Bootstrap on a Pod with the volume attached:
 pip install huggingface-hub hf_transfer
 export HF_TOKEN=hf_...   # if needed
 export HF_HOME=/runpod-volume/hf
+# Default FP8 DiT:
 python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volume/hf
+# Or INT8 ConvRot (3090-friendly) / both:
+python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volume/hf --quant int8_convrot
+python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volume/hf --quant both
 ```
 
 `download_weights.py` also snapshots `Qwen/Qwen-Image` `vae/*` into `HF_HOME` (clean Diffusers VAE). Comfy-format `qwen_image_vae.safetensors` from AlperKTS is optional and often **not** loadable via Diffusers `from_single_file`.
@@ -72,11 +79,23 @@ python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volum
 
 | File | Used here? |
 |------|------------|
-| `krea2_turbo_fp8.safetensors` | **Yes** (DiT) |
+| `krea2_turbo_fp8.safetensors` | **Yes** (DiT, default `DIT_QUANT=fp8`) |
+| `krea2_turbo_int8_convrot.safetensors` | **Yes** when `DIT_QUANT=int8_convrot` |
 | `qwen_image_vae.safetensors` | Optional try; else clean HF VAE |
 | `qwen3vl_4b_fp8_scaled.safetensors` (~5.2 GB) | **No** — ComfyUI `text_encoders/` format |
 
 Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. Cache the HF model on the volume so cold starts do not re-download it.
+
+### DiT quant modes (`DIT_QUANT`)
+
+| `DIT_QUANT` | DiT file (auto under `MODEL_DIR`) | Compute path |
+|-------------|-----------------------------------|--------------|
+| `fp8` (default / unset) | `krea2_turbo_fp8.safetensors` | FP8 storage, cast to bf16 on Linear forward (current production) |
+| `int8_convrot` (aliases: `int8`, `int8_tensorwise`) | `krea2_turbo_int8_convrot.safetensors` | int8_tensorwise + online ConvRot; CUDA `torch._int_mm` W8A8 when batch is large enough, else dequant fallback |
+
+Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fails fast. TE / VAE / API are shared.
+
+**Why INT8 on 3090:** Ampere has INT8 Tensor Cores but not FP8. Native INT8 GEMM avoids the FP8→BF16 cast tax. Speedup only applies when the INT8 path is active — plain dequant of an int8 file under `DIT_QUANT=fp8` is rejected.
 
 ## Endpoint env
 
@@ -84,7 +103,8 @@ Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` fro
 |----------|---------|---------|
 | `MODEL_DIR` | `/runpod-volume/krea2` | DiT / optional VAE files |
 | `LORA_DIR` | `/runpod-volume/krea2/loras` | Directory of pre-placed LoRA `.safetensors` (scanned once at start) |
-| `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path |
+| `DIT_QUANT` | `fp8` | `fp8` or `int8_convrot` — selects DiT load + Linear runtime |
+| `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path (must match `DIT_QUANT`) |
 | `VAE_PATH` | auto under `MODEL_DIR` | Override VAE safetensors path |
 | `TEXT_ENCODER_ID` | `Qwen/Qwen3-VL-4B-Instruct` | HF id or local snapshot path |
 | `HF_HOME` | (hf default) | Put on volume for faster/offline loads |
@@ -288,9 +308,10 @@ You still need GPU + `MODEL_DIR` mount to actually generate.
 ## Design notes
 
 - **VRAM (24 GB):** TE + DiT + VAE load on GPU; after prompt encode the text encoder is offloaded to **CPU** and stays there until the next encode so DiT sampling and VAE decode fit (all-resident OOMs at decode with ~2–3 GiB free).
-- **FP8 DiT:** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
+- **FP8 DiT (default):** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
+- **INT8 ConvRot DiT (`DIT_QUANT=int8_convrot`):** stock Comfy `int8_tensorwise` layout (`weight` int8 + `weight_scale` + `comfy_quant`); online Hadamard on activations when marker has `convrot`; CUDA uses `torch._int_mm` for larger token batches.
 - **VAE:** prefer clean HF Diffusers weights; do not overlay incompatible Comfy key names with `strict=False`.
-- **Runtime LoRA:** up to four pre-placed adapters applied only during DiT denoise (base FP8 weights unchanged); released before VAE decode.
+- **Runtime LoRA:** up to four pre-placed adapters applied only during DiT denoise (base FP8/INT8 weights unchanged; LoRA delta in compute dtype); released before VAE decode.
 - **Identity edit:** grounded multimodal TE (`mm_processor`, separate from text tokenizer) + source VAE tokens with RoPE frame split; optional `ref_boost` dense bias with GQA-safe expand.
 - **Not in MVP:** Comfy workflows, multi-ref edit, removals→raw, baking 18 GB into the image layer.
 

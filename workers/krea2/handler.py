@@ -1,4 +1,4 @@
-"""RunPod serverless handler — Krea 2 Turbo FP8 (thin worker, no ComfyUI).
+"""RunPod serverless handler — Krea 2 Turbo FP8 / INT8 ConvRot (thin worker, no ComfyUI).
 
 Portions are adapted from runpod-workers/worker-sdxl under the MIT License;
 see LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
@@ -38,9 +38,17 @@ class ModelHandler:
 
     def load_models(self):
         model_dir = os.environ.get("MODEL_DIR", "/runpod-volume/krea2")
-        logger.info("Initializing Krea2 pipeline from MODEL_DIR=%s", model_dir)
+        dit_quant = os.environ.get("DIT_QUANT", "fp8")
+        logger.info(
+            "Initializing Krea2 pipeline from MODEL_DIR=%s DIT_QUANT=%s",
+            model_dir,
+            dit_quant,
+        )
         self.pipe = load_pipeline(model_dir=model_dir)
-        logger.info("Krea2 pipeline ready")
+        logger.info(
+            "Krea2 pipeline ready (quant_mode=%s)",
+            getattr(self.pipe, "quant_mode", dit_quant),
+        )
 
 
 # Load at import / process start (not lazy on first request).

@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .int8_linear import int8_linear_forward, is_int8_linear
 from .lora import (
     LoRACatalog,
     LoRAError,
@@ -85,7 +86,10 @@ def _patch_linear(module: nn.Linear, compute_dtype: torch.dtype) -> None:
 
     def forward(x: torch.Tensor) -> torch.Tensor:
         dtype = getattr(module, _PATCHED_ATTR)
-        if is_fp8_tensor(module.weight):
+        if is_int8_linear(module):
+            # INT8 W8A8 path (optional online ConvRot). LoRA delta stays BF16/compute.
+            output = int8_linear_forward(x, module, dtype)
+        elif is_fp8_tensor(module.weight):
             weight = module.weight.to(dtype=dtype)
             bias = None if module.bias is None else module.bias.to(dtype=dtype)
             output = F.linear(x.to(dtype=dtype), weight, bias)

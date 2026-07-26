@@ -1,4 +1,4 @@
-# Krea 2 Turbo FP8 — thin RunPod serverless worker
+# Krea 2 Turbo (FP8 default / INT8 ConvRot via DIT_QUANT) — thin RunPod serverless worker
 # Weights live on Network Volume (MODEL_DIR), not in this image.
 #
 # RunPod GitHub Integration:
