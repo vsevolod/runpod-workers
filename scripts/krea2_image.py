@@ -7,21 +7,21 @@ Modes (auto-detected):
   3) Generate:  otherwise          → text2img job → PNG
 
 Env:
-  ENDPOINT_ID      RunPod serverless endpoint id
-  RUNPOD_API_KEY   API key (Bearer)
+  RUNPOD_API_KEY   API key (Bearer) — required
+  ENDPOINT_ID      optional override of hardcoded default
 
 Examples:
   # Text-to-image (interactive prompt/LoRA if omitted)
-  python krea2_image.py -o out.png
-  python krea2_image.py --prompt "a red fox" --lora my_lora@0.8 -o out.png
+  python scripts/krea2_image.py -o out.png
+  python scripts/krea2_image.py --prompt "a red fox" --lora my_lora@0.8 -o out.png
 
   # Image edit
-  python krea2_image.py -i person.jpg -o edit.png \\
+  python scripts/krea2_image.py -i person.jpg -o edit.png \\
     --prompt "change the jacket to red leather" \\
     --lora krea2_identity_edit_v1_2 --ref-boost 4 --seed 42
 
   # Download an already submitted job
-  python krea2_image.py --request-id abc123 -o out.png
+  python scripts/krea2_image.py --request-id abc123 -o out.png
 """
 
 from __future__ import annotations
@@ -40,6 +40,8 @@ from pathlib import Path
 from typing import Any
 
 API_BASE = "https://api.runpod.ai/v2"
+# Hardcoded serverless endpoint (override with ENDPOINT_ID env if needed).
+DEFAULT_ENDPOINT_ID = "9zb0wyo61ck3wk"
 POLL_INTERVAL_S = 2.0
 DEFAULT_OUTPUT = "output.png"
 DEFAULT_EDIT_OUTPUT = "edit_output.png"
@@ -51,12 +53,16 @@ DEFAULT_STEPS = 8
 DEFAULT_GEN_SIZE = 1024
 
 
-def _require_env(name: str) -> str:
-    value = os.environ.get(name, "").strip()
+def _require_api_key() -> str:
+    value = os.environ.get("RUNPOD_API_KEY", "").strip()
     if not value:
-        print(f"error: set {name} in the environment", file=sys.stderr)
+        print("error: set RUNPOD_API_KEY in the environment", file=sys.stderr)
         raise SystemExit(1)
     return value
+
+
+def _endpoint_id() -> str:
+    return os.environ.get("ENDPOINT_ID", "").strip() or DEFAULT_ENDPOINT_ID
 
 
 def _prompt_line(label: str, *, default: str | None = None) -> str:
@@ -583,8 +589,8 @@ def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
 
-    endpoint_id = _require_env("ENDPOINT_ID")
-    api_key = _require_env("RUNPOD_API_KEY")
+    endpoint_id = _endpoint_id()
+    api_key = _require_api_key()
     interval = max(0.5, args.poll_interval)
 
     if args.request_id:
