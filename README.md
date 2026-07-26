@@ -7,6 +7,7 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 | Path | Description | Status |
 |------|-------------|--------|
 | [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8 image generation (thin Python handler) | MVP |
+| [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
 | `workers/shared/` | Shared utilities (reserved) | empty |
 
 ## Deploy

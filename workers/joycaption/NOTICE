@@ -1,0 +1,39 @@
+Third-party software notices for workers/joycaption
+
+RunPod worker-sdxl
+------------------
+
+Portions of handler.py (serverless validation / entrypoint pattern) are adapted
+from:
+
+  runpod-workers/worker-sdxl
+  https://github.com/runpod-workers/worker-sdxl
+
+Copyright (c) 2025 RunPod
+
+The adapted portions are licensed under the MIT License. A copy of that
+license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
+
+JoyCaption / model weights
+--------------------------
+
+Model weights are NOT included in this repository. They must be downloaded
+separately onto a Network Volume (see download_weights.py / README).
+
+Upstream project:
+
+  fpgaminer/joycaption
+  https://github.com/fpgaminer/joycaption
+
+Model:
+
+  fancyfeast/llama-joycaption-beta-one-hf-llava
+  https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava
+
+The HF snapshot includes LLAMA_LICENSE and LLAMA_USE_POLICY.md (Llama 3.1).
+The model is built on Meta Llama 3.1 and google/siglip2-so400m-patch14-384
+components. Use of the weights is governed by those upstream licenses and the
+model card on Hugging Face — not by this repository.
+
+These third-party notices do not grant a license to the original code in this
+repository beyond what is stated in the project root license (if any).

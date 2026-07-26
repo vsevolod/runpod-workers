@@ -1,0 +1,15 @@
+# Runtime deps for JoyCaption RunPod worker.
+# Torch / torchvision are installed separately in the Dockerfile (CUDA wheels).
+# Pins align with official JoyCaption known-working set where practical:
+#   https://github.com/fpgaminer/joycaption/blob/main/requirements.txt
+
+runpod>=1.7.9
+transformers==4.51.3
+accelerate==1.6.0
+pillow==11.2.1
+safetensors>=0.4.0
+huggingface-hub>=0.26.0
+hf_transfer>=0.1.0
+numpy>=1.24.0
+sentencepiece>=0.2.0
+protobuf>=4.0.0
