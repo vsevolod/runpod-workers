@@ -14,9 +14,11 @@ import torch.nn.functional as F
 from .lora import (
     LoRACatalog,
     LoRAError,
+    LoRALayerWeights,
     LoRALoader,
     LoRASelection,
     PreparedLoRA,
+    WeightDiffLayerWeights,
     normalize_lora_requests,
 )
 
@@ -67,9 +69,10 @@ def _detach_exception_references(error: BaseException) -> BaseException:
 
 @dataclass(frozen=True)
 class ActiveLoRALayer:
-    down: torch.Tensor
-    up: torch.Tensor
     multiplier: float
+    down: torch.Tensor | None = None
+    up: torch.Tensor | None = None
+    delta: torch.Tensor | None = None
 
 
 def _patch_linear(module: nn.Linear, compute_dtype: torch.dtype) -> None:
@@ -93,8 +96,12 @@ def _patch_linear(module: nn.Linear, compute_dtype: torch.dtype) -> None:
         if active_layers:
             lora_input = x.to(dtype=dtype)
             for layer in active_layers:
-                low_rank = F.linear(lora_input, layer.down)
-                delta = F.linear(low_rank, layer.up)
+                if layer.delta is not None:
+                    delta = F.linear(lora_input, layer.delta)
+                else:
+                    assert layer.down is not None and layer.up is not None
+                    low_rank = F.linear(lora_input, layer.down)
+                    delta = F.linear(low_rank, layer.up)
                 output = output + delta.to(dtype=output.dtype) * layer.multiplier
         return output
 
@@ -190,6 +197,7 @@ class LoRAActivation:
         module = None
         down = None
         up = None
+        delta = None
         active = None
         try:
             for adapter in self._prepared:
@@ -200,23 +208,38 @@ class LoRAActivation:
                     )
                     if module is _MISSING_TARGET:
                         raise LoRAError(f"Unknown LoRA target: {layer.target}") from None
-                    down = layer.down.to(
-                        device=module.weight.device,
-                        dtype=self._registry.compute_dtype,
-                    )
-                    up = layer.up.to(
-                        device=module.weight.device,
-                        dtype=self._registry.compute_dtype,
-                    )
-                    active = ActiveLoRALayer(
-                        down=down,
-                        up=up,
-                        multiplier=adapter.strength * layer.scale,
-                    )
+                    if isinstance(layer, WeightDiffLayerWeights):
+                        delta = layer.delta.to(
+                            device=module.weight.device,
+                            dtype=self._registry.compute_dtype,
+                        )
+                        active = ActiveLoRALayer(
+                            multiplier=adapter.strength,
+                            delta=delta,
+                        )
+                    elif isinstance(layer, LoRALayerWeights):
+                        down = layer.down.to(
+                            device=module.weight.device,
+                            dtype=self._registry.compute_dtype,
+                        )
+                        up = layer.up.to(
+                            device=module.weight.device,
+                            dtype=self._registry.compute_dtype,
+                        )
+                        active = ActiveLoRALayer(
+                            multiplier=adapter.strength * layer.scale,
+                            down=down,
+                            up=up,
+                        )
+                    else:
+                        raise LoRAError(
+                            f"Unsupported LoRA layer type for {adapter.name}"
+                        ) from None
                     grouped.setdefault(module, []).append(active)
                     module = None
                     down = None
                     up = None
+                    delta = None
                     active = None
             return grouped, None
         except BaseException as error:
@@ -224,6 +247,7 @@ class LoRAActivation:
             module = None
             down = None
             up = None
+            delta = None
             active = None
             return None, _detach_exception_references(error)
 
@@ -267,8 +291,9 @@ class LoRAManager:
         prepared = self._loader.load(selections)
         for adapter in prepared:
             logger.info(
-                "Loaded LoRA %s strength=%.3f layers=%d",
+                "Loaded LoRA %s type=%s strength=%.3f layers=%d",
                 adapter.name,
+                adapter.type,
                 adapter.strength,
                 len(adapter.layers),
             )

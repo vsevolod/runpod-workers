@@ -50,9 +50,11 @@ Mount the same datacenter volume on the endpoint.
 /runpod-volume/hf/                # HF_HOME: TE + clean VAE cache
 ```
 
-Place standard text-to-image Krea 2 LoRA `.safetensors` files in `loras/` (or
-`$LORA_DIR`). The worker scans **only top-level** `*.safetensors` stems at
-process start into an allowlist; files are loaded only when selected for a job.
+Place Krea 2 adapter `.safetensors` files in `loras/` (or `$LORA_DIR`): standard
+rank LoRA and/or full `weight_diff` files (e.g. Fedor-style
+`diffusion_model.txtfusion.projector.diff`). The worker scans **only top-level**
+`*.safetensors` stems at process start into an allowlist; files are loaded only
+when selected for a job. Request `type` must match each file’s tensor layout.
 After adding or removing adapters, restart warm workers so they re-scan.
 
 Bootstrap on a Pod with the volume attached:
@@ -157,7 +159,8 @@ If a release appears on GitHub but **no** new row shows under Builds, re-check G
     "mu": 1.15,
     "loras": [
       {"name": "lora_a", "strength": 0.8},
-      {"name": "lora_b"}
+      {"name": "lora_b"},
+      {"name": "fedor_bypass", "type": "weight_diff", "strength": 4.0}
     ]
   }
 }
@@ -219,10 +222,23 @@ What is **not** available yet: multi-image refs, “removals → raw” export, 
 Optional `loras` (default `[]`, both modes):
 
 - At most **4** items; names must be unique catalog IDs (exact filename stem, no path/URL/`.safetensors` suffix).
-- `strength` is optional (default **1.0**), finite number in **0.0..2.0**; `0.0` skips that adapter.
-- Standard DiT LoRA only (A/B or up/down pairs). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
+- `type` is optional (default **`lora`**): `"lora"` (A/B or up/down pairs) or `"weight_diff"` (full Linear weight deltas, e.g. `*.diff` projector bypasses).
+- `strength` is optional (default **1.0**), finite; range depends on `type`:
+  - `lora` → **0.0..2.0**
+  - `weight_diff` → **0.0..5.0** (community filter-bypass files often use **3–5**)
+  - `0.0` skips that adapter
+- Declared `type` must match file contents (no silent auto-detect). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
 - Identity edit expects the identity LoRA on the volume; running edit without it is allowed but quality will be poor.
-- Unknown names or invalid shapes fail the job with a safe error (no `refresh_worker`).
+- Unknown names, type/content mismatch, or invalid shapes fail the job with a safe error (no `refresh_worker`).
+
+Example with a rank LoRA and a projector weight-diff bypass (file pre-placed on volume as `fedor_bypass.safetensors`):
+
+```json
+"loras": [
+  {"name": "style_v1", "strength": 0.85},
+  {"name": "fedor_bypass", "type": "weight_diff", "strength": 4.0}
+]
+```
 
 What is **not** per-request: which DiT/TE/VAE files (fixed by volume/env), sampler algorithm (official krea-2 Euler flow-matching).
 
@@ -241,7 +257,7 @@ Response:
     "ref_boost": 4.0,
     "fit_mode": "fit",
     "loras": [
-      {"name": "krea2_identity_edit_v1_2", "strength": 1.0}
+      {"name": "krea2_identity_edit_v1_2", "strength": 1.0, "type": "lora"}
     ]
   }
 }

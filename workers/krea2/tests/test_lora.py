@@ -97,8 +97,8 @@ class _TinyKreaModel(nn.Module):
         return block
 
 
-def _selection(path, name="public-adapter", strength=0.75):
-    return LoRASelection(name=name, strength=strength, path=path)
+def _selection(path, name="public-adapter", strength=0.75, type="lora"):
+    return LoRASelection(name=name, strength=strength, path=path, type=type)
 
 
 def _pair(base, *, rank=1, in_features=3, out_features=2, native=False):
@@ -245,7 +245,11 @@ class NormalizeLoRARequestsTest(unittest.TestCase):
         self.assertEqual(selections[0].name, "alpha")
         self.assertEqual(selections[0].strength, 1.0)
         self.assertEqual(selections[0].path, self.alpha_path)
-        self.assertEqual(selections[0].as_dict(), {"name": "alpha", "strength": 1.0})
+        self.assertEqual(selections[0].type, "lora")
+        self.assertEqual(
+            selections[0].as_dict(),
+            {"name": "alpha", "strength": 1.0, "type": "lora"},
+        )
 
     def test_rejects_more_than_four_items_before_filtering_zero_strength(self):
         requests = [{"name": "alpha", "strength": 0.0} for _ in range(5)]
@@ -317,8 +321,55 @@ class NormalizeLoRARequestsTest(unittest.TestCase):
                 [{"name": "alpha", "strength": 0}, {"name": "beta", "strength": 2}],
                 self.catalog,
             )[0].as_dict(),
-            {"name": "beta", "strength": 2.0},
+            {"name": "beta", "strength": 2.0, "type": "lora"},
         )
+
+    def test_defaults_type_to_lora(self):
+        selections = normalize_lora_requests([{"name": "alpha"}], self.catalog)
+        self.assertEqual(selections[0].type, "lora")
+        self.assertEqual(selections[0].as_dict()["type"], "lora")
+
+    def test_accepts_weight_diff_type_and_higher_strength(self):
+        selections = normalize_lora_requests(
+            [
+                {
+                    "name": "alpha",
+                    "type": "weight_diff",
+                    "strength": 4.0,
+                }
+            ],
+            self.catalog,
+        )
+        self.assertEqual(
+            selections[0].as_dict(),
+            {"name": "alpha", "strength": 4.0, "type": "weight_diff"},
+        )
+
+    def test_weight_diff_accepts_strength_five(self):
+        selections = normalize_lora_requests(
+            [{"name": "alpha", "type": "weight_diff", "strength": 5.0}],
+            self.catalog,
+        )
+        self.assertEqual(selections[0].strength, 5.0)
+
+    def test_rejects_strength_above_ceiling_for_type(self):
+        with self.assertRaises(LoRAError):
+            normalize_lora_requests(
+                [{"name": "alpha", "type": "lora", "strength": 4.0}],
+                self.catalog,
+            )
+        with self.assertRaises(LoRAError):
+            normalize_lora_requests(
+                [{"name": "alpha", "type": "weight_diff", "strength": 5.1}],
+                self.catalog,
+            )
+
+    def test_rejects_unknown_type(self):
+        with self.assertRaisesRegex(LoRAError, "type"):
+            normalize_lora_requests(
+                [{"name": "alpha", "type": "loha"}],
+                self.catalog,
+            )
 
     def test_rejects_non_list_input(self):
         for raw in ({}, "alpha", 1):
@@ -351,10 +402,10 @@ class LoRALoaderTest(unittest.TestCase):
         save_file(tensors, path)
         return path
 
-    def _assert_rejected(self, tensors, *, name="public-adapter"):
+    def _assert_rejected(self, tensors, *, name="public-adapter", type="lora"):
         path = self._save(tensors)
         with self.assertRaises(LoRAError) as raised:
-            self.loader.load((_selection(path, name=name),))
+            self.loader.load((_selection(path, name=name, type=type),))
         message = str(raised.exception)
         self.assertIn(name, message)
         self.assertNotIn(str(path), message)
@@ -626,6 +677,65 @@ class LoRALoaderTest(unittest.TestCase):
         self.assertIn("public-adapter", message)
         self.assertNotIn(str(path), message)
         self.assertNotIn(str(self.root), message)
+
+    def test_loads_weight_diff_projector_with_diffusion_model_prefix(self):
+        delta = torch.zeros(2, 3)
+        delta[0, 1] = -0.5117
+        delta[0, 2] = -0.8906
+        tensors = {"diffusion_model.txtfusion.projector.diff": delta}
+        path = self._save(tensors)
+
+        prepared = self.loader.load(
+            (
+                _selection(
+                    path,
+                    name="fedor_bypass",
+                    strength=4.0,
+                    type="weight_diff",
+                ),
+            )
+        )
+
+        self.assertEqual(prepared[0].name, "fedor_bypass")
+        self.assertEqual(prepared[0].type, "weight_diff")
+        self.assertEqual(prepared[0].strength, 4.0)
+        self.assertEqual(len(prepared[0].layers), 1)
+        layer = prepared[0].layers[0]
+        self.assertEqual(layer.target, "txtfusion.projector")
+        torch.testing.assert_close(layer.delta, delta)
+
+    def test_loads_weight_diff_via_text_fusion_projector_alias(self):
+        delta = torch.ones(2, 3)
+        path = self._save({"text_fusion.projector.diff": delta})
+
+        prepared = self.loader.load(
+            (_selection(path, type="weight_diff"),)
+        )
+
+        self.assertEqual(prepared[0].layers[0].target, "txtfusion.projector")
+
+    def test_rejects_weight_diff_shape_mismatch(self):
+        tensors = {
+            "diffusion_model.txtfusion.projector.diff": torch.ones(1, 12)
+        }
+        self._assert_rejected(tensors, type="weight_diff")
+
+    def test_rejects_weight_diff_when_type_is_lora(self):
+        tensors = {
+            "diffusion_model.txtfusion.projector.diff": torch.ones(2, 3)
+        }
+        self._assert_rejected(tensors, type="lora")
+
+    def test_rejects_lora_pairs_when_type_is_weight_diff(self):
+        self._assert_rejected(
+            _pair("blocks.0.attn.wq", native=True),
+            type="weight_diff",
+        )
+
+    def test_prepared_lora_type_defaults_on_rank_load(self):
+        path = self._save(_pair("blocks.0.attn.wq", native=True))
+        prepared = self.loader.load((_selection(path),))
+        self.assertEqual(prepared[0].type, "lora")
 
 
 class LoRASchemaTests(unittest.TestCase):

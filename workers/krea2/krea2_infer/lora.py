@@ -19,7 +19,15 @@ logger = logging.getLogger(__name__)
 
 MAX_LORAS_PER_REQUEST = 4
 MIN_LORA_STRENGTH = 0.0
-MAX_LORA_STRENGTH = 2.0
+MAX_LORA_STRENGTH = 2.0  # legacy alias for type "lora"
+LORA_TYPE_LORA = "lora"
+LORA_TYPE_WEIGHT_DIFF = "weight_diff"
+LORA_TYPES = frozenset({LORA_TYPE_LORA, LORA_TYPE_WEIGHT_DIFF})
+MAX_STRENGTH_BY_TYPE = {
+    LORA_TYPE_LORA: 2.0,
+    LORA_TYPE_WEIGHT_DIFF: 5.0,
+}
+DEFAULT_LORA_TYPE = LORA_TYPE_LORA
 
 _COMPONENT_PREFIXES = ("diffusion_model.", "transformer.")
 _PAIR_SUFFIXES = {
@@ -29,6 +37,7 @@ _PAIR_SUFFIXES = {
     ".lora_up.weight": ("up", "native"),
 }
 _ALPHA_SUFFIX = ".alpha"
+_DIFF_SUFFIX = ".diff"
 
 _BLOCK_TARGET_MAPPINGS = {
     "attn.to_q": "attn.wq",
@@ -66,9 +75,14 @@ class LoRASelection:
     name: str
     strength: float
     path: Path
+    type: str = DEFAULT_LORA_TYPE
 
     def as_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "strength": self.strength}
+        return {
+            "name": self.name,
+            "strength": self.strength,
+            "type": self.type,
+        }
 
 
 @dataclass(frozen=True)
@@ -80,10 +94,17 @@ class LoRALayerWeights:
 
 
 @dataclass(frozen=True)
+class WeightDiffLayerWeights:
+    target: str
+    delta: torch.Tensor
+
+
+@dataclass(frozen=True)
 class PreparedLoRA:
     name: str
     strength: float
-    layers: tuple[LoRALayerWeights, ...]
+    layers: tuple[LoRALayerWeights | WeightDiffLayerWeights, ...]
+    type: str = DEFAULT_LORA_TYPE
 
 
 @dataclass(frozen=True)
@@ -144,8 +165,10 @@ def normalize_lora_requests(
     for item in raw:
         if not isinstance(item, dict):
             raise LoRAError("Each LoRA must be an object")
-        if "name" not in item or not set(item).issubset({"name", "strength"}):
-            raise LoRAError("Each LoRA object must contain only name and strength")
+        if "name" not in item or not set(item).issubset({"name", "strength", "type"}):
+            raise LoRAError(
+                "Each LoRA object must contain only name, strength, and type"
+            )
 
         name = item["name"]
         if not isinstance(name, str) or not _is_safe_name(name):
@@ -156,6 +179,14 @@ def normalize_lora_requests(
             raise LoRAError(f"Duplicate LoRA: {name}")
         seen.add(name)
 
+        raw_type = item.get("type", DEFAULT_LORA_TYPE)
+        if not isinstance(raw_type, str) or raw_type not in LORA_TYPES:
+            raise LoRAError(
+                f"LoRA type must be one of: {', '.join(sorted(LORA_TYPES))}"
+            )
+        adapter_type = raw_type
+        max_strength = MAX_STRENGTH_BY_TYPE[adapter_type]
+
         raw_strength = item.get("strength", 1.0)
         if isinstance(raw_strength, bool) or not isinstance(raw_strength, (int, float)):
             raise LoRAError("LoRA strength must be a number")
@@ -165,15 +196,22 @@ def normalize_lora_requests(
             raise LoRAError("LoRA strength must be finite") from None
         if not math.isfinite(strength):
             raise LoRAError("LoRA strength must be finite")
-        if not MIN_LORA_STRENGTH <= strength <= MAX_LORA_STRENGTH:
+        if not MIN_LORA_STRENGTH <= strength <= max_strength:
             raise LoRAError(
-                f"LoRA strength must be between {MIN_LORA_STRENGTH} "
-                f"and {MAX_LORA_STRENGTH}"
+                f"LoRA strength for type {adapter_type!r} must be between "
+                f"{MIN_LORA_STRENGTH} and {max_strength}"
             )
 
         path = catalog.resolve(name)
         if strength != 0.0:
-            selections.append(LoRASelection(name=name, strength=strength, path=path))
+            selections.append(
+                LoRASelection(
+                    name=name,
+                    strength=strength,
+                    path=path,
+                    type=adapter_type,
+                )
+            )
 
     return tuple(selections)
 
@@ -197,10 +235,21 @@ class LoRALoader:
         except Exception:
             raise LoRAError(f"Could not load LoRA: {selection.name}") from None
 
+        if selection.type == LORA_TYPE_WEIGHT_DIFF:
+            return self._load_weight_diff(selection, tensors)
+        if selection.type == LORA_TYPE_LORA:
+            return self._load_rank_lora(selection, tensors)
+        self._invalid(selection, f"unsupported type {selection.type!r}")
+
+    def _load_rank_lora(
+        self,
+        selection: LoRASelection,
+        tensors: Mapping[str, torch.Tensor],
+    ) -> PreparedLoRA:
         grouped: dict[str, dict[str, torch.Tensor]] = {}
         pair_conventions: dict[str, str] = {}
         for key in sorted(tensors):
-            parsed = self._parse_tensor_key(key)
+            parsed = self._parse_lora_tensor_key(key)
             if parsed is None:
                 self._invalid(selection, "unsupported tensor key")
             base, part, convention = parsed
@@ -250,16 +299,66 @@ class LoRALoader:
             name=selection.name,
             strength=selection.strength,
             layers=tuple(layers),
+            type=selection.type,
+        )
+
+    def _load_weight_diff(
+        self,
+        selection: LoRASelection,
+        tensors: Mapping[str, torch.Tensor],
+    ) -> PreparedLoRA:
+        layers: list[WeightDiffLayerWeights] = []
+        resolved_targets: set[str] = set()
+        for key in sorted(tensors):
+            if not key.endswith(_DIFF_SUFFIX):
+                self._invalid(selection, "unsupported tensor key")
+            base = key[: -len(_DIFF_SUFFIX)]
+            target = self._resolve_target(base)
+            if target is None:
+                self._invalid(selection, "unknown target")
+            if target in resolved_targets:
+                self._invalid(selection, "duplicate target")
+            resolved_targets.add(target)
+
+            delta = tensors[key]
+            module = self._linear_targets[target]
+            self._validate_weight_diff(selection, module, delta)
+            layers.append(WeightDiffLayerWeights(target=target, delta=delta))
+
+        if not layers:
+            self._invalid(selection, "contains no weight-diff layers")
+
+        layers.sort(key=lambda layer: layer.target)
+        return PreparedLoRA(
+            name=selection.name,
+            strength=selection.strength,
+            layers=tuple(layers),
+            type=selection.type,
         )
 
     @staticmethod
-    def _parse_tensor_key(key: str) -> tuple[str, str, str | None] | None:
+    def _parse_lora_tensor_key(key: str) -> tuple[str, str, str | None] | None:
         for suffix, (part, convention) in _PAIR_SUFFIXES.items():
             if key.endswith(suffix):
                 return key[: -len(suffix)], part, convention
         if key.endswith(_ALPHA_SUFFIX):
             return key[: -len(_ALPHA_SUFFIX)], "alpha", None
         return None
+
+    @staticmethod
+    def _validate_weight_diff(
+        selection: LoRASelection,
+        module: nn.Linear,
+        delta: torch.Tensor,
+    ) -> None:
+        if not delta.is_floating_point():
+            LoRALoader._invalid(selection, "non-floating-point weights")
+        if delta.ndim != 2:
+            LoRALoader._invalid(selection, "non-matrix weights")
+        if tuple(delta.shape) != tuple(module.weight.shape):
+            LoRALoader._invalid(selection, "weight shape mismatch")
+        if not torch.isfinite(delta).all():
+            LoRALoader._invalid(selection, "non-finite weights")
 
     def _resolve_target(self, source: str) -> str | None:
         target = source

@@ -66,6 +66,7 @@ LoRACatalog = _lora.LoRACatalog
 LoRALayerWeights = _lora.LoRALayerWeights
 LoRASelection = _lora.LoRASelection
 PreparedLoRA = _lora.PreparedLoRA
+WeightDiffLayerWeights = _lora.WeightDiffLayerWeights
 LoRAManager = _runtime.LoRAManager
 RuntimeLinearRegistry = _runtime.RuntimeLinearRegistry
 
@@ -80,12 +81,18 @@ class _TwoLinearModel(nn.Module):
         return self.first(x), self.second(x)
 
 
-def _prepared(name, strength, *layers):
-    return PreparedLoRA(name=name, strength=strength, layers=tuple(layers))
+def _prepared(name, strength, *layers, type="lora"):
+    return PreparedLoRA(
+        name=name, strength=strength, layers=tuple(layers), type=type
+    )
 
 
 def _layer(target, down, up, scale=1.0):
     return LoRALayerWeights(target=target, down=down, up=up, scale=scale)
+
+
+def _diff_layer(target, delta):
+    return WeightDiffLayerWeights(target=target, delta=delta)
 
 
 class ModuleIsolationTest(unittest.TestCase):
@@ -121,6 +128,88 @@ class RuntimeLinearRegistryTest(unittest.TestCase):
             torch.testing.assert_close(model.linear(x), x)
         torch.testing.assert_close(model.linear(x), x)
         torch.testing.assert_close(model.linear.weight, weight_before)
+
+    def test_weight_diff_matches_fused_weight_reference(self):
+        model = nn.Module()
+        model.linear = nn.Linear(3, 2, bias=False)
+        with torch.no_grad():
+            model.linear.weight.copy_(
+                torch.tensor([[1.0, 0.0, -0.5], [0.25, 2.0, 0.0]])
+            )
+        x = torch.tensor([[1.0, -2.0, 0.5], [0.0, 1.5, -1.0]])
+        delta = torch.tensor([[0.0, -0.5, 0.0], [1.0, 0.0, -0.25]])
+        strength = 4.0
+        adapter = _prepared(
+            "fedor",
+            strength,
+            _diff_layer("linear", delta),
+            type="weight_diff",
+        )
+        fused = model.linear.weight + strength * delta
+        expected = F.linear(x, fused)
+        registry = RuntimeLinearRegistry.patch(model, torch.float32)
+
+        with registry.activate((adapter,)):
+            actual = model.linear(x)
+
+        torch.testing.assert_close(actual, expected)
+        torch.testing.assert_close(
+            model.linear.weight,
+            fused - strength * delta,
+        )
+
+    def test_mix_rank_lora_and_weight_diff_on_different_targets(self):
+        model = _TwoLinearModel()
+        with torch.no_grad():
+            model.first.weight.copy_(torch.eye(2))
+            model.second.weight.copy_(2.0 * torch.eye(2))
+        x = torch.tensor([[1.0, 3.0]])
+        down = torch.tensor([[1.0, 0.0]])
+        up = torch.tensor([[2.0], [0.0]])
+        delta = torch.tensor([[0.0, 1.0], [-1.0, 0.0]])
+        lora_adapter = _prepared(
+            "style",
+            0.5,
+            _layer("first", down, up, scale=2.0),
+            type="lora",
+        )
+        diff_adapter = _prepared(
+            "bypass",
+            3.0,
+            _diff_layer("second", delta),
+            type="weight_diff",
+        )
+        registry = RuntimeLinearRegistry.patch(model, torch.float32)
+
+        with registry.activate((lora_adapter, diff_adapter)):
+            first, second = model(x)
+
+        torch.testing.assert_close(
+            first,
+            x + 0.5 * 2.0 * F.linear(F.linear(x, down), up),
+        )
+        torch.testing.assert_close(
+            second,
+            F.linear(x, model.second.weight + 3.0 * delta),
+        )
+
+    def test_weight_diff_activation_clears_after_exit(self):
+        model = nn.Module()
+        model.linear = nn.Linear(2, 2, bias=False)
+        adapter = _prepared(
+            "diff",
+            1.0,
+            _diff_layer("linear", torch.ones(2, 2)),
+            type="weight_diff",
+        )
+        registry = RuntimeLinearRegistry.patch(model, torch.float32)
+
+        with registry.activate((adapter,)):
+            self.assertEqual(len(getattr(model.linear, _runtime._ACTIVE_ATTR)), 1)
+            self.assertIsNotNone(
+                getattr(model.linear, _runtime._ACTIVE_ATTR)[0].delta
+            )
+        self.assertEqual(getattr(model.linear, _runtime._ACTIVE_ATTR), ())
 
     def test_two_adapters_on_one_target_sum_their_deltas(self):
         model = nn.Module()
