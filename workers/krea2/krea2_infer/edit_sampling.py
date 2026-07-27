@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from contextlib import nullcontext
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -80,13 +81,66 @@ def build_ref_boost_bias(
     return bias
 
 
+def resolve_edit_canvas_size(
+    sources: Sequence[Image.Image],
+    width: int | None,
+    height: int | None,
+    *,
+    max_megapixels: float = 1.5,
+    align: int = 16,
+) -> tuple[int, int]:
+    """Return (width, height) multiples of align.
+
+    Invariant: both None → derive from sources[0]; both int → roundup;
+    xor → ValueError (no silent dual-derive).
+    """
+    if (width is None) ^ (height is None):
+        raise ValueError("width and height must both be set or both omitted")
+    if not sources:
+        raise ValueError("sources must be non-empty")
+    if width is None and height is None:
+        sw, sh = sources[0].size
+        return target_size_from_source(
+            sw, sh, max_megapixels=max_megapixels, align=align
+        )
+    return roundup(int(width), align, "width"), roundup(int(height), align, "height")
+
+
+def _encode_source_tokens(
+    ae,
+    source: Image.Image,
+    *,
+    height: int,
+    width: int,
+    fit_mode: str,
+    patch: int,
+    device,
+    dtype,
+) -> tuple[torch.Tensor, int, int, int]:
+    """Returns (src_tok, src_len, src_gh, src_gw)."""
+    src_img = fit_source_pixels(
+        source, target_h=height, target_w=width, fit_mode=fit_mode
+    )
+    arr = np.asarray(src_img, dtype=np.float32) / 255.0  # H,W,3
+    px = torch.from_numpy(arr).to(device=device, dtype=dtype)
+    px = px.permute(2, 0, 1).unsqueeze(0) * 2 - 1  # (1,3,hs,ws)
+    src_lat = ae.encode(px)  # (1,16,hs/8,ws/8)
+    src_tok = rearrange(
+        src_lat, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch
+    )
+    src_len = src_tok.shape[1]
+    src_gh = src_lat.shape[-2] // patch
+    src_gw = src_lat.shape[-1] // patch
+    return src_tok, src_len, src_gh, src_gw
+
+
 @torch.no_grad()
 def sample_edit(
     model,  # SingleStreamDiT
     ae,  # QwenAutoencoder
     encoder,  # Qwen3VLConditioner
     instruction: str,
-    source: Image.Image,
+    sources: Sequence[Image.Image],
     *,
     negative_prompt: str | None = None,
     device="cuda",
@@ -103,45 +157,60 @@ def sample_edit(
     max_megapixels: float = 1.5,
     lora_activation=None,
 ) -> list[Image.Image]:
+    if not isinstance(sources, (list, tuple)):
+        raise ValueError("sources must be a sequence of PIL images")
+    n_src = len(sources)
+    if n_src not in (1, 2):
+        raise ValueError(f"sample_edit requires 1 or 2 sources (got {n_src})")
+
     patch = model.config.patch
     align = ae.compression * patch  # 16
 
-    sw, sh = source.size
-    if width is None or height is None:
-        width, height = target_size_from_source(
-            sw, sh, max_megapixels=max_megapixels, align=align
-        )
-    else:
-        width, height = roundup(width, align, "width"), roundup(height, align, "height")
+    width, height = resolve_edit_canvas_size(
+        sources,
+        width,
+        height,
+        max_megapixels=max_megapixels,
+        align=align,
+    )
 
     # --- TE on GPU ---
     if _module_device(encoder).type != "cuda" and str(device).startswith("cuda"):
         encoder.to(device)
 
     txt, txtmask = encoder.grounded_encode(
-        [instruction], [source], grounding_px=grounding_px
+        instruction, sources, grounding_px=grounding_px
     )
     # txt: (1, T, 12, C), txtmask: (1, T)
     cfg = guidance > 0
     if cfg:
         neg_text = negative_prompt if negative_prompt is not None else ""
         untxt, untxtmask = encoder.grounded_encode(
-            [neg_text], [source], grounding_px=grounding_px
+            neg_text, sources, grounding_px=grounding_px
         )
 
     _offload_encoder_to_cpu(encoder)
 
-    # --- source pixels → latent tokens ---
-    src_img = fit_source_pixels(source, target_h=height, target_w=width, fit_mode=fit_mode)
-    arr = np.asarray(src_img, dtype=np.float32) / 255.0  # H,W,3
-    px = torch.from_numpy(arr).to(device=device, dtype=dtype)
-    px = px.permute(2, 0, 1).unsqueeze(0) * 2 - 1  # (1,3,hs,ws)
-    src_lat = ae.encode(px)  # (1,16,hs/8,ws/8)
-    src_tok = rearrange(
-        src_lat, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch
-    )
-    src_len = src_tok.shape[1]
-    src_gh, src_gw = src_lat.shape[-2] // patch, src_lat.shape[-1] // patch
+    # --- source pixels → latent tokens (independent fit per ref) ---
+    src_toks: list[torch.Tensor] = []
+    src_lens: list[int] = []
+    src_grids: list[tuple[int, int]] = []
+    for src in sources:
+        tok, slen, gh, gw = _encode_source_tokens(
+            ae,
+            src,
+            height=height,
+            width=width,
+            fit_mode=fit_mode,
+            patch=patch,
+            device=device,
+            dtype=dtype,
+        )
+        src_toks.append(tok)
+        src_lens.append(slen)
+        src_grids.append((gh, gw))
+    src_tok = torch.cat(src_toks, dim=1)
+    src_total = sum(src_lens)
 
     # --- target noise ---
     lh, lw = height // ae.compression, width // ae.compression
@@ -164,18 +233,19 @@ def sample_edit(
     pos = build_edit_position_ids(
         1,
         txt.shape[1],
-        [(src_gh, src_gw)],
+        src_grids,
         (th, tw),
         pos_mode=pos_mode,
         device=device,
     )
-    img_ones = torch.ones(1, src_len + tgt_len, device=device, dtype=torch.bool)
+    img_ones = torch.ones(1, src_total + tgt_len, device=device, dtype=torch.bool)
     mask = torch.cat([txtmask.to(device), img_ones], dim=1)
 
+    boosts = [ref_boost] * n_src
     bias = build_ref_boost_bias(
-        [ref_boost],
+        boosts,
         txt.shape[1],
-        [src_len],
+        src_lens,
         tgt_len,
         device=device,
         dtype=dtype,
@@ -204,16 +274,16 @@ def sample_edit(
                 unpos = build_edit_position_ids(
                     1,
                     untxt.shape[1],
-                    [(src_gh, src_gw)],
+                    src_grids,
                     (th, tw),
                     pos_mode=pos_mode,
                     device=device,
                 )
                 unmask = torch.cat([untxtmask.to(device), img_ones], dim=1)
                 unbias = build_ref_boost_bias(
-                    [ref_boost],
+                    boosts,
                     untxt.shape[1],
-                    [src_len],
+                    src_lens,
                     tgt_len,
                     device=device,
                     dtype=dtype,
@@ -231,7 +301,7 @@ def sample_edit(
                 v = cond
             # Euler only on target tokens; source tokens stay clean
             tgt = img[:, -tgt_len:, :] + (tprev - tcurr) * v
-            img = torch.cat([img[:, :src_len, :], tgt], dim=1)
+            img = torch.cat([img[:, :src_total, :], tgt], dim=1)
 
     tgt = img[:, -tgt_len:, :]
     lat = rearrange(

@@ -30,6 +30,7 @@ _ensure_krea2_infer_namespace()
 from krea2_infer.edit_sampling import (  # noqa: E402
     build_edit_position_ids,
     build_ref_boost_bias,
+    resolve_edit_canvas_size,
 )
 
 
@@ -96,6 +97,77 @@ class RefBoostBiasTests(unittest.TestCase):
             torch.allclose(bias[0, 0, 5:9, 2:5], torch.full((4, 3), expected))
         )
         self.assertTrue(torch.all(bias[0, 0, :5, :] == 0))
+
+    def test_two_sources_boost_spans_both_blocks(self):
+        bias = build_ref_boost_bias(
+            [4.0, 4.0],
+            text_len=1,
+            src_token_lens=[2, 3],
+            tgt_len=4,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+        )
+        # L = 1+2+3+4 = 10
+        self.assertEqual(tuple(bias.shape), (1, 1, 10, 10))
+        expected = math.log(4.0)
+        # target rows 6:10, src0 cols 1:3, src1 cols 3:6
+        self.assertTrue(
+            torch.allclose(bias[0, 0, 6:10, 1:3], torch.full((4, 2), expected))
+        )
+        self.assertTrue(
+            torch.allclose(bias[0, 0, 6:10, 3:6], torch.full((4, 3), expected))
+        )
+
+
+class MultiRefPositionIdsTests(unittest.TestCase):
+    def test_two_sources_frames_and_total_len(self):
+        # text=2, src0 2x2, src1 1x2, tgt 3x3
+        pos = build_edit_position_ids(
+            batch=1,
+            text_len=2,
+            src_grids=[(2, 2), (1, 2)],
+            tgt_grid=(3, 3),
+            pos_mode="anchor",
+            device=torch.device("cpu"),
+        )
+        # 2 + 4 + 2 + 9 = 17
+        self.assertEqual(tuple(pos.shape), (1, 17, 3))
+        self.assertTrue(torch.all(pos[0, 2:6, 0] == 1.0))  # frame 1
+        self.assertTrue(torch.all(pos[0, 6:8, 0] == 2.0))  # frame 2
+        self.assertTrue(torch.all(pos[0, 8:17, 0] == 0.0))  # target
+
+
+class ResolveCanvasSizeTests(unittest.TestCase):
+    def test_xor_raises(self):
+        from PIL import Image
+
+        src = Image.new("RGB", (64, 64))
+        with self.assertRaisesRegex(ValueError, "both"):
+            resolve_edit_canvas_size([src], 512, None)
+        with self.assertRaisesRegex(ValueError, "both"):
+            resolve_edit_canvas_size([src], None, 512)
+
+    def test_both_none_uses_first_source(self):
+        from PIL import Image
+
+        a = Image.new("RGB", (320, 160))
+        b = Image.new("RGB", (999, 999))
+        w, h = resolve_edit_canvas_size(
+            [a, b], None, None, max_megapixels=1.5, align=16
+        )
+        self.assertEqual(w % 16, 0)
+        self.assertEqual(h % 16, 0)
+        self.assertAlmostEqual(w / h, 320 / 160, delta=0.05)
+
+    def test_both_int_roundup(self):
+        from PIL import Image
+
+        src = Image.new("RGB", (10, 10))
+        w, h = resolve_edit_canvas_size([src], 1000, 500, align=16)
+        self.assertEqual(w % 16, 0)
+        self.assertEqual(h % 16, 0)
+        self.assertGreaterEqual(w, 1000)
+        self.assertGreaterEqual(h, 500)
 
 
 class VelocitySliceTests(unittest.TestCase):

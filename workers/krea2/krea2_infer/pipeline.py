@@ -268,8 +268,9 @@ class Krea2Pipeline:
     def edit(
         self,
         prompt: str,
-        source: Image.Image,
+        sources: Sequence[Image.Image] | None = None,
         *,
+        source: Image.Image | None = None,
         width: int | None = None,
         height: int | None = None,
         steps: int = 8,
@@ -282,6 +283,19 @@ class Krea2Pipeline:
         fit_mode: str = "fit",
         loras: Sequence[LoRASelection] = (),
     ):
+        """Identity edit with 1..2 reference images.
+
+        Prefer ``sources=``. Deprecated ``source=`` alone is accepted as a
+        single-ref adapter. Passing both is an error.
+        """
+        if sources is not None and source is not None:
+            raise ValueError("pass only one of source= or sources=")
+        if sources is None and source is None:
+            raise ValueError("edit requires sources= or source=")
+        if sources is None:
+            resolved: Sequence[Image.Image] = (source,)
+        else:
+            resolved = sources
         if loras and self.loras is None:
             raise RuntimeError("LoRA manager is not configured")
         # Edit never uses resolution-auto mu (would depend on wrong seq_len).
@@ -293,7 +307,7 @@ class Krea2Pipeline:
             self.ae,
             self.encoder,
             prompt,
-            source,
+            resolved,
             negative_prompt=negative_prompt,
             device=str(self.device),
             dtype=self.dtype,

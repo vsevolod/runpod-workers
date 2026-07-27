@@ -68,21 +68,69 @@ class NormalizeJobInputTests(unittest.TestCase):
                 raw_keys={"type", "prompt", "images", "width", "height"},
             )
 
-    def test_edit_requires_exactly_one_image(self):
-        with self.assertRaisesRegex(RequestError, "exactly one"):
+    def test_edit_requires_one_or_two_images(self):
+        with self.assertRaisesRegex(RequestError, r"1 or 2"):
             normalize_job_input(
                 {"type": "image_edit", "prompt": "make it night", "images": []},
                 raw_keys={"type", "prompt", "images"},
             )
-        with self.assertRaisesRegex(RequestError, "exactly one"):
+        with self.assertRaisesRegex(RequestError, r"1 or 2"):
             normalize_job_input(
                 {
                     "type": "image_edit",
                     "prompt": "make it night",
-                    "images": [_png_b64(), _png_b64()],
+                    "images": [_png_b64(), _png_b64(), _png_b64()],
                 },
                 raw_keys={"type", "prompt", "images"},
             )
+
+    def test_edit_accepts_two_images_different_sizes(self):
+        a = _png_b64(64, 48, color=(255, 0, 0))
+        b = _png_b64(100, 200, color=(0, 255, 0))
+        out = normalize_job_input(
+            {
+                "type": "image_edit",
+                "prompt": "put person next to tractor",
+                "images": [a, b],
+                "width": 1024,
+                "height": 1024,
+                "grounding_px": 768,
+                "ref_boost": 4.0,
+                "fit_mode": "fit",
+                "num_images": 1,
+            },
+            raw_keys={"type", "prompt", "images", "width", "height"},
+        )
+        self.assertEqual(len(out.images), 2)
+        self.assertEqual(out.images[0].size, (64, 48))
+        self.assertEqual(out.images[1].size, (100, 200))
+        self.assertFalse(out.size_from_source)
+        self.assertEqual(out.width, 1024)
+        self.assertEqual(out.height, 1024)
+
+    def test_edit_size_from_source_ignores_second_image_dims(self):
+        """Canvas primary is images[0]; second image size does not set WH."""
+        a = _png_b64(80, 60)
+        b = _png_b64(400, 300)
+        out = normalize_job_input(
+            {
+                "type": "image_edit",
+                "prompt": "restage",
+                "images": [a, b],
+                "width": 1024,
+                "height": 1024,
+                "grounding_px": 768,
+                "ref_boost": 1.0,
+                "fit_mode": "fit",
+                "num_images": 1,
+            },
+            raw_keys={"type", "prompt", "images"},
+        )
+        self.assertTrue(out.size_from_source)
+        self.assertIsNone(out.width)
+        self.assertIsNone(out.height)
+        self.assertEqual(len(out.images), 2)
+        self.assertEqual(out.images[0].size, (80, 60))
 
     def test_edit_accepts_data_url_and_defaults(self):
         raw = _png_b64(64, 48)

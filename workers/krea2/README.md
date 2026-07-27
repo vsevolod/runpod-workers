@@ -160,9 +160,9 @@ If a release appears on GitHub but **no** new row shows under Builds, re-check G
 | `type` | Meaning | `images` |
 |--------|---------|----------|
 | `image_generate` (default) | Text-to-image | must be empty / omitted |
-| `image_edit` | Identity edit (source image + instruction) | **exactly one** base64 / data-URL entry |
+| `image_edit` | Identity edit (1–2 refs + instruction) | **1 or 2** base64 / data-URL entries |
 
-`images` is always an **array** (future multi-ref). Edit currently requires length **1**.
+`images` is always an **array**. Edit requires length **1 or 2** (hard max 2).
 
 ### Text-to-image (`image_generate`)
 
@@ -192,8 +192,8 @@ Turbo defaults: **8 steps**, **CFG 0**, **mu 1.15**. Width/height multiples of *
 
 Dual conditioning (not a plain LoRA attach):
 
-1. **Grounded Qwen3-VL encode** — instruction + source image through the vision TE (`mm_processor`).
-2. **Source VAE tokens** — fit/crop pixels → encode → RoPE frame=1 concatenated with target noise (frame=0).
+1. **Grounded Qwen3-VL encode** — instruction + **1 or 2** source images through the vision TE (`mm_processor`).
+2. **Source VAE tokens** — each ref independently fit/crop → encode → RoPE frames `1..N` concatenated with target noise (frame=`0`).
 
 Primary reference implementation: [conradlocke/krea2-identity-edit](https://huggingface.co/spaces/conradlocke/krea2-identity-edit) **v1.2** Space (and ComfyUI-Krea2Edit). Place the identity LoRA on the volume:
 
@@ -202,6 +202,8 @@ Primary reference implementation: [conradlocke/krea2-identity-edit](https://hugg
 ```
 
 Restart warm workers after adding the file so the catalog re-scans.
+
+**Single ref:**
 
 ```json
 {
@@ -221,23 +223,42 @@ Restart warm workers after adding the file so the catalog re-scans.
 }
 ```
 
+**Two refs** (same pipeline — multi-identity, compose, or scene+subject). Order matters for scene+subject: **scene first, subject second**.
+
+```json
+{
+  "input": {
+    "type": "image_edit",
+    "prompt": "create a photo of this person next to the tractor",
+    "images": [
+      "data:image/png;base64,...",
+      "data:image/jpeg;base64,..."
+    ],
+    "loras": [{"name": "krea2_identity_edit_v1_2", "strength": 1.0}],
+    "ref_boost": 4.0,
+    "fit_mode": "fit",
+    "seed": 42
+  }
+}
+```
+
 Edit fields:
 
 | Field | Default | Notes |
 |-------|---------|--------|
-| `images` | `[]` | **Required** length 1 for edit (raw base64 or `data:image/...;base64,...`) |
-| `width` / `height` | schema 1024 | If **omitted** by the client, size is derived from the source (MP-capped, snap to 16). If present, used as explicit target. |
-| `grounding_px` | `768` | Long-side cap for vision TE; `0` = no resize |
-| `ref_boost` | `1.0` | Attention boost target→source. **Recommend `4.0` for likeness**; `1.0` is the API default (no dense float bias). |
-| `fit_mode` | `"fit"` | `"fit"` (AR-preserving, may be smaller) or `"crop"` (exact target) |
-| `num_images` | `1` | Must be **1** for edit |
+| `images` | `[]` | **Required** length **1 or 2** (raw base64 or `data:image/...;base64,...`) |
+| `width` / `height` | schema 1024 | If **both omitted** by the client, canvas is derived from **`images[0]`** (MP-capped, snap to 16). If present, both used as explicit target. Prefer omit both or send both. `images[1]` never sets canvas. Different native sizes are fine (each ref fit independently). |
+| `grounding_px` | `768` | Long-side cap for vision TE **per** image; `0` = no resize |
+| `ref_boost` | `1.0` | Attention boost target→**each** source (shared scalar). **Recommend `4.0` for likeness**; `1.0` is the API default (no dense float bias). |
+| `fit_mode` | `"fit"` | `"fit"` (AR-preserving, may be smaller) or `"crop"` (exact target); applied to **all** refs |
+| `num_images` | `1` | Must be **1** for edit (output count, not ref count) |
 | `mu` | `1.15` | Always pinned for edit (auto-mu disabled) |
 
 **GQA / `ref_boost`:** when `ref_boost != 1`, the DiT uses a dense float attention bias and expands K/V heads (GQA → full heads) so SDPA has a valid kernel. CUDA backends are FLASH + EFFICIENT only (no MATH — would OOM on full L×L).
 
-**VRAM:** edit sequences are ~2× image tokens (source + target). Same 24 GB class with TE offload; prefer ≤1.5 MP targets. OOM → lower resolution / fewer steps / no CFG.
+**VRAM:** 1-ref edit ≈ ~2× image tokens (source + target); **2 refs ≈ ~3×**. Same 24 GB class with TE offload; prefer ≤1.5 MP targets. OOM → lower resolution / fewer steps / no CFG / single ref.
 
-What is **not** available yet: multi-image refs, “removals → raw” export, Diffusers pipeline rewrite.
+What is **not** available yet: N>2 refs, per-image `ref_boosts`, “removals → raw” export, Diffusers pipeline rewrite. Style-only dual-ref is not a quality guarantee.
 
 Optional `loras` (default `[]`, both modes):
 
@@ -276,12 +297,15 @@ Response:
     "grounding_px": 768,
     "ref_boost": 4.0,
     "fit_mode": "fit",
+    "num_refs": 1,
     "loras": [
       {"name": "krea2_identity_edit_v1_2", "strength": 1.0, "type": "lora"}
     ]
   }
 }
 ```
+
+Edit responses keep top-level `grounding_px` / `ref_boost` / `fit_mode` and add top-level **`num_refs`** (`1` or `2`).
 
 ### curl
 
@@ -312,8 +336,8 @@ You still need GPU + `MODEL_DIR` mount to actually generate.
 - **INT8 ConvRot DiT (`DIT_QUANT=int8_convrot`):** stock Comfy `int8_tensorwise` layout (`weight` int8 + `weight_scale` + `comfy_quant`); online Hadamard on activations when marker has `convrot`; CUDA uses `torch._int_mm` for larger token batches.
 - **VAE:** prefer clean HF Diffusers weights; do not overlay incompatible Comfy key names with `strict=False`.
 - **Runtime LoRA:** up to four pre-placed adapters applied only during DiT denoise (base FP8/INT8 weights unchanged; LoRA delta in compute dtype); released before VAE decode.
-- **Identity edit:** grounded multimodal TE (`mm_processor`, separate from text tokenizer) + source VAE tokens with RoPE frame split; optional `ref_boost` dense bias with GQA-safe expand.
-- **Not in MVP:** Comfy workflows, multi-ref edit, removals→raw, baking 18 GB into the image layer.
+- **Identity edit:** grounded multimodal TE (`mm_processor`, separate from text tokenizer) + 1–2 source VAE streams with RoPE frame split; optional `ref_boost` dense bias with GQA-safe expand.
+- **Not in MVP:** Comfy workflows, N>2 refs, removals→raw, baking 18 GB into the image layer.
 
 ## License
 

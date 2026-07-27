@@ -7,6 +7,7 @@ Licensed under Apache-2.0; see ../LICENSES/KREA-2-APACHE-2.0.txt.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Sequence
 
 import torch
 from PIL import Image
@@ -18,30 +19,24 @@ from transformers import (
     Qwen3VLForConditionalGeneration,
 )
 
-# Grounded multimodal template (identity-edit path). Keep in sync with Space/Comfy.
-GROUNDED_TEMPLATE = (
-    "<|im_start|>system\nDescribe the image by detailing the color, shape, size, "
-    "texture, quantity, text, spatial relationships of the objects and background:"
-    "<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
-    "{instruction}<|im_end|>\n<|im_start|>assistant\n"
+# Re-export grounded helpers (identity-edit path; implementation in grounded.py).
+from .grounded import (  # noqa: E402
+    GROUNDED_TEMPLATE,
+    grounded_encode_impl,
+    grounded_template,
+    prepare_grounded_images,
+    resize_for_grounding,
 )
 
-
-def grounded_template(instruction: str) -> str:
-    return GROUNDED_TEMPLATE.format(instruction=instruction or "")
-
-
-def resize_for_grounding(image: Image.Image, grounding_px: int) -> Image.Image:
-    img = image.convert("RGB")
-    if not grounding_px:
-        return img
-    w, h = img.size
-    m = max(w, h)
-    if m <= grounding_px:
-        return img
-    s = grounding_px / m
-    nw, nh = max(16, round(w * s)), max(16, round(h * s))
-    return img.resize((nw, nh), Image.Resampling.LANCZOS)
+__all__ = [
+    "GROUNDED_TEMPLATE",
+    "TextEncoderConfig",
+    "Qwen3VLConditioner",
+    "grounded_encode_impl",
+    "grounded_template",
+    "prepare_grounded_images",
+    "resize_for_grounding",
+]
 
 
 @dataclass
@@ -133,56 +128,25 @@ class Qwen3VLConditioner(torch.nn.Module):
 
     def grounded_encode(
         self,
-        texts: list[str],
-        images: list[Image.Image],
+        text: str,
+        images: Sequence[Image.Image],
         *,
         grounding_px: int = 768,
     ) -> tuple[Tensor, Tensor]:
         """
+        Multimodal encode for identity edit: one instruction + 1..2 images.
+
         Returns:
-          hiddens: (B, seq_after_prefix, len(select_layers), hidden_dim)
-          mask:    (B, seq_after_prefix) bool
-        MVP: B == 1 (caller loops for CFG).
+          hiddens: (1, seq_after_prefix, len(select_layers), hidden_dim)
+          mask:    (1, seq_after_prefix) bool
+        Batch is always 1 (caller loops for CFG).
         """
-        if len(texts) != len(images) or len(texts) != 1:
-            raise ValueError("grounded_encode MVP requires len(texts) == len(images) == 1")
-        if self.mm_processor is None:
-            raise RuntimeError("mm_processor (AutoProcessor) is required for image_edit")
-
-        img = resize_for_grounding(images[0], grounding_px)
-        text = grounded_template(texts[0])
-        inputs = self.mm_processor(
-            text=[text],
-            images=[img],
-            padding=True,
-            return_tensors="pt",
+        return grounded_encode_impl(
+            text,
+            images,
+            grounding_px=grounding_px,
+            mm_processor=self.mm_processor,
+            qwen=self.qwen,
+            select_layers=self.select_layers,
+            prefix_idx=self.prompt_template_encode_start_idx,
         )
-        device = next(self.qwen.parameters()).device
-        te_kwargs = {
-            "input_ids": inputs["input_ids"].to(device),
-            "attention_mask": inputs.get("attention_mask"),
-            "pixel_values": inputs.get("pixel_values"),
-            "image_grid_thw": inputs.get("image_grid_thw"),
-            "output_hidden_states": True,
-        }
-        if te_kwargs["attention_mask"] is not None:
-            te_kwargs["attention_mask"] = te_kwargs["attention_mask"].to(device)
-        if te_kwargs["pixel_values"] is not None:
-            te_kwargs["pixel_values"] = te_kwargs["pixel_values"].to(device)
-        if te_kwargs["image_grid_thw"] is not None:
-            te_kwargs["image_grid_thw"] = te_kwargs["image_grid_thw"].to(device)
-        if inputs.get("mm_token_type_ids") is not None:
-            te_kwargs["mm_token_type_ids"] = inputs["mm_token_type_ids"].to(device)
-
-        with torch.no_grad():
-            states = self.qwen(**te_kwargs)
-            hiddens = torch.stack(
-                [states.hidden_states[i] for i in self.select_layers], dim=2
-            )
-        attn = te_kwargs.get("attention_mask")
-        if attn is None:
-            mask = torch.ones(hiddens.shape[:2], device=hiddens.device, dtype=torch.bool)
-        else:
-            mask = attn.bool()
-        prefix = self.prompt_template_encode_start_idx
-        return hiddens[:, prefix:], mask[:, prefix:]

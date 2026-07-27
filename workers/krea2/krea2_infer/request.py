@@ -27,7 +27,7 @@ class NormalizedRequest:
     guidance_scale: float
     mu: float | None
     num_images: int
-    images: tuple[Image.Image, ...]  # 0 for generate; 1 for edit
+    images: tuple[Image.Image, ...]  # 0 for generate; 1..2 for edit
     grounding_px: int
     ref_boost: float
     fit_mode: str  # "fit" | "crop"
@@ -95,14 +95,16 @@ def normalize_job_input(
                 f"width and height must be multiples of 16 (got {width}x{height})"
             )
     else:
-        if len(images_raw) != 1:
-            raise RequestError("image_edit requires exactly one entry in images[]")
-        images = (decode_image_string(images_raw[0]),)
+        n_raw = len(images_raw)
+        if n_raw < 1 or n_raw > 2:
+            raise RequestError("image_edit requires 1 or 2 entries in images[]")
+        images = tuple(decode_image_string(s) for s in images_raw)
         num_images = int(validated.get("num_images") or 1)
         if num_images != 1:
             raise RequestError("image_edit requires num_images == 1")
         size_from_source = ("width" not in raw_keys) and ("height" not in raw_keys)
         if size_from_source:
+            # Canvas primary is images[0]; both None (handler/pipeline invariant).
             width, height = None, None
         else:
             width = int(validated["width"])

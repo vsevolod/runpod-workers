@@ -139,7 +139,7 @@ def generate_image(job: dict):
             edit_mu = float(norm.mu) if norm.mu is not None else 1.15
             images = MODELS.pipe.edit(
                 prompt=norm.prompt,
-                source=norm.images[0],
+                sources=norm.images,
                 width=norm.width,
                 height=norm.height,
                 steps=int(norm.num_inference_steps),
@@ -165,7 +165,8 @@ def generate_image(job: dict):
         return {
             "error": (
                 "CUDA out of memory. Need ~24 GB with TE offload after encode, "
-                "or a larger GPU / lower resolution. Edit uses ~2× image tokens."
+                "or a larger GPU / lower resolution. Edit uses ~2× image tokens "
+                "per ref (+target); two refs ≈ ~3× image tokens."
             ),
             "refresh_worker": True,
         }
@@ -202,6 +203,7 @@ def generate_image(job: dict):
                 "grounding_px": norm.grounding_px,
                 "ref_boost": norm.ref_boost,
                 "fit_mode": norm.fit_mode,
+                "num_refs": len(norm.images),
             }
         )
     return payload
