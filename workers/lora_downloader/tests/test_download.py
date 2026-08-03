@@ -92,7 +92,7 @@ class NormalizeItemTests(unittest.TestCase):
             normalize_item({"model_version_id": True})
 
     def test_rejects_zero_and_bad_str(self):
-        for raw in (0, -1, "", "12a", 1.5, None):
+        for raw in (0, -1, "", "12a", 1.5, None, "²"):
             with self.subTest(raw=raw):
                 with self.assertRaises(ItemNormalizeError):
                     normalize_item({"model_version_id": raw})
@@ -463,6 +463,37 @@ class RunBatchTests(unittest.TestCase):
         self.assertIn("note", out)
         self.assertEqual(out["dest"], str(lora))
         self.assertNotIn("output", out)
+
+    def test_unicode_digit_id_fails_item_not_batch(self):
+        """Unicode isdigit() chars must not abort the whole batch via ValueError."""
+        lora = self._lora_dir()
+        body = b"ok"
+        opener = ScriptedOpener(
+            [
+                FakeResponse(
+                    200,
+                    {
+                        "Content-Disposition": 'attachment; filename="ok.safetensors"',
+                        "Content-Length": str(len(body)),
+                    },
+                    body,
+                )
+            ]
+        )
+        out = run_batch(
+            [
+                {"model_version_id": "²"},
+                {"model_version_id": "2", "filename": "ok.safetensors"},
+            ],
+            token="t",
+            lora_dir=lora,
+            urlopen=opener,
+        )
+        self.assertEqual(out["summary"]["failed"], 1)
+        self.assertEqual(out["summary"]["downloaded"], 1)
+        self.assertEqual(out["results"][0]["status"], "failed")
+        self.assertEqual(out["results"][1]["status"], "downloaded")
+        self.assertTrue((lora / "ok.safetensors").is_file())
 
     def test_network_error_then_success(self):
         lora = self._lora_dir()

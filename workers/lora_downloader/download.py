@@ -94,9 +94,16 @@ def _normalize_model_version_id(value: object) -> str:
             raise ItemNormalizeError("model_version_id must be a positive integer")
         return str(value)
     if isinstance(value, str):
-        if not value.isdigit():
+        # ASCII digits only — str.isdigit() accepts Unicode numerals (e.g. "²")
+        # that int() rejects with ValueError.
+        if not value or not value.isascii() or not value.isdigit():
             raise ItemNormalizeError("model_version_id must be a positive digit string")
-        as_int = int(value)
+        try:
+            as_int = int(value)
+        except ValueError as err:
+            raise ItemNormalizeError(
+                "model_version_id must be a positive digit string"
+            ) from err
         if as_int <= 0:
             raise ItemNormalizeError("model_version_id must be a positive digit string")
         return str(as_int)
@@ -406,8 +413,18 @@ def _best_effort_id(raw: object) -> str:
             return "?"
         if type(val) is int and val > 0:
             return str(val)
-        if isinstance(val, str) and val.isdigit() and int(val) > 0:
-            return str(int(val))
+        if (
+            isinstance(val, str)
+            and val
+            and val.isascii()
+            and val.isdigit()
+        ):
+            try:
+                as_int = int(val)
+            except ValueError:
+                return str(val)
+            if as_int > 0:
+                return str(as_int)
         return str(val)
     return "?"
 
