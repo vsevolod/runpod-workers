@@ -1,0 +1,11 @@
+{
+  "input": {
+    "items": [
+      {
+        "model_version_id": "46846",
+        "filename": "example.safetensors",
+        "nsfw": true
+      }
+    ]
+  }
+}

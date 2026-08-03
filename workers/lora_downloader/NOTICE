@@ -1,0 +1,26 @@
+Third-party software notices for workers/lora_downloader
+
+RunPod worker-sdxl
+------------------
+
+Portions of handler.py (serverless validation / entrypoint pattern) are adapted
+from:
+
+  runpod-workers/worker-sdxl
+  https://github.com/runpod-workers/worker-sdxl
+
+Copyright (c) 2025 RunPod
+
+The adapted portions are licensed under the MIT License. A copy of that
+license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
+
+CivitAI
+-------
+
+This worker downloads files using CivitAI's public download API
+(https://civitai.com / https://civitai.red) with an operator-provided API token.
+It does not vendor or copy third-party download utilities (including any
+GPL-licensed clients). HTTP client code in download.py is original to this
+repository.
+
+LoRA weights are NOT included in this repository.
