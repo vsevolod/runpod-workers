@@ -95,8 +95,8 @@ Ref2VA / `transformer_ref/` are **not** downloaded (T2V MVP only).
 | `MAX_INLINE_VIDEO_BYTES` | optional | default `7000000` when no bucket |
 | `LOG_LEVEL` | optional | default `INFO` |
 
-Without a complete bucket config, small MP4s return `video_base64`; large files
-return an error (no fake `local_upload/` URL).
+Without a complete bucket config, small MP4s return `video` (raw base64); large
+files return an error (no fake `local_upload/` URL).
 
 ## API
 
@@ -133,13 +133,13 @@ Official long canvas **2016×512** is valid; preview **864×480** is valid.
   "seed": 42,
   "requested_duration": 5.0,
   "output_duration": 5.1666…,
-  "num_inference_steps": 50,
-  "size_bytes": 1234567
+  "fps": 24,
+  "model": "MiniMaxAI/MiniMax-H3"
 }
 ```
 
-**Success (inline):** `video_base64` + `content_type: video/mp4` when no bucket
-and size ≤ inline limit.
+**Success (inline):** field `video` (raw base64 MP4, no `data:` prefix) when no
+bucket and size ≤ inline limit — same metadata fields as URL mode.
 
 **Errors:** `{"error": "…"}`; CUDA OOM and unexpected failures set
 `"refresh_worker": true`.

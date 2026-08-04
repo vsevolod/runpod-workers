@@ -19,6 +19,7 @@ from h3_infer.delivery import (
     choose_delivery,
     require_bucket_or_exit,
 )
+from h3_infer.pipeline import FPS, MODEL_ID
 from h3_infer.request import RequestError, normalize_t2v_input
 from schemas import INPUT_SCHEMA
 
@@ -54,6 +55,7 @@ def _upload_file_to_bucket(**kwargs):
 
 
 def _meta(req) -> dict:
+    """Success/error geometry metadata (design contract)."""
     return {
         "width": req.width,
         "height": req.height,
@@ -61,7 +63,8 @@ def _meta(req) -> dict:
         "seed": req.seed,
         "requested_duration": req.requested_duration,
         "output_duration": req.output_duration,
-        "num_inference_steps": 50,
+        "fps": FPS,
+        "model": MODEL_ID,
     }
 
 
@@ -137,14 +140,10 @@ def handler(job: dict) -> dict:
             return {"error": plan.error, **meta}
 
         if plan.mode == "base64":
+            # Spec field name is ``video`` (raw base64, no data: prefix).
             raw = mp4_path.read_bytes()
             b64 = base64.b64encode(raw).decode("ascii")
-            return {
-                **meta,
-                "video_base64": b64,
-                "content_type": "video/mp4",
-                "size_bytes": raw_size,
-            }
+            return {**meta, "video": b64}
 
         # url mode
         url = _upload_file_to_bucket(
@@ -158,7 +157,7 @@ def handler(job: dict) -> dict:
                 "error": "bucket upload returned non-URL path; check BUCKET_* credentials",
                 **meta,
             }
-        return {**meta, "video_url": url, "size_bytes": raw_size}
+        return {**meta, "video_url": url}
 
     except Exception as err:
         # Prefer torch.cuda.OutOfMemoryError when torch is available.

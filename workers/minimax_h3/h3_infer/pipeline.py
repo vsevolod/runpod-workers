@@ -27,6 +27,7 @@ class H3Pipeline:
     def __init__(self, model_dir: str | None = None) -> None:
         self.model_dir = model_dir or os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
         self._pipe = None
+        self._manager = None
         self._load()
 
     def _load(self) -> None:
@@ -45,7 +46,7 @@ class H3Pipeline:
             )
 
         import torch
-        from diffusers.modular_pipelines import ModularPipeline
+        from diffusers import ComponentsManager, ModularPipeline
 
         logger.info(
             "Loading MiniMax-H3 ModularPipeline from %s (diffusers pin %s)",
@@ -57,24 +58,23 @@ class H3Pipeline:
             "true",
             "yes",
         }
+        # Official 1×80GB recipe: ComponentsManager owns placement; pipe.components
+        # is a dict and does NOT expose enable_auto_cpu_offload.
+        manager = ComponentsManager()
         pipe = ModularPipeline.from_pretrained(
             self.model_dir,
+            components_manager=manager,
             trust_remote_code=True,
             local_files_only=local_only,
         )
         pipe.load_components(dtype=torch.bfloat16)
-        # 1×80GB path: auto CPU offload with reserve for activations.
-        if hasattr(pipe, "components") and hasattr(
-            pipe.components, "enable_auto_cpu_offload"
-        ):
-            pipe.components.enable_auto_cpu_offload(
-                device="cuda",
-                memory_reserve_margin="12GB",
-            )
-        elif hasattr(pipe, "enable_model_cpu_offload"):
-            pipe.enable_model_cpu_offload()
+        manager.enable_auto_cpu_offload(
+            device="cuda",
+            memory_reserve_margin="12GB",
+        )
+        self._manager = manager
         self._pipe = pipe
-        logger.info("MiniMax-H3 pipeline ready")
+        logger.info("MiniMax-H3 pipeline ready (auto CPU offload enabled)")
 
     def generate_t2v(self, req: T2VRequest, output_path: str | Path) -> Path:
         """Run t2va inference and mux video+audio to ``output_path`` (mp4)."""

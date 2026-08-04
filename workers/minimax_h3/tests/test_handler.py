@@ -88,11 +88,14 @@ class HandlerTests(unittest.TestCase):
                         }
                     )
         self.assertNotIn("error", out)
-        self.assertIn("video_base64", out)
-        raw = base64.b64decode(out["video_base64"])
+        self.assertIn("video", out)
+        self.assertNotIn("video_base64", out)
+        raw = base64.b64decode(out["video"])
         self.assertEqual(len(raw), 128)
         self.assertEqual(out["length"], 124)
         self.assertEqual(out["seed"], 42)
+        self.assertEqual(out["fps"], 24)
+        self.assertEqual(out["model"], "MiniMaxAI/MiniMax-H3")
 
     def test_valid_url_with_full_bucket(self):
         mock_models = self._mock_pipe(256)
@@ -124,6 +127,9 @@ class HandlerTests(unittest.TestCase):
                         )
         self.assertNotIn("error", out)
         self.assertEqual(out["video_url"], "https://example/x.mp4")
+        self.assertEqual(out["fps"], 24)
+        self.assertEqual(out["model"], "MiniMaxAI/MiniMax-H3")
+        self.assertNotIn("video", out)
         up.assert_called_once()
         self.assertEqual(up.call_args.kwargs.get("bucket_name"), "mybucket")
 
