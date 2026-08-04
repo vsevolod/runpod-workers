@@ -160,6 +160,32 @@ cd workers/minimax_h3 && PYTHONPATH=. python3.12 -m unittest discover -s tests -
 GPU smoke (allowed territory only): bootstrap weights, deploy, run
 `test_input.json` → expect `length=124` and `video_url` https with audio muxed.
 
+## Level-1 spike (R&D — not production default)
+
+Thin-Python path for Comfy-Org **non-pruned** FL2VA int8 ConvRot DiT into stock
+diffusers `MiniMaxH3Transformer3DModel` (no ComfyUI), official TE/VAE. See:
+
+- Spec: `docs/superpowers/specs/2026-08-04-minimax-h3-level1-comfy-dit-spike-design.md`
+- Plan: `docs/superpowers/plans/2026-08-04-minimax-h3-level1-comfy-dit-spike.md`
+- Report: `docs/superpowers/specs/2026-08-04-minimax-h3-level1-comfy-dit-spike-report.md`
+
+```bash
+# Hybrid weights (~112 GB volume; not the 144 GB official DiT shards)
+python download_weights.py --output /runpod-volume/minimax_h3_hybrid \
+  --pack hybrid_spike --also-fetch-pruned-for-g0
+
+# G0 inspect
+PYTHONPATH=. python tools/spike_inspect_comfy_dit.py \
+  /runpod-volume/minimax_h3_hybrid/comfy/diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors
+
+# G4 fail-closed forward (needs GPU host + local transformer/config.json)
+PYTHONPATH=. python tools/spike_dit_forward.py \
+  --dit …/minimax_h3_fl2va_int8_convrot.safetensors \
+  --model-dir /runpod-volume/minimax_h3_hybrid
+```
+
+**Production `H3Pipeline` / handler still uses official MiniMaxAI pack only.**
+
 ## Status
 
 MVP implementation. **Not production-ready** until GPU smoke on a real 80 GB
