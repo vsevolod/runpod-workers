@@ -1,0 +1,9 @@
+{
+  "input": {
+    "prompt": "A red fox walks through a misty forest at dawn, cinematic lighting, soft camera pan",
+    "width": 864,
+    "height": 480,
+    "duration": 5.0,
+    "seed": 42
+  }
+}

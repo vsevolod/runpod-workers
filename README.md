@@ -8,6 +8,7 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 |------|-------------|--------|
 | [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8 image generation (thin Python handler) | MVP |
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
+| [`workers/minimax_h3`](workers/minimax_h3/) | MiniMax H3 T2V (diffusers ModularPipeline, thin handler) | MVP |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CivitAI LoRA download to network volume (CPU) | MVP |
 | `workers/shared/` | Shared utilities (reserved) | empty |
 
