@@ -31,8 +31,16 @@ def read_safetensors_header(path: str | Path) -> dict[str, Any]:
     return header
 
 
-def classify_dit_checkpoint(header: dict[str, Any]) -> G0Result:
-    """``header`` maps key -> {dtype, shape, ...} (safetensors header values)."""
+def classify_dit_checkpoint(
+    header: dict[str, Any],
+    *,
+    time_embed_dim: int = STOCK_TIME_EMBED_DIM,
+) -> G0Result:
+    """``header`` maps key -> {dtype, shape, ...} (safetensors header values).
+
+    ``time_embed_dim`` defaults to stock MiniMax-H3 (2688). Tests may pass the
+    TEST config value; production load uses stock / full config.
+    """
     reasons: list[str] = []
     notes: list[str] = []
     keys = set(header)
@@ -57,13 +65,13 @@ def classify_dit_checkpoint(header: dict[str, Any]) -> G0Result:
                 reasons=tuple(reasons),
             )
 
-    # Any AdaLN linear with in_features != 2688 is incompatible with stock module.
+    # Any AdaLN linear with in_features != expected time_embed_dim is incompatible.
     for k, meta in header.items():
         if "adaln_proj" in k and k.endswith(".weight"):
             sh = list(meta["shape"])
-            if len(sh) >= 2 and sh[-1] != STOCK_TIME_EMBED_DIM:
+            if len(sh) >= 2 and sh[-1] != time_embed_dim:
                 reasons.append(
-                    f"{k} in_features={sh[-1]} != stock time_embed_dim={STOCK_TIME_EMBED_DIM}"
+                    f"{k} in_features={sh[-1]} != stock time_embed_dim={time_embed_dim}"
                 )
                 return G0Result(
                     verdict="NO_GO_NARROW_ADALN",
@@ -75,8 +83,8 @@ def classify_dit_checkpoint(header: dict[str, Any]) -> G0Result:
     te_out = shape_of("time_embedder.proj_out.weight") or shape_of(
         "time_embedder.linear_2.weight"
     )
-    if te_out is not None and te_out[0] != STOCK_TIME_EMBED_DIM:
-        reasons.append(f"time_embedder out dim {te_out[0]} != {STOCK_TIME_EMBED_DIM}")
+    if te_out is not None and te_out[0] != time_embed_dim:
+        reasons.append(f"time_embedder out dim {te_out[0]} != {time_embed_dim}")
         return G0Result(
             verdict="NO_GO_TIME_EMBED",
             compatible_with_stock_diffusers=False,
@@ -100,5 +108,9 @@ def classify_dit_checkpoint(header: dict[str, Any]) -> G0Result:
     )
 
 
-def classify_dit_file(path: str | Path) -> G0Result:
-    return classify_dit_checkpoint(read_safetensors_header(path))
+def classify_dit_file(
+    path: str | Path, *, time_embed_dim: int = STOCK_TIME_EMBED_DIM
+) -> G0Result:
+    return classify_dit_checkpoint(
+        read_safetensors_header(path), time_embed_dim=time_embed_dim
+    )
