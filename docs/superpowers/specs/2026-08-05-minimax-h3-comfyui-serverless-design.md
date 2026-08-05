@@ -1,201 +1,161 @@
 # MiniMax H3 — ComfyUI Serverless Worker (Design)
 
-**Дата:** 2026-08-05  
-**Статус:** approved direction (replaces thin diffusers ModularPipeline MVP)  
-**Связано:** superseded thin worker + Level-1 inject spike (deleted from `workers/`)
+**Дата:** 2026-08-05 (rev 2 after plan review)  
+**Статус:** draft for approval (not implementation-approved until Task/Phase 0 smoke)  
+**Официальный tutorial:** [MiniMax H3 in ComfyUI](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)  
+**Официальный T2V template:** [video_minimax_h3_t2v.json](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_minimax_h3_t2v.json)
 
-## Контекст и решение
+## Решение
 
-Thin-Python путь (diffusers `ModularPipeline` + official ~144 GB pack, или inject
-Comfy int8 DiT в stock `MiniMaxH3Transformer3DModel`) **не** даёт целевой
-экономии диска/VRAM для **pruned** `minimax_h3_fl2va_pruned_int8_convrot.safetensors`
-(~19.5 GB): pruned = **curve AdaLN**, несовместим со stock transformer без порта
-архитектуры.
-
-**Решение:** serverless worker на **ComfyUI** (headless), с весами Comfy-Org и
-официальными/Comfy workflow-шаблонами MiniMax H3. Product API остаётся простым
-(prompt / canvas / duration / seed); внутри — pinned workflow API JSON.
+Thin ModularPipeline / Level-1 inject **отменены**. Product path = **headless ComfyUI** + **native** MiniMax H3 nodes (ComfyUI ≥ 0.30.0), weights Comfy-Org, serverless RunPod.
 
 ## Goal
 
-1. RunPod Serverless endpoint генерирует **video+audio (t2va / FL2VA)** через
-   ComfyUI без ручного UI.
-2. Primary DiT: **pruned int8 ConvRot** (~19.5 GB on volume).
-3. Стабильный cold start: volume bootstrap, pin Comfy + custom nodes, template
-   workflow.
-4. Delivery: **S3/R2 URL** (все четыре `BUCKET_*`) или base64 для маленьких
-   артефактов (как в других workers монорепо).
+1. Serverless job: product input → native T2V workflow → **MP4 with native stereo audio**.  
+2. Default DiT: `minimax_h3_fl2va_pruned_int8_convrot.safetensors` (~19.5 GB) + three companions (TE + 2×VAE).  
+3. Output path taken **only** from **SaveVideo** node history metadata (not “largest mp4”).  
+4. Delivery: all four `BUCKET_*` → URL; none → limited inline base64; **partial** `BUCKET_*` → **startup error**.
 
 ## Non-goals (v1)
 
-- Diffusers ModularPipeline / thin inject Level-1.
-- Ref2VA / multi-shot / R2V (можно later via second workflow template).
-- Произвольный «сырой» `input.workflow` как **единственный** public API
-  (внутренний escape hatch OK; product surface — нормализованные поля).
-- Bit-exact parity с каждым community template; достаточно стабильного
-  smoke + фиксированного pin.
-- EU/UK/KR/US serving under Community License without separate authorization
-  (ops obligation; document only).
+- Diffusers ModularPipeline / thin inject.  
+- Mandatory **custom node packages** for core T2V (native only).  
+- KJNodes / SageAttention (optional later; not in v1 path).  
+- Ref2VA / R2V / I2V product modes (T2V first).  
+- Raw `input.comfy_workflow` escape hatch.  
+- Multi-workflow product surface.
 
-## Architecture
+## Architecture (minimal)
 
 ```text
-  RunPod /run|/runsync
-           │
-           ▼
-  handler.py  ── validate product input
-           │
-           ├─ inject → pinned API workflow JSON (node ids fixed)
-           │
-           ▼
-  ComfyUI (localhost:8188)  ── queue_prompt / history / output files
-           │
-           ▼
-  video (+audio) file under Comfy output/
-           │
-           ▼
-  delivery: BUCKET upload → video_url  |  base64 if small + no bucket
+start.sh
+  → symlink volume models → ComfyUI/models
+  → ComfyUI (pinned commit ≥ H3 support) on 127.0.0.1:8188
+  → python -u handler.py
+
+handler.py
+  → validate product input
+  → workflow.py: load pinned API JSON + inject fields
+  → POST /prompt → poll /history/{id}
+  → resolve SaveVideo output path from history
+  → delivery: S3 URL or base64
 ```
 
-**Process model (recommended):**
+**No** separate `runtime.py` / `comfy_client.py` / multi-module request stack unless forced by size. Prefer:
 
-- One container = one GPU worker.
-- On start: start ComfyUI server (pinned commit), wait until `/system_stats` OK,
-  load models lazily on first job (Comfy default) or optional warm load.
-- Handler talks HTTP to Comfy on `127.0.0.1` (same pattern as
-  [runpod-workers/worker-comfyui](https://github.com/runpod-workers/worker-comfyui)).
+| File | Role |
+|------|------|
+| `handler.py` | RunPod entry, Comfy HTTP via `requests`, delivery |
+| `workflow.py` | load template, inject, duration/canvas helpers used by inject |
+| `download_weights.py` | four exact HF files |
+| `workflows/t2va_api.json` | **API-format** export (not UI subgraph template as-is) |
+| `start.sh` | process layout |
+| `Dockerfile` | pin ComfyUI commit; optional worker-comfyui only as boot pattern |
+| `tests/` | 2–3 unit files (inject + delivery + input normalize) |
 
-**Why not only Hub `worker-comfyui` image as the product?**
+## Native vs custom nodes
 
-- Stock worker is **image-centric** (`output.images`); MiniMax H3 needs **video**
-  (and likely audio mux) collection from Comfy output nodes.
-- We need **pinned MiniMax custom nodes** + fixed product schema and monorepo
-  tests/deploy path.
-- Hub base image / fork of worker-comfyui is still a valid **implementation
-  substrate** (Dockerfile FROM or copy handler patterns).
+| Layer | v1 |
+|-------|-----|
+| Core graph | **Native** ComfyUI nodes (`UNETLoader`, `CLIPLoader`, `MiniMaxH3ImageToVideo`, `CreateVideo`, `SaveVideo`, …) after ComfyUI **≥ 0.30.0** / pin with PR #15224 lineage |
+| Custom nodes | **Not required** for default path |
+| SageAttention | Optional later: package + **KJNodes** `Patch Sage Attention KJ` — out of v1 |
 
-## Model & volume layout
+Sources: [Comfy docs MiniMax H3](https://docs.comfy.org/tutorials/video/minimax/minimax-h3) (“ComfyUI natively supports MiniMax H3”; Sage section explicitly optional + KJNodes).
 
-**Network volume (recommended ≥ 80–120 GB** for pruned + TE + VAEs + nodes cache;
-minimum ~40 GB if only DiT+minimal extras proven):
+## Exact four weights (T2V)
+
+From official storage layout:
 
 ```text
-/runpod-volume/minimax_h3_comfy/          # COMFY_MODEL_DIR or Comfy models root
-  models/
-    diffusion_models/
-      minimax_h3_fl2va_pruned_int8_convrot.safetensors   # ~19.5 GB primary
-    text_encoders/   # Qwen3-VL / whatever workflow requires (Comfy-Org layout)
-    vae/
-    audio_vae/       # if separate in workflow
-    ...
-  custom_nodes/      # OR bake nodes into image; volume symlink optional
-  workflows/         # exported API JSON templates (also baked in image)
+ComfyUI/models/
+  diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+  text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+  vae/minimax_h3_video_vae_fp16.safetensors
+  vae/minimax_h3_audio_vae_fp32.safetensors
 ```
 
-**Bootstrap script** (`download_weights.py` / `bootstrap_volume.py`):
+HF: [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3).  
+Volume bootstrap downloads **only these four** for T2V v1.
 
-- HF: `Comfy-Org/MiniMax-H3` — at least pruned DiT + documented TE/VAE files
-  from Comfy-Org README / model card.
-- Optional: non-pruned DiT for quality A/B (not default).
-- Does **not** download MiniMaxAI ~144 GB official modular pack for v1.
+## ComfyUI pin (critical)
 
-**Comfy paths:** set `COMFYUI_PATH` models via env or symlink
-`/comfyui/models` → volume `models/`.
+- Official docs: update ComfyUI to **0.30.0 or later** for H3.  
+- [runpod-workers/worker-comfyui](https://github.com/runpod-workers/worker-comfyui) release tags (e.g. 5.8.x) may predate H3 — **do not** assume `…-base` image has new enough Comfy.  
+- **Must** pin an explicit **ComfyUI git commit / release** known to include MiniMax H3 native nodes, then either:  
+  - build image that clones that pin, or  
+  - start from worker-comfyui base **and overwrite/upgrade** ComfyUI to the pin.  
+- Document pin in `PINS.md` after Phase 0 verifies headless smoke.
+
+## Workflow artifact
+
+1. Start from official template `video_minimax_h3_t2v` (UI/subgraph form).  
+2. On a host with pinned Comfy: **Workflow → Export (API)** → freeze `workflows/t2va_api.json`.  
+3. Record **inject map**: node id → input field for `prompt`, `width`, `height`, `duration` (or snapped `length`), `seed` / `noise_seed`.  
+4. Record **SaveVideo node id** and exact **history outputs** key path to the written file (filename + subfolder + type).  
+5. Phase 0 fails closed if history shape is unknown.
+
+**Forbidden:** pick largest `.mp4` under `output/`.
+
+## Canvas & duration
+
+| Constraint | Source |
+|------------|--------|
+| Multiple of **32** | official |
+| Native canvas: **768 short edge**, cap **768×1344** | official |
+| Template megapixel table includes e.g. 0.4 → 864×480, 0.98 → 1344×768 | template note |
+| Duration → frames: **17k+5 @ 24 fps** (math in template) | official + template `ComfyMathExpression` |
+
+**Product defaults (v1):** choose after Phase 0 cost/quality note — **not** auto-port deleted thin worker defaults.  
+Candidates: preview-ish 864×480 (0.4 MP 16:9 from template table) vs native 1344×768. Document chosen default in README with rationale (VRAM/time).
+
+Validation: width/height multiples of 32; short edge ≤ 768 and long ≤ 1344 when enforcing “H3 native canvas”; duration in documented min/max (template uses duration float; snap formula lives in graph — product may pass **duration seconds** and let graph snap, or inject precomputed length — pick one and test in Phase 0).
 
 ## Product API (v1)
-
-Same spirit as deleted thin worker (client-compatible where possible):
 
 ```json
 {
   "input": {
-    "prompt": "string (required)",
-    "width": 864,
-    "height": 480,
+    "prompt": "…",
+    "width": 1344,
+    "height": 768,
     "duration": 5.0,
-    "seed": -1,
-    "workflow": "t2va_pruned_int8"
+    "seed": 42
   }
 }
 ```
 
-| Field | Default | Notes |
-|-------|---------|--------|
-| `prompt` | — | required, max length TBD (e.g. 8000) |
-| `width` / `height` | 864×480 | multiples of 32; bounds from Comfy workflow packing |
-| `duration` | 5.0 | map to frames via workflow (document exact snap) |
-| `seed` | -1 | random if -1 |
-| `workflow` | `t2va_pruned_int8` | template id; only allowlisted ids |
+- No `workflow` enum multi-mode in v1 (single T2V template).  
+- No raw graph field.
 
-**Success:**
+**Success:** `video_url` or `video` (base64) + meta (`width`, `height`, `seed`, `duration`/`length` if known, `model` id string).
 
-```json
-{
-  "video_url": "https://…",
-  "width": 864,
-  "height": 480,
-  "length": 124,
-  "seed": 42,
-  "requested_duration": 5.0,
-  "output_duration": 5.166…,
-  "fps": 24,
-  "model": "Comfy-Org/MiniMax-H3/pruned_int8",
-  "workflow": "t2va_pruned_int8"
-}
-```
+## Delivery
 
-Or `video` base64 when no bucket and size ≤ inline limit.
+| `BUCKET_*` state | Behavior |
+|------------------|----------|
+| All four non-empty | URL upload |
+| All empty/unset | Inline base64 if size ≤ `MAX_INLINE_VIDEO_BYTES` (default 7e6); else error |
+| Any non-empty but incomplete set | **Fail at worker start** (misconfig) |
 
-**Errors:** `{ "error": "…" }`; OOM / Comfy crash → `refresh_worker: true`.
+Never `require_bucket_or_exit` that forces bucket for every deploy.
 
-**Escape hatch (internal / debug only, not default product):**
-`input.comfy_workflow` full API graph — gated by env `ALLOW_RAW_WORKFLOW=1`.
+## Phase plan (execution)
 
-## Pins (must freeze in plan execution)
+See plan file — four phases only:
 
-| Component | Pin policy |
-|-----------|------------|
-| ComfyUI | git SHA or release tag |
-| MiniMax H3 custom nodes | repo + SHA (from Comfy-Org / community package used by official workflows) |
-| worker base | optional: `runpod/worker-comfyui:<ver>-base` or CUDA image + install |
-| Primary weights | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` filename exact |
-| Workflow template | file under `workflows/t2va_pruned_int8_api.json` + node-id map for inject |
+1. Pinned Comfy + API workflow + four weights + **headless** MP4+audio smoke  
+2. Minimal handler + product inject  
+3. S3/base64 + CPU tests  
+4. Docker/serverless smoke + VRAM/cold start
 
-## GPU / ops
+## Success (GO)
 
-| | Recommendation |
-|--|----------------|
-| GPU | Start **48 GB** class for smoke; measure peak; may fit **24–40 GB** with pruned int8 — **validate empirically** |
-| Workers | 1 GPU / worker; FlashBoot-friendly long load |
-| Volume | Network Volume mounted `/runpod-volume` |
-| Cold start | Comfy process start + first model load dominates |
-
-## License
-
-MiniMax H3 Community License still applies to model weights (Excluded Territories,
-downstream restrictions). Ship license text + NOTICE. ComfyUI / nodes have their
-own licenses — list in NOTICE.
-
-## Testing strategy
-
-| Layer | What |
-|-------|------|
-| Unit | request normalize, workflow inject (node fields), delivery mode |
-| Integration (CPU) | mock Comfy HTTP; handler returns planned delivery |
-| GPU smoke | Pod or serverless: one job `test_input.json` → MP4 finite + length |
-| Regression | pin workflow JSON hash; fail if template missing nodes |
-
-## Success criteria (GO)
-
-1. Volume bootstrap docs + script install pruned DiT + required companions.
-2. Serverless job with product input returns video (URL or base64).
-3. Default path uses **pruned int8** only (no 144 GB official pack).
-4. CPU unit tests green in monorepo.
-5. README: volume size, VRAM, env, license, smoke steps.
+- Phase 0 headless script produces MP4 with audio via SaveVideo metadata.  
+- Serverless `/runsync` product input returns video.  
+- CPU unit tests: inject exact nodes; delivery matrix.  
+- README: pins, volume layout, canvas default rationale, license.
 
 ## Supersedes
 
-| Old | Status |
-|-----|--------|
-| `workers/minimax_h3/` thin ModularPipeline + Level-1 inject | **Deleted** 2026-08-05 |
-| Specs/plans `2026-08-04-minimax-h3-t2v-worker*` / `*-level1-comfy-dit-spike*` | **Historical only** — do not implement |
+`workers/minimax_h3/` deleted; `2026-08-04-*` thin/spike docs historical stubs only.
