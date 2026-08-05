@@ -1,0 +1,40 @@
+Third-party software notices for workers/minimax_h3_comfy
+
+ComfyUI
+-------
+
+This worker runs a pinned checkout of ComfyUI:
+
+  https://github.com/Comfy-Org/ComfyUI
+  pin: see PINS.md (v0.30.0 / commit b1693ec…)
+
+ComfyUI is licensed under GPL-3.0. Operators building images that include
+ComfyUI must comply with that license for the ComfyUI tree.
+
+MiniMax H3 model weights
+------------------------
+
+Weights are downloaded separately (not baked into the image by default) from:
+
+  https://huggingface.co/Comfy-Org/MiniMax-H3
+
+Respect the license terms published on that Hugging Face repository and any
+MiniMax model license referenced there.
+
+RunPod worker patterns
+----------------------
+
+Portions of handler delivery (S3 / base64) follow patterns from:
+
+  runpod-workers/worker-sdxl
+  https://github.com/runpod-workers/worker-sdxl
+
+Copyright (c) 2025 RunPod — MIT License (see LICENSES/ if vendored).
+
+Official workflow template
+--------------------------
+
+T2V graph derived from:
+
+  Comfy-Org/workflow_templates
+  templates/video_minimax_h3_t2v.json

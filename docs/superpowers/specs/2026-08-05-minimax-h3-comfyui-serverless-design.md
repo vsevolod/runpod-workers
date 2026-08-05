@@ -1,7 +1,7 @@
 # MiniMax H3 — ComfyUI Serverless Worker (Design)
 
 **Дата:** 2026-08-05 (rev 2 after plan review)  
-**Статус:** draft for approval (not implementation-approved until Task/Phase 0 smoke)  
+**Статус:** approved; implementation in progress (`workers/minimax_h3_comfy/`) — live GPU smoke still pending  
 **Официальный tutorial:** [MiniMax H3 in ComfyUI](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)  
 **Официальный T2V template:** [video_minimax_h3_t2v.json](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_minimax_h3_t2v.json)
 

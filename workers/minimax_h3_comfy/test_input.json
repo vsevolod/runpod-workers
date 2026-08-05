@@ -1,0 +1,9 @@
+{
+  "input": {
+    "prompt": "A calm empty room, soft daylight, slow camera drift, subtle ambient audio. No text, no logos.",
+    "width": 864,
+    "height": 480,
+    "duration": 5.0,
+    "seed": 42
+  }
+}

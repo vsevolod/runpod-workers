@@ -8,14 +8,15 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 |------|-------------|--------|
 | [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8 image generation (thin Python handler) | MVP |
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
-| `workers/minimax_h3_comfy/` | MiniMax H3 T2V via headless ComfyUI (native nodes, pruned int8) | planned — see design/plan |
+| [`workers/minimax_h3_comfy/`](workers/minimax_h3_comfy/) | MiniMax H3 T2V via headless ComfyUI (native nodes, pruned int8) | scaffold — headless GPU smoke pending |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CivitAI LoRA download to network volume (CPU) | MVP |
 | `workers/shared/` | Shared utilities (reserved) | empty |
 
-MiniMax H3 design/plan (not implemented yet):
+MiniMax H3 design/plan:
 
 - [`docs/superpowers/specs/2026-08-05-minimax-h3-comfyui-serverless-design.md`](docs/superpowers/specs/2026-08-05-minimax-h3-comfyui-serverless-design.md)
 - [`docs/superpowers/plans/2026-08-05-minimax-h3-comfyui-serverless.md`](docs/superpowers/plans/2026-08-05-minimax-h3-comfyui-serverless.md)
+- Worker: [`workers/minimax_h3_comfy/`](workers/minimax_h3_comfy/) (`PINS.md`, frozen API workflow, handler)
 
 ## Deploy
 

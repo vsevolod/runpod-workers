@@ -1,0 +1,8 @@
+# Runtime deps for MiniMax H3 ComfyUI RunPod worker.
+# Torch is installed separately in the Dockerfile (CUDA wheel).
+# ComfyUI requirements are installed from the pinned Comfy tree.
+
+runpod>=1.7.9
+requests>=2.31.0
+huggingface-hub>=0.26.0
+hf_transfer>=0.1.0
