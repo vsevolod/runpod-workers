@@ -67,10 +67,16 @@ def bucket_state(env: dict[str, str] | None = None) -> str:
 
 def require_bucket_config_or_exit() -> str:
     """Startup: partial BUCKET_* is misconfiguration — exit process."""
+    present = [k for k in BUCKET_KEYS if (os.environ.get(k) or "").strip()]
+    missing = [k for k in BUCKET_KEYS if k not in present]
+    # Log names only (never secret values)
+    logger.info(
+        "BUCKET_* set=%s missing=%s",
+        present,
+        missing,
+    )
     state = bucket_state()
     if state == "partial":
-        present = [k for k in BUCKET_KEYS if (os.environ.get(k) or "").strip()]
-        missing = [k for k in BUCKET_KEYS if k not in present]
         logger.error(
             "Partial BUCKET_* config: present=%s missing=%s. "
             "Set all four for URL delivery, or none for inline base64.",
@@ -267,9 +273,16 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    logger.info(
+        "handler start MODEL_DIR=%s COMFY_URL=%s COMFY_OUTPUT_DIR=%s",
+        os.environ.get("MODEL_DIR"),
+        COMFY_URL,
+        COMFY_OUTPUT_DIR,
+    )
     # Fail fast on misconfigured partial BUCKET_* (startup only; keeps unit imports clean).
     require_bucket_config_or_exit()
-    # Optional wait so start.sh can race Comfy up; set COMFY_WAIT=0 to skip.
+    # start.sh already waits for Comfy; keep a short re-check by default.
     if os.environ.get("COMFY_WAIT", "1") not in ("0", "false", "False"):
-        wait_for_comfy(float(os.environ.get("COMFY_WAIT_TIMEOUT_S", "600")))
+        wait_for_comfy(float(os.environ.get("COMFY_WAIT_TIMEOUT_S", "120")))
+    logger.info("entering runpod.serverless.start")
     runpod.serverless.start({"handler": handler})

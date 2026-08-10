@@ -71,9 +71,27 @@ python -m unittest discover -s tests -v
 
 - Dockerfile path: `workers/minimax_h3_comfy/Dockerfile`
 - Build context: repo root
-- Env: `MODEL_DIR=/runpod-volume/minimax_h3_comfy`, optional full `BUCKET_*`
+- **Network Volume** attached to the endpoint (same datacenter as download)
+- Env:
+  - `MODEL_DIR` = volume root that contains `models/`  
+    (default `/runpod-volume/minimax_h3_comfy`; if you downloaded to `/workspace/minimax_h3_comfy`, set that)
+  - all four `BUCKET_*` **or** none
 - GPU: measure after first smoke; start conservatively (e.g. 48 GB) until peak known
 - Image includes `build-essential` so Triton can JIT-compile CUDA utils at runtime
+
+### "All workers are unhealthy"
+
+Container exits before `runpod.serverless.start`. Open **Worker logs** (not only System logs) and look for `minimax_h3_comfy: ERROR:`.
+
+Typical causes:
+
+| Log | Fix |
+|-----|-----|
+| `missing .../models` | Attach volume; set `MODEL_DIR` to where you ran `download_weights.py` |
+| `MISSING weight` | Re-run download; 4 files required |
+| `Partial BUCKET_*` | Set all 4 bucket env vars or delete all of them |
+| `ComfyUI process died` / Triton / gcc | Rebuild image; check Comfy log tail in worker log |
+| System log only shows start/remove | App log is under **Workers → Logs** for a specific worker |
 
 ## Metrics (fill after Phase 1 / 4 smoke)
 
