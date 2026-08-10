@@ -3,9 +3,9 @@
 # Fail loud with diagnostics — silent exit marks workers "unhealthy".
 set -euo pipefail
 
-# Always stderr+stdout so RunPod container log capture sees lines
-log() { echo "minimax_h3_comfy: $*" | tee /dev/stderr; }
-die() { echo "minimax_h3_comfy: ERROR: $*" | tee /dev/stderr; exit 1; }
+# Plain stdout — reliable under Docker log capture (no /dev/stderr tee).
+log() { echo "minimax_h3_comfy: $*"; }
+die() { echo "minimax_h3_comfy: ERROR: $*"; exit 1; }
 
 MODEL_ROOT="${MODEL_DIR:-/runpod-volume/minimax_h3_comfy}"
 COMFYUI_PATH="${COMFYUI_PATH:-/comfyui}"
@@ -116,8 +116,15 @@ if [[ "${ready}" -ne 1 ]]; then
   die "ComfyUI failed to become ready"
 fi
 
-# Keep streaming Comfy logs in background for worker log visibility
-tail -n +1 -F /tmp/comfyui.log &
+# Local/CI boot smoke: validate weights + Comfy ready without RunPod handler.
+if [[ "${BOOT_CHECK:-0}" == "1" ]]; then
+  log "BOOT_CHECK ok — models present, Comfy ready; skipping runpod.serverless.start"
+  # Do not leave tail -F on stdout — it keeps entrypoint pipes open forever.
+  exit 0
+fi
+
+# Stream Comfy logs to a file only (never stdout) so Docker/entrypoint pipes close.
+tail -n +1 -F /tmp/comfyui.log >>/tmp/comfyui_follow.log 2>&1 &
 
 log "starting handler"
 exec python -u /app/handler.py

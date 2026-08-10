@@ -67,6 +67,32 @@ cd workers/minimax_h3_comfy
 python -m unittest discover -s tests -v
 ```
 
+## Local boot smoke (no RunPod, no CUDA, fake weights)
+
+Validates entrypoint + `start.sh` + `MODEL_DIR`/four weight paths + mock Comfy `/system_stats`.
+Uses slim `Dockerfile.bootcheck` (~python slim, seconds to rebuild).
+
+```bash
+# from monorepo root
+./workers/minimax_h3_comfy/tools/local_boot_smoke.sh
+```
+
+Only fake weight tree:
+
+```bash
+./workers/minimax_h3_comfy/tools/make_fake_weights.sh /tmp/mh3_fake
+docker build -f workers/minimax_h3_comfy/Dockerfile.bootcheck \
+  -t minimax-h3-bootcheck workers/minimax_h3_comfy
+docker run --rm \
+  -v /tmp/mh3_fake:/runpod-volume/minimax_h3_comfy \
+  -e MODEL_DIR=/runpod-volume/minimax_h3_comfy \
+  -e BOOT_CHECK=1 -e BOOT_FAIL_SLEEP=0 \
+  minimax-h3-bootcheck
+# expect: ENTRYPOINT … ok weight … ComfyUI ready … BOOT_CHECK ok
+```
+
+Full CUDA image still requires a real GPU + real weights; use bootcheck for daily iteration.
+
 ## Deploy (RunPod)
 
 - Dockerfile path: `workers/minimax_h3_comfy/Dockerfile`
