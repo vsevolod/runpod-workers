@@ -1,5 +1,6 @@
 # MiniMax H3 T2V — headless ComfyUI (native nodes) on RunPod serverless.
-# Weights live on Network Volume (MODEL_DIR), not in this image.
+# Weights: RunPod Model Cache (HF hub layout) or legacy Network Volume (MODEL_DIR).
+# Never baked into this image; materialize via model_store.py → /models (symlinks).
 #
 # RunPod GitHub Integration:
 #   Dockerfile path:  workers/minimax_h3_comfy/Dockerfile
@@ -17,7 +18,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COMFYUI_PATH=/comfyui \
     COMFY_URL=http://127.0.0.1:8188 \
     COMFY_OUTPUT_DIR=/comfyui/output \
-    MODEL_DIR=/runpod-volume/minimax_h3_comfy
+    MODEL_NAME=Comfy-Org/MiniMax-H3 \
+    HF_CACHE_ROOT=/runpod-volume/huggingface-cache/hub
 
 # Pin: ComfyUI v0.30.0 (H3 native) — see workers/minimax_h3_comfy/PINS.md
 ARG COMFYUI_REF=b1693ecba9f5b65f8c80ab36b195ab963ec92413
@@ -70,6 +72,7 @@ RUN uv pip install --no-cache -r /app/requirements.txt
 COPY workers/minimax_h3_comfy/handler.py \
      workers/minimax_h3_comfy/workflow.py \
      workers/minimax_h3_comfy/download_weights.py \
+     workers/minimax_h3_comfy/model_store.py \
      workers/minimax_h3_comfy/test_input.json \
      workers/minimax_h3_comfy/start.sh \
      workers/minimax_h3_comfy/entrypoint.sh \

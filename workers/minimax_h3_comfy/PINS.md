@@ -14,14 +14,27 @@ Repo: https://github.com/Comfy-Org/ComfyUI
 
 ## Four weights (T2V only)
 
-HF: `Comfy-Org/MiniMax-H3`
+Relative paths (under HF snapshot **or** under volume `models/`):
 
 ```text
-models/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
-models/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
-models/vae/minimax_h3_video_vae_fp16.safetensors
-models/vae/minimax_h3_audio_vae_fp32.safetensors
+diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+vae/minimax_h3_video_vae_fp16.safetensors
+vae/minimax_h3_audio_vae_fp32.safetensors
 ```
+
+| Source | ID / path |
+|--------|-----------|
+| Full HF repo (all variants, ~465 GB) | `Comfy-Org/MiniMax-H3` — contains the four T2V files plus many others; **not** default Model Cache target |
+| Slim HF repo (G0 path A, ~42.5 GB) | **TBD** after publish (e.g. `YOUR_ORG/MiniMax-H3-T2V-comfy-four`) — **preferred** for RunPod Model field |
+| Legacy volume layout | `{MODEL_DIR}/models/<paths above>` |
+| Materialize root (worker) | hard-coded **`/models`** (symlinks only) |
+| RunPod HF cache | `/runpod-volume/huggingface-cache/hub/models--{org}--{name}/snapshots/<hash>/` |
+
+Env: `MODEL_NAME` = endpoint **Model** field (`org/name`, main only). Interim default `Comfy-Org/MiniMax-H3` for path B experiments.
+
+Shared constant: `download_weights.WEIGHTS` / `model_store.WEIGHT_RELS`.
+`download_weights.py` = **operator CLI** for offline volume fill only (not serverless boot).
 
 ## Workflow artifact
 

@@ -6,6 +6,7 @@ Design/plan:
 
 - `docs/superpowers/specs/2026-08-05-minimax-h3-comfyui-serverless-design.md`
 - `docs/superpowers/plans/2026-08-05-minimax-h3-comfyui-serverless.md`
+- Model Cache migration: `docs/superpowers/specs/2026-08-10-minimax-h3-model-cache-design.md`
 - Pins & inject map: [`PINS.md`](PINS.md)
 
 ## Product input
@@ -35,14 +36,35 @@ Design/plan:
 | all empty | `video` base64 if size ≤ `MAX_INLINE_VIDEO_BYTES` (default 7e6) |
 | partial | **worker exits at start** |
 
-## Volume bootstrap
+## Model sources (boot)
+
+At boot, `model_store.py` materializes **symlinks only** under hard-coded **`/models`**, then `start.sh` does `rm -rf` + `ln -sfn /models → /comfyui/models`.
+
+| Priority | Source | When |
+|----------|--------|------|
+| 1 | RunPod **Model Cache** (HF hub layout) | Endpoint **Model** field = `MODEL_NAME` (`org/name`); store filled under `/runpod-volume/huggingface-cache/hub/` |
+| 2 | Legacy **Network Volume** | `MODEL_DIR` root contains `models/` with the four T2V files |
+
+**No runtime HF download** in the worker (45 GB container disk cannot hold ~42 GB weights + image + outputs).
+
+### Preferred: Model Cache (slim repo)
+
+1. Publish or use a **slim** HF repo with **exactly** the four T2V paths (~42.5 GB), **not** the full `Comfy-Org/MiniMax-H3` (~465 GB) unless G0 path B is proven.
+2. Endpoint → **Model** = slim `org/name` (main only; no `:hash` pin in v1).
+3. Env `MODEL_NAME` = same string.
+4. Optional HF token in RunPod UI if the repo is gated.
+5. No user Network Volume required once the store is ready.
+
+Default interim `MODEL_NAME` / image env: `Comfy-Org/MiniMax-H3` (for G0 path B experiments only until a slim id is published — see `PINS.md`).
+
+### Legacy volume bootstrap (operator offline)
 
 ```bash
 python download_weights.py --output /runpod-volume/minimax_h3_comfy --dry-run
 python download_weights.py --output /runpod-volume/minimax_h3_comfy
 ```
 
-Exactly four files under `{output}/models/…` (see `PINS.md`).
+Exactly four files under `{output}/models/…` (see `PINS.md`). Set `MODEL_DIR` to that root when not using Model Cache.
 
 ## Comfy pin
 
@@ -69,26 +91,29 @@ python -m unittest discover -s tests -v
 
 ## Local boot smoke (no RunPod, no CUDA, fake weights)
 
-Validates entrypoint + `start.sh` + `MODEL_DIR`/four weight paths + mock Comfy `/system_stats`.
-Uses slim `Dockerfile.bootcheck` (~python slim, seconds to rebuild).
+Validates entrypoint + `start.sh` + `model_store.py` (cache **and** volume paths) + mock Comfy `/system_stats`.
+Uses slim `Dockerfile.bootcheck` (must COPY `model_store.py`).
 
 ```bash
 # from monorepo root
 ./workers/minimax_h3_comfy/tools/local_boot_smoke.sh
 ```
 
-Only fake weight tree:
+Cases: missing source (fail), fake HF cache (`source=cache`), fake volume (`source=volume`), incomplete weights (fail).
+
+Manual cache fixture:
 
 ```bash
-./workers/minimax_h3_comfy/tools/make_fake_weights.sh /tmp/mh3_fake
+./workers/minimax_h3_comfy/tools/make_fake_hf_cache.sh /tmp/mh3_hub
 docker build -f workers/minimax_h3_comfy/Dockerfile.bootcheck \
   -t minimax-h3-bootcheck workers/minimax_h3_comfy
 docker run --rm \
-  -v /tmp/mh3_fake:/runpod-volume/minimax_h3_comfy \
-  -e MODEL_DIR=/runpod-volume/minimax_h3_comfy \
+  -v /tmp/mh3_hub:/runpod-volume/huggingface-cache/hub \
+  -e MODEL_NAME=Comfy-Org/MiniMax-H3 \
+  -e HF_CACHE_ROOT=/runpod-volume/huggingface-cache/hub \
   -e BOOT_CHECK=1 -e BOOT_FAIL_SLEEP=0 \
   minimax-h3-bootcheck
-# expect: ENTRYPOINT … ok weight … ComfyUI ready … BOOT_CHECK ok
+# expect: source=cache … ok weight … ComfyUI ready … BOOT_CHECK ok
 ```
 
 Full CUDA image still requires a real GPU + real weights; use bootcheck for daily iteration.
@@ -97,12 +122,17 @@ Full CUDA image still requires a real GPU + real weights; use bootcheck for dail
 
 - Dockerfile path: `workers/minimax_h3_comfy/Dockerfile`
 - Build context: repo root
-- **Network Volume** attached to the endpoint (same datacenter as download)
-- Env:
-  - `MODEL_DIR` = volume root that contains `models/`  
-    (default `/runpod-volume/minimax_h3_comfy`; if you downloaded to `/workspace/minimax_h3_comfy`, set that)
-  - all four `BUCKET_*` **or** none
-- GPU: measure after first smoke; start conservatively (e.g. 48 GB) until peak known
+- **Docker Command** empty (use image `CMD`)
+- **Model Cache (preferred):**
+  - Endpoint **Model** = slim `org/name` (G0 path A) or proven full repo (path B)
+  - Env `MODEL_NAME` = same; `HF_CACHE_ROOT` default `/runpod-volume/huggingface-cache/hub`
+  - Container disk **45 GB** (weights stay on cache volume via symlinks — never copy)
+  - No user Network Volume required when cache is ready
+- **Legacy volume (fallback):**
+  - Attach Network Volume + `MODEL_DIR` = root containing `models/`
+  - Fill offline with `download_weights.py`
+- Env: all four `BUCKET_*` **or** none
+- GPU allowlist (cu124): A40 / A6000 / L40 / L40S / 6000 Ada / H100 — **not** Blackwell until cu128
 - Image includes `build-essential` so Triton can JIT-compile CUDA utils at runtime
 
 ### "All workers are unhealthy" / empty Container logs
@@ -116,16 +146,19 @@ If Container is empty and worker `exit code 1`:
    If you set a custom command, clear it or set exactly:  
    `/bin/bash /app/entrypoint.sh`
 2. Rebuild after `entrypoint.sh` (prints immediately, `bash -x`, sleeps 120s on failure so logs stay visible).
-3. Attach Network Volume + set `MODEL_DIR` to the folder that contains `models/`.
+3. **Cache path:** set Model field + `MODEL_NAME`; wait for store; look for `[ModelStore] source=cache` and `Using snapshot:`.
+   **Volume path:** attach volume + `MODEL_DIR` containing `models/`.
 4. `BUCKET_*`: all four or none.
 
 Typical app log lines (after rebuild):
 
 | Log | Fix |
 |-----|-----|
-| `ENTRYPOINT ...` then `missing .../models` | Volume / `MODEL_DIR` |
-| `MISSING weight` | Re-run `download_weights.py` |
+| `ENTRYPOINT ...` then `No usable model source` / `model_store.py failed` | Model field / `MODEL_NAME` / cache not ready, or volume + `MODEL_DIR` |
+| Snapshot / cache root missing | Store not filled or `MODEL_NAME` mismatch |
+| `MISSING weight` | Incomplete store/volume; re-fill slim repo or `download_weights.py` |
 | `Partial BUCKET_*` | Fix env |
+| `sm_120` / no kernel image | Blackwell GPU on cu124 image — use allowlist GPUs |
 | `ComfyUI process died` | Scroll Comfy log tail in same log stream |
 
 ## Metrics (fill after Phase 1 / 4 smoke)

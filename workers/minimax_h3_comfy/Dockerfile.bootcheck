@@ -1,5 +1,5 @@
 # Lightweight boot-path smoke image (NO CUDA, NO real Comfy, NO real weights).
-# Validates entrypoint + start.sh + MODEL_DIR/weights layout + mock Comfy ready.
+# Validates entrypoint + start.sh + model_store.py + mock Comfy ready.
 #
 # Build (from monorepo root OR this directory — see tools/local_boot_smoke.sh):
 #   docker build -f workers/minimax_h3_comfy/Dockerfile.bootcheck \
@@ -12,7 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COMFYUI_PATH=/comfyui \
     COMFY_URL=http://127.0.0.1:8188 \
     COMFY_OUTPUT_DIR=/comfyui/output \
-    MODEL_DIR=/runpod-volume/minimax_h3_comfy \
+    MODEL_NAME=Comfy-Org/MiniMax-H3 \
+    HF_CACHE_ROOT=/runpod-volume/huggingface-cache/hub \
     BOOT_CHECK=1 \
     BOOT_FAIL_SLEEP=0
 
@@ -24,12 +25,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/local/bin/python3 /usr/local/bin/python
 
-# Fake Comfy tree
-RUN mkdir -p /comfyui/output
+# Fake Comfy tree — include a *real* models/ directory (as stock Comfy ships)
+# so start.sh must rm -rf before ln -sfn /models. Sentinel proves replace worked.
+RUN mkdir -p /comfyui/output /comfyui/models/diffusion_models \
+    && echo "REPLACE_ME" > /comfyui/models/.bootcheck_sentinel \
+    && echo "placeholder" > /comfyui/models/diffusion_models/NOT_REAL_WEIGHT.safetensors
 COPY tools/mock_comfy_main.py /comfyui/main.py
 
 WORKDIR /app
-COPY entrypoint.sh start.sh /app/
+COPY entrypoint.sh start.sh model_store.py download_weights.py /app/
 # handler/workflow not required for BOOT_CHECK=1 (start.sh exits before handler)
 RUN chmod +x /app/entrypoint.sh /app/start.sh \
     && sed -i 's/\r$//' /app/entrypoint.sh /app/start.sh
