@@ -1,10 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Boot pinned ComfyUI then RunPod handler.
 # Fail loud with diagnostics — silent exit marks workers "unhealthy".
 set -euo pipefail
 
-log() { echo "minimax_h3_comfy: $*"; }
-die() { echo "minimax_h3_comfy: ERROR: $*" >&2; exit 1; }
+# Always stderr+stdout so RunPod container log capture sees lines
+log() { echo "minimax_h3_comfy: $*" | tee /dev/stderr; }
+die() { echo "minimax_h3_comfy: ERROR: $*" | tee /dev/stderr; exit 1; }
 
 MODEL_ROOT="${MODEL_DIR:-/runpod-volume/minimax_h3_comfy}"
 COMFYUI_PATH="${COMFYUI_PATH:-/comfyui}"

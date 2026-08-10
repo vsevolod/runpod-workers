@@ -79,19 +79,28 @@ python -m unittest discover -s tests -v
 - GPU: measure after first smoke; start conservatively (e.g. 48 GB) until peak known
 - Image includes `build-essential` so Triton can JIT-compile CUDA utils at runtime
 
-### "All workers are unhealthy"
+### "All workers are unhealthy" / empty Container logs
 
-Container exits before `runpod.serverless.start`. Open **Worker logs** (not only System logs) and look for `minimax_h3_comfy: ERROR:`.
+RunPod **System** logs only show `start/remove container`. Real output is **Container** logs from CMD.
 
-Typical causes:
+If Container is empty and worker `exit code 1`:
+
+1. **Endpoint → Docker configuration → Docker Command / Start command**  
+   Must be **empty** (use image `CMD`).  
+   If you set a custom command, clear it or set exactly:  
+   `/bin/bash /app/entrypoint.sh`
+2. Rebuild after `entrypoint.sh` (prints immediately, `bash -x`, sleeps 120s on failure so logs stay visible).
+3. Attach Network Volume + set `MODEL_DIR` to the folder that contains `models/`.
+4. `BUCKET_*`: all four or none.
+
+Typical app log lines (after rebuild):
 
 | Log | Fix |
 |-----|-----|
-| `missing .../models` | Attach volume; set `MODEL_DIR` to where you ran `download_weights.py` |
-| `MISSING weight` | Re-run download; 4 files required |
-| `Partial BUCKET_*` | Set all 4 bucket env vars or delete all of them |
-| `ComfyUI process died` / Triton / gcc | Rebuild image; check Comfy log tail in worker log |
-| System log only shows start/remove | App log is under **Workers → Logs** for a specific worker |
+| `ENTRYPOINT ...` then `missing .../models` | Volume / `MODEL_DIR` |
+| `MISSING weight` | Re-run `download_weights.py` |
+| `Partial BUCKET_*` | Fix env |
+| `ComfyUI process died` | Scroll Comfy log tail in same log stream |
 
 ## Metrics (fill after Phase 1 / 4 smoke)
 

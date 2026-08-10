@@ -72,14 +72,21 @@ COPY workers/minimax_h3_comfy/handler.py \
      workers/minimax_h3_comfy/download_weights.py \
      workers/minimax_h3_comfy/test_input.json \
      workers/minimax_h3_comfy/start.sh \
+     workers/minimax_h3_comfy/entrypoint.sh \
      workers/minimax_h3_comfy/PINS.md \
      /app/
 COPY workers/minimax_h3_comfy/workflows /app/workflows
 
-RUN chmod +x /app/start.sh
+RUN chmod +x /app/start.sh /app/entrypoint.sh \
+    && sed -i 's/\r$//' /app/start.sh /app/entrypoint.sh \
+    && head -1 /app/entrypoint.sh \
+    && test -x /app/entrypoint.sh
 
 # Handler imports workflow from /app; template path is next to workflow.py
 ENV PYTHONPATH=/app \
-    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    PYTHONUNBUFFERED=1
 
-CMD ["/app/start.sh"]
+# Do NOT override "Docker Command" in RunPod UI — leave empty to use this CMD.
+# entrypoint always prints to logs; on failure sleeps so UI can scrape output.
+CMD ["/bin/bash", "/app/entrypoint.sh"]
