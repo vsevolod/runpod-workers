@@ -22,6 +22,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Pin: ComfyUI v0.30.0 (H3 native) — see workers/minimax_h3_comfy/PINS.md
 ARG COMFYUI_REF=b1693ecba9f5b65f8c80ab36b195ab963ec92413
 
+# build-essential: Triton (torch) compiles cuda_utils at runtime and needs gcc.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     curl \
@@ -30,12 +31,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libgl1 \
     libglib2.0-0 \
+    build-essential \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
     python3.12-venv \
     python3.12-dev \
     && rm -rf /var/lib/apt/lists/*
+
+ENV CC=gcc \
+    CXX=g++
 
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 

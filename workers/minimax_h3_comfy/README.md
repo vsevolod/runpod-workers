@@ -73,6 +73,7 @@ python -m unittest discover -s tests -v
 - Build context: repo root
 - Env: `MODEL_DIR=/runpod-volume/minimax_h3_comfy`, optional full `BUCKET_*`
 - GPU: measure after first smoke; start conservatively (e.g. 48 GB) until peak known
+- Image includes `build-essential` so Triton can JIT-compile CUDA utils at runtime
 
 ## Metrics (fill after Phase 1 / 4 smoke)
 
