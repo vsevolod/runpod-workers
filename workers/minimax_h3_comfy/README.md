@@ -11,6 +11,8 @@ Design/plan:
 
 ## Product input
 
+**T2V** (default — no images):
+
 ```json
 {
   "input": {
@@ -23,10 +25,33 @@ Design/plan:
 }
 ```
 
-- Canvas: multiples of 32; short edge ≤ 768; long ≤ 1344.
+**I2V / FL2V** — same four `fl2va` weights; optional keyframes:
+
+```json
+{
+  "input": {
+    "prompt": "…",
+    "first_image": "https://example.com/start.png",
+    "last_image": "data:image/png;base64,…",
+    "width": 864,
+    "height": 480,
+    "duration": 5.0,
+    "seed": 42
+  }
+}
+```
+
+| Field | Rule |
+|-------|------|
+| `first_image` | Optional. HTTPS URL, raw base64, or `data:image/{png,jpeg,jpg,webp};base64,…` → `first_frame` |
+| `last_image` | Optional; requires `first_image` → `last_frame` |
+| Mode | Implicit: no `first_image` → T2V; first only → I2V; both → FL2V. Response includes `mode` |
+
+- Canvas: multiples of 32; short edge ≤ 768; long ≤ 1344 (client always sets width/height; defaults 864×480).
 - Default canvas **864×480** (template 0.4 MP) until smoke metrics justify 1344×768.
 - `seed: -1` → random.
-- No raw workflow field in v1.
+- No raw workflow field; no explicit `mode` field.
+- Image limits: 20 MiB, 4096² pixels (see `image_input.py`).
 
 ## Delivery
 

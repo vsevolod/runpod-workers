@@ -23,6 +23,12 @@ UNET_NODE = "6"
 UNET_NAME_KEY = "unet_name"
 SAVE_VIDEO_NODE = "92"
 
+# Runtime LoadImage nodes for I2V / FL2V (not present in frozen t2va_api.json)
+FIRST_LOAD_NODE = "200"
+LAST_LOAD_NODE = "201"
+FIRST_FRAME_KEY = "first_frame"
+LAST_FRAME_KEY = "last_frame"
+
 DEFAULT_WIDTH = 864
 DEFAULT_HEIGHT = 480
 DEFAULT_DURATION = 5.0
@@ -73,8 +79,14 @@ def inject_product(
     height: int,
     duration: float,
     seed: int,
+    first_image_name: str | None = None,
+    last_image_name: str | None = None,
 ) -> dict[str, Any]:
-    """Deep-copy workflow; set only inject-map fields; raise if node/key missing."""
+    """Deep-copy workflow; set inject-map fields; optional I2V LoadImage wiring.
+
+    first_image_name / last_image_name are basenames under Comfy input/ for LoadImage.
+    last_image_name requires first_image_name.
+    """
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("prompt must be a non-empty string")
     if duration <= 0:
@@ -82,6 +94,17 @@ def inject_product(
     if not isinstance(seed, int) or seed < 0:
         raise ValueError(f"seed must be a non-negative int, got {seed!r}")
     validate_canvas(int(width), int(height))
+
+    if last_image_name and not first_image_name:
+        raise ValueError("last_image_name requires first_image_name")
+    if first_image_name is not None and (
+        not isinstance(first_image_name, str) or not first_image_name.strip()
+    ):
+        raise ValueError("first_image_name must be a non-empty basename")
+    if last_image_name is not None and (
+        not isinstance(last_image_name, str) or not last_image_name.strip()
+    ):
+        raise ValueError("last_image_name must be a non-empty basename")
 
     out = copy.deepcopy(workflow)
 
@@ -100,4 +123,23 @@ def inject_product(
     _set(PROMPT_NODE, HEIGHT_KEY, int(height))
     _set(DURATION_NODE, DURATION_KEY, float(duration))
     _set(SEED_NODE, SEED_KEY, int(seed))
+
+    # Ensure T2V path does not carry optional frame links from a polluted template
+    prompt_inputs = out[PROMPT_NODE]["inputs"]
+    prompt_inputs.pop(FIRST_FRAME_KEY, None)
+    prompt_inputs.pop(LAST_FRAME_KEY, None)
+
+    if first_image_name:
+        out[FIRST_LOAD_NODE] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": first_image_name.strip()},
+        }
+        prompt_inputs[FIRST_FRAME_KEY] = [FIRST_LOAD_NODE, 0]
+    if last_image_name:
+        out[LAST_LOAD_NODE] = {
+            "class_type": "LoadImage",
+            "inputs": {"image": last_image_name.strip()},
+        }
+        prompt_inputs[LAST_FRAME_KEY] = [LAST_LOAD_NODE, 0]
+
     return out

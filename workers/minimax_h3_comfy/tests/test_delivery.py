@@ -76,6 +76,23 @@ class TestNormalizeInput(unittest.TestCase):
         p = handler.normalize_input({"prompt": "hi"})
         self.assertEqual(p["width"], 864)
         self.assertEqual(p["height"], 480)
+        self.assertIsNone(p["first_image"])
+        self.assertIsNone(p["last_image"])
+
+    def test_first_image_accepted(self):
+        p = handler.normalize_input(
+            {"prompt": "hi", "first_image": "data:image/png;base64,abc"}
+        )
+        self.assertEqual(p["first_image"], "data:image/png;base64,abc")
+
+    def test_last_without_first_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            handler.normalize_input({"prompt": "hi", "last_image": "x"})
+        self.assertIn("first_image", str(ctx.exception))
+
+    def test_empty_first_image_rejected(self):
+        with self.assertRaises(ValueError):
+            handler.normalize_input({"prompt": "hi", "first_image": "  "})
 
 
 class TestDeliverVideo(unittest.TestCase):

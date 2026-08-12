@@ -53,6 +53,10 @@ Shared constant: `download_weights.WEIGHTS` / `model_store.WEIGHT_RELS`.
 | height | `104` | MiniMaxH3ImageToVideo | `height` |
 | duration (seconds) | `111` | PrimitiveFloat | `value` |
 | seed | `15` | RandomNoise | `noise_seed` |
+| first_image (I2V) | `200` → `104` | LoadImage → MiniMaxH3ImageToVideo | `image` → `first_frame` |
+| last_image (FL2V) | `201` → `104` | LoadImage → MiniMaxH3ImageToVideo | `image` → `last_frame` |
+
+Runtime-only nodes `200` / `201` are **not** in frozen `t2va_api.json`; `inject_product` adds them when basenames are provided. T2V omits `first_frame` / `last_frame` keys entirely.
 
 Duration → frame length snap stays in graph node `107` (`ComfyMathExpression`, formula `17k+5` @ 24fps). Do **not** inject `length` on `104` from the handler unless the math node is removed.
 

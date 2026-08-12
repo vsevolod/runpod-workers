@@ -71,6 +71,7 @@ RUN uv pip install --no-cache -r /app/requirements.txt
 
 COPY workers/minimax_h3_comfy/handler.py \
      workers/minimax_h3_comfy/workflow.py \
+     workers/minimax_h3_comfy/image_input.py \
      workers/minimax_h3_comfy/download_weights.py \
      workers/minimax_h3_comfy/model_store.py \
      workers/minimax_h3_comfy/test_input.json \

@@ -21,6 +21,7 @@ import requests
 import runpod
 from runpod.serverless.utils import rp_cleanup, rp_upload
 
+from image_input import ImageInputError, cleanup_staged, stage_image
 from workflow import (
     DEFAULT_DURATION,
     DEFAULT_HEIGHT,
@@ -41,6 +42,7 @@ COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
 COMFY_OUTPUT_DIR = Path(
     os.environ.get("COMFY_OUTPUT_DIR", "/comfyui/output")
 )
+COMFY_INPUT_DIR = Path(os.environ.get("COMFY_INPUT_DIR", "/comfyui/input"))
 MAX_INLINE_VIDEO_BYTES = int(os.environ.get("MAX_INLINE_VIDEO_BYTES", str(7_000_000)))
 PROMPT_TIMEOUT_S = float(os.environ.get("COMFY_PROMPT_TIMEOUT_S", "3600"))
 POLL_INTERVAL_S = float(os.environ.get("COMFY_POLL_INTERVAL_S", "1.0"))
@@ -172,6 +174,15 @@ def poll_history(prompt_id: str) -> dict[str, Any]:
     raise TimeoutError(f"Comfy history timeout after {PROMPT_TIMEOUT_S}s for {prompt_id}")
 
 
+def _optional_image_field(job_input: dict[str, Any], key: str) -> str | None:
+    if key not in job_input or job_input[key] is None:
+        return None
+    val = job_input[key]
+    if not isinstance(val, str) or not val.strip():
+        raise ValueError(f"{key} must be a non-empty string when provided")
+    return val.strip()
+
+
 def normalize_input(job_input: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(job_input, dict):
         raise ValueError("input must be an object")
@@ -192,12 +203,19 @@ def normalize_input(job_input: dict[str, Any]) -> dict[str, Any]:
     if seed < 0:
         seed = random.randint(0, 2**31 - 1)
 
+    first_image = _optional_image_field(job_input, "first_image")
+    last_image = _optional_image_field(job_input, "last_image")
+    if last_image and not first_image:
+        raise ValueError("last_image requires first_image")
+
     return {
         "prompt": prompt.strip(),
         "width": width,
         "height": height,
         "duration": duration,
         "seed": seed,
+        "first_image": first_image,
+        "last_image": last_image,
     }
 
 
@@ -236,8 +254,29 @@ def _upload_video(job_id: str, path: Path) -> str:
 
 def handler(job: dict[str, Any]) -> dict[str, Any]:
     job_id = str(job.get("id") or uuid.uuid4())
+    staged_first: str | None = None
+    staged_last: str | None = None
     try:
         params = normalize_input(job.get("input") or {})
+        if params["first_image"]:
+            try:
+                staged_first = stage_image(
+                    params["first_image"],
+                    input_dir=COMFY_INPUT_DIR,
+                    basename_stem=f"{job_id}_first",
+                )
+            except ImageInputError as err:
+                raise ValueError(str(err)) from err
+        if params["last_image"]:
+            try:
+                staged_last = stage_image(
+                    params["last_image"],
+                    input_dir=COMFY_INPUT_DIR,
+                    basename_stem=f"{job_id}_last",
+                )
+            except ImageInputError as err:
+                raise ValueError(str(err)) from err
+
         wf = inject_product(
             load_workflow(),
             prompt=params["prompt"],
@@ -245,9 +284,17 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
             height=params["height"],
             duration=params["duration"],
             seed=params["seed"],
+            first_image_name=staged_first,
+            last_image_name=staged_last,
         )
         prompt_id = submit_prompt(wf)
-        logger.info("Submitted prompt_id=%s job_id=%s", prompt_id, job_id)
+        logger.info(
+            "Submitted prompt_id=%s job_id=%s i2v=%s fl2v=%s",
+            prompt_id,
+            job_id,
+            bool(staged_first),
+            bool(staged_last),
+        )
         history = poll_history(prompt_id)
         mp4 = path_from_savevideo(history, COMFY_OUTPUT_DIR)
         logger.info("SaveVideo path=%s size=%s", mp4, mp4.stat().st_size)
@@ -257,6 +304,11 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
             rp_cleanup.clean([f"/{job_id}"])
         except Exception:  # noqa: BLE001
             pass
+        mode = "t2v"
+        if staged_first and staged_last:
+            mode = "fl2v"
+        elif staged_first:
+            mode = "i2v"
         return {
             **delivery,
             "width": params["width"],
@@ -264,12 +316,15 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
             "seed": params["seed"],
             "duration": params["duration"],
             "model": MODEL_ID,
+            "mode": mode,
             "prompt_id": prompt_id,
             "filename": mp4.name,
         }
     except Exception as e:  # noqa: BLE001 — surface to RunPod
         logger.error("job failed: %s\n%s", e, traceback.format_exc())
         return {"error": str(e)}
+    finally:
+        cleanup_staged(COMFY_INPUT_DIR, staged_first, staged_last)
 
 
 if __name__ == "__main__":

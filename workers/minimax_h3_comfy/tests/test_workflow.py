@@ -13,6 +13,10 @@ sys.path.insert(0, str(ROOT))
 from workflow import (  # noqa: E402
     DURATION_KEY,
     DURATION_NODE,
+    FIRST_FRAME_KEY,
+    FIRST_LOAD_NODE,
+    LAST_FRAME_KEY,
+    LAST_LOAD_NODE,
     PROMPT_KEY,
     PROMPT_NODE,
     SEED_KEY,
@@ -91,7 +95,68 @@ class TestWorkflowInject(unittest.TestCase):
         self.assertEqual(SEED_KEY, "noise_seed")
         self.assertEqual(UNET_NODE, "6")
         self.assertEqual(UNET_NAME_KEY, "unet_name")
+        self.assertEqual(FIRST_LOAD_NODE, "200")
+        self.assertEqual(LAST_LOAD_NODE, "201")
+        self.assertEqual(FIRST_FRAME_KEY, "first_frame")
+        self.assertEqual(LAST_FRAME_KEY, "last_frame")
+
+    def test_inject_t2v_has_no_frame_links_or_loadimage(self):
+        wf = load_workflow()
+        out = inject_product(
+            wf, prompt="hi", width=864, height=480, duration=2.0, seed=1
+        )
+        self.assertNotIn(FIRST_FRAME_KEY, out["104"]["inputs"])
+        self.assertNotIn(LAST_FRAME_KEY, out["104"]["inputs"])
+        self.assertNotIn(FIRST_LOAD_NODE, out)
+        self.assertNotIn(LAST_LOAD_NODE, out)
+
+    def test_inject_first_frame_only(self):
+        wf = load_workflow()
+        out = inject_product(
+            wf,
+            prompt="hi",
+            width=864,
+            height=480,
+            duration=2.0,
+            seed=1,
+            first_image_name="job_first.png",
+        )
+        self.assertEqual(out[FIRST_LOAD_NODE]["class_type"], "LoadImage")
+        self.assertEqual(out[FIRST_LOAD_NODE]["inputs"]["image"], "job_first.png")
+        self.assertEqual(out["104"]["inputs"][FIRST_FRAME_KEY], [FIRST_LOAD_NODE, 0])
+        self.assertNotIn(LAST_FRAME_KEY, out["104"]["inputs"])
+        self.assertNotIn(LAST_LOAD_NODE, out)
+
+    def test_inject_first_and_last(self):
+        wf = load_workflow()
+        out = inject_product(
+            wf,
+            prompt="hi",
+            width=864,
+            height=480,
+            duration=2.0,
+            seed=1,
+            first_image_name="a.png",
+            last_image_name="b.png",
+        )
+        self.assertEqual(out["104"]["inputs"][FIRST_FRAME_KEY], [FIRST_LOAD_NODE, 0])
+        self.assertEqual(out["104"]["inputs"][LAST_FRAME_KEY], [LAST_LOAD_NODE, 0])
+        self.assertEqual(out[LAST_LOAD_NODE]["inputs"]["image"], "b.png")
+
+    def test_inject_last_without_first_raises(self):
+        wf = load_workflow()
+        with self.assertRaises(ValueError):
+            inject_product(
+                wf,
+                prompt="hi",
+                width=864,
+                height=480,
+                duration=2.0,
+                seed=1,
+                last_image_name="b.png",
+            )
 
 
 if __name__ == "__main__":
     unittest.main()
+
