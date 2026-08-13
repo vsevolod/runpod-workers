@@ -57,9 +57,18 @@ Design/plan:
 
 | `BUCKET_*` | Behavior |
 |------------|----------|
-| all four set | `video_url` via S3-compatible upload |
+| all four set | upload MP4 → `delivery: "s3"` + `bucket` + `key` (no URL) |
 | all empty | `video` base64 if size ≤ `MAX_INLINE_VIDEO_BYTES` (default 7e6) |
 | partial | **worker exits at start** |
+
+S3 delivery is for files that exceed the RunPod response cap (`/run` 10 MB, `/runsync` 20 MB). The worker does **not** attach a Network Volume and does **not** return a presigned URL (RunPod S3 API has no presign). The consumer `GetObject`s with its own credentials.
+
+| Env | Required for S3 | Meaning |
+|-----|-----------------|--------|
+| `BUCKET_ENDPOINT_URL` | yes | `https://s3api-<DC>.runpod.io/` |
+| `BUCKET_ACCESS_KEY_ID` / `BUCKET_SECRET_ACCESS_KEY` | yes | RunPod **S3 API key** (Settings), not the account API key |
+| `BUCKET_NAME` | yes | network volume id |
+| `BUCKET_REGION` | no | if unset, parsed from `s3api-<dc>.runpod.io` → `<DC>` |
 
 ## Model sources (boot)
 
@@ -156,7 +165,7 @@ Full CUDA image still requires a real GPU + real weights; use bootcheck for dail
 - **Legacy volume (fallback):**
   - Attach Network Volume + `MODEL_DIR` = root containing `models/`
   - Fill offline with `download_weights.py`
-- Env: all four `BUCKET_*` **or** none
+- Env: all four `BUCKET_*` **or** none (optional `BUCKET_REGION`)
 - GPU allowlist (cu124): A40 / A6000 / L40 / L40S / 6000 Ada / H100 — **not** Blackwell until cu128
 - Image includes `build-essential` so Triton can JIT-compile CUDA utils at runtime
 

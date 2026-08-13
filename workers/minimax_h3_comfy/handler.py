@@ -2,7 +2,7 @@
 
 Architecture: start.sh launches pinned ComfyUI on 127.0.0.1:8188, then this
 handler. Product input → inject frozen API workflow → POST /prompt → poll
-history → path from SaveVideo node only → S3 URL or limited base64.
+history → path from SaveVideo node only → S3 bucket+key or limited base64.
 """
 
 from __future__ import annotations
@@ -16,10 +16,11 @@ import traceback
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 import runpod
-from runpod.serverless.utils import rp_cleanup, rp_upload
+from runpod.serverless.utils import rp_cleanup
 
 from image_input import ImageInputError, cleanup_staged, stage_image
 from workflow import (
@@ -81,13 +82,41 @@ def require_bucket_config_or_exit() -> str:
     if state == "partial":
         logger.error(
             "Partial BUCKET_* config: present=%s missing=%s. "
-            "Set all four for URL delivery, or none for inline base64.",
+            "Set all four for S3 key delivery, or none for inline base64.",
             present,
             missing,
         )
         raise SystemExit(2)
-    logger.info("Delivery mode: %s", "S3 URL" if state == "full" else "inline base64")
+    logger.info(
+        "Delivery mode: %s",
+        "S3 object (bucket+key)" if state == "full" else "inline base64",
+    )
     return state
+
+
+def region_from_endpoint(endpoint: str) -> str | None:
+    """Parse RunPod s3api-<DC>.runpod.io → DC id; else None."""
+    text = (endpoint or "").strip()
+    if not text:
+        return None
+    host = urlparse(text).netloc if "://" in text else text
+    host = host.split("@")[-1].split(":")[0].rstrip("/")
+    prefix = "s3api-"
+    suffix = ".runpod.io"
+    if host.startswith(prefix) and host.endswith(suffix):
+        dc = host[len(prefix) : -len(suffix)]
+        if dc:
+            return dc.upper()
+    return None
+
+
+def bucket_region(env: dict[str, str] | None = None) -> str | None:
+    """BUCKET_REGION if set, else parse BUCKET_ENDPOINT_URL."""
+    src = env if env is not None else os.environ
+    explicit = (src.get("BUCKET_REGION") or "").strip()
+    if explicit:
+        return explicit
+    return region_from_endpoint((src.get("BUCKET_ENDPOINT_URL") or "").strip())
 
 
 def path_from_savevideo(history_entry: dict[str, Any], output_dir: Path) -> Path:
@@ -223,13 +252,12 @@ def deliver_video(mp4: Path, job_id: str) -> dict[str, Any]:
     state = bucket_state()
     size = mp4.stat().st_size
     if state == "full":
-        # rp_upload.upload_image is image-oriented; use file upload helper if present
-        url = _upload_video(job_id, mp4)
-        return {"video_url": url, "delivery": "url", "bytes": size}
+        bucket, key = _upload_video(job_id, mp4)
+        return {"delivery": "s3", "bucket": bucket, "key": key, "bytes": size}
     if size > MAX_INLINE_VIDEO_BYTES:
         raise RuntimeError(
             f"Video is {size} bytes > MAX_INLINE_VIDEO_BYTES={MAX_INLINE_VIDEO_BYTES}; "
-            "configure full BUCKET_* for URL delivery"
+            "configure full BUCKET_* for S3 delivery"
         )
     b64 = base64.b64encode(mp4.read_bytes()).decode("ascii")
     return {
@@ -239,17 +267,34 @@ def deliver_video(mp4: Path, job_id: str) -> dict[str, Any]:
     }
 
 
-def _upload_video(job_id: str, path: Path) -> str:
-    """Upload via runpod rp_upload (S3-compatible when BUCKET_* set)."""
-    # Prefer generic file upload; fall back to upload_image path API.
-    if hasattr(rp_upload, "upload_file_to_bucket"):
-        return rp_upload.upload_file_to_bucket(
-            file_name=path.name,
-            file_location=str(path),
-            prefix=job_id,
-        )
-    # Older runpod: upload_image still works for arbitrary files in practice
-    return rp_upload.upload_image(job_id, str(path))
+def _upload_video(job_id: str, path: Path) -> tuple[str, str]:
+    """PutObject via boto3. Returns (bucket, key). Never generates a presigned URL."""
+    import boto3
+    from botocore.config import Config as BotoConfig
+
+    bucket = (os.environ.get("BUCKET_NAME") or "").strip()
+    endpoint = (os.environ.get("BUCKET_ENDPOINT_URL") or "").strip()
+    access = (os.environ.get("BUCKET_ACCESS_KEY_ID") or "").strip()
+    secret = (os.environ.get("BUCKET_SECRET_ACCESS_KEY") or "").strip()
+    if not all((bucket, endpoint, access, secret)):
+        raise RuntimeError("incomplete BUCKET_* during S3 upload")
+
+    key = f"{job_id}/{path.name}"
+    client = boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=access,
+        aws_secret_access_key=secret,
+        region_name=bucket_region(),
+        config=BotoConfig(signature_version="s3v4"),
+    )
+    client.upload_file(
+        str(path),
+        bucket,
+        key,
+        ExtraArgs={"ContentType": "video/mp4"},
+    )
+    return bucket, key
 
 
 def handler(job: dict[str, Any]) -> dict[str, Any]:

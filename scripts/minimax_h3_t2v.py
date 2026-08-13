@@ -198,7 +198,7 @@ def _extract_video_bytes(output: dict[str, Any]) -> tuple[bytes, str]:
         return _decode_data_url_or_b64(video.strip()), "video(base64)"
 
     raise ValueError(
-        "no video_url or video in output "
+        "no video_url, video, or s3 bucket/key in output "
         f"(keys={list(output.keys())}; delivery={output.get('delivery')!r})"
     )
 
@@ -239,6 +239,29 @@ def _looks_like_mp4(data: bytes) -> bool:
     return b"ftyp" in data[:64]
 
 
+def _print_output_meta(result: dict[str, Any], output: dict[str, Any]) -> None:
+    for key in (
+        "delivery",
+        "bucket",
+        "key",
+        "bytes",
+        "width",
+        "height",
+        "duration",
+        "seed",
+        "model",
+        "mode",
+        "filename",
+        "prompt_id",
+    ):
+        if key in output:
+            print(f"  {key}: {output[key]}")
+    delay = result.get("delayTime")
+    exec_t = result.get("executionTime")
+    if delay is not None or exec_t is not None:
+        print(f"  times: delay={delay}ms exec={exec_t}ms")
+
+
 def _save_result(
     result: dict[str, Any],
     dest: Path,
@@ -265,6 +288,17 @@ def _save_result(
 
     _maybe_save_json(result, output, save_json)
 
+    if output.get("delivery") == "s3" or (
+        output.get("bucket") and output.get("key")
+    ):
+        print("✓ S3 object (consumer downloads with its own credentials)")
+        _print_output_meta(result, output)
+        print()
+        print("Not writing a local MP4 — no presigned URL. GetObject:")
+        print(f"  bucket={output.get('bucket')!s}")
+        print(f"  key={output.get('key')!s}")
+        return 0
+
     try:
         raw, source = _extract_video_bytes(output)
     except Exception as err:
@@ -286,24 +320,7 @@ def _save_result(
     else:
         print("  container: looks like MP4 (ftyp present)")
 
-    for key in (
-        "delivery",
-        "bytes",
-        "width",
-        "height",
-        "duration",
-        "seed",
-        "model",
-        "mode",
-        "filename",
-        "prompt_id",
-    ):
-        if key in output:
-            print(f"  {key}: {output[key]}")
-    delay = result.get("delayTime")
-    exec_t = result.get("executionTime")
-    if delay is not None or exec_t is not None:
-        print(f"  times: delay={delay}ms exec={exec_t}ms")
+    _print_output_meta(result, output)
 
     print()
     print("Next (optional):")
