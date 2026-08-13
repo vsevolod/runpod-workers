@@ -212,6 +212,20 @@ def _optional_image_field(job_input: dict[str, Any], key: str) -> str | None:
     return val.strip()
 
 
+def _optional_file_path(job_input: dict[str, Any]) -> str | None:
+    """Object key for S3 delivery, or None if omitted / blank."""
+    if "file_path" not in job_input or job_input["file_path"] is None:
+        return None
+    val = job_input["file_path"]
+    if not isinstance(val, str):
+        raise ValueError("file_path must be a string when provided")
+    text = val.strip()
+    if "://" in text:
+        raise ValueError("file_path must be an object key, not a URI")
+    text = text.lstrip("/")
+    return text or None
+
+
 def normalize_input(job_input: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(job_input, dict):
         raise ValueError("input must be an object")
@@ -245,14 +259,18 @@ def normalize_input(job_input: dict[str, Any]) -> dict[str, Any]:
         "seed": seed,
         "first_image": first_image,
         "last_image": last_image,
+        "file_path": _optional_file_path(job_input),
     }
 
 
-def deliver_video(mp4: Path, job_id: str) -> dict[str, Any]:
+def deliver_video(
+    mp4: Path, job_id: str, file_path: str | None = None
+) -> dict[str, Any]:
     state = bucket_state()
     size = mp4.stat().st_size
     if state == "full":
-        bucket, key = _upload_video(job_id, mp4)
+        key = file_path or f"{job_id}/{mp4.name}"
+        bucket, key = _upload_video(mp4, key)
         return {"delivery": "s3", "bucket": bucket, "key": key, "bytes": size}
     if size > MAX_INLINE_VIDEO_BYTES:
         raise RuntimeError(
@@ -267,7 +285,7 @@ def deliver_video(mp4: Path, job_id: str) -> dict[str, Any]:
     }
 
 
-def _upload_video(job_id: str, path: Path) -> tuple[str, str]:
+def _upload_video(path: Path, key: str) -> tuple[str, str]:
     """PutObject via boto3. Returns (bucket, key). Never generates a presigned URL."""
     import boto3
     from botocore.config import Config as BotoConfig
@@ -279,7 +297,6 @@ def _upload_video(job_id: str, path: Path) -> tuple[str, str]:
     if not all((bucket, endpoint, access, secret)):
         raise RuntimeError("incomplete BUCKET_* during S3 upload")
 
-    key = f"{job_id}/{path.name}"
     client = boto3.client(
         "s3",
         endpoint_url=endpoint,
@@ -343,7 +360,7 @@ def handler(job: dict[str, Any]) -> dict[str, Any]:
         history = poll_history(prompt_id)
         mp4 = path_from_savevideo(history, COMFY_OUTPUT_DIR)
         logger.info("SaveVideo path=%s size=%s", mp4, mp4.stat().st_size)
-        delivery = deliver_video(mp4, job_id)
+        delivery = deliver_video(mp4, job_id, file_path=params["file_path"])
         # best-effort cleanup of job staging only (not Comfy output tree wholesale)
         try:
             rp_cleanup.clean([f"/{job_id}"])

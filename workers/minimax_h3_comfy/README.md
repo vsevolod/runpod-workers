@@ -45,6 +45,7 @@ Design/plan:
 |-------|------|
 | `first_image` | Optional. HTTPS URL, raw base64, or `data:image/{png,jpeg,jpg,webp};base64,…` → `first_frame` |
 | `last_image` | Optional; requires `first_image` → `last_frame` |
+| `file_path` | Optional S3 object key (not `s3://…`). With full `BUCKET_*` → upload to that key (overwrite). Without bucket → ignored, base64 as usual. Omitted → `{job_id}/{filename}` |
 | Mode | Implicit: no `first_image` → T2V; first only → I2V; both → FL2V. Response includes `mode` |
 
 - Canvas: multiples of 32; short edge ≤ 768; long ≤ 1344 (client always sets width/height; defaults 864×480).
@@ -57,7 +58,7 @@ Design/plan:
 
 | `BUCKET_*` | Behavior |
 |------------|----------|
-| all four set | upload MP4 → `delivery: "s3"` + `bucket` + `key` (no URL) |
+| all four set | upload MP4 → `delivery: "s3"` + `bucket` + `key` (no URL). `key` = `file_path` if set, else `{job_id}/{filename}` |
 | all empty | `video` base64 if size ≤ `MAX_INLINE_VIDEO_BYTES` (default 7e6) |
 | partial | **worker exits at start** |
 

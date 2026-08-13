@@ -94,6 +94,33 @@ class TestNormalizeInput(unittest.TestCase):
         with self.assertRaises(ValueError):
             handler.normalize_input({"prompt": "hi", "first_image": "  "})
 
+    def test_file_path_omitted(self):
+        p = handler.normalize_input({"prompt": "hi"})
+        self.assertIsNone(p["file_path"])
+
+    def test_file_path_empty_or_slashes_is_omitted(self):
+        for raw in ("", "   ", "///"):
+            p = handler.normalize_input({"prompt": "hi", "file_path": raw})
+            self.assertIsNone(p["file_path"], raw)
+
+    def test_file_path_strips_and_drops_leading_slashes(self):
+        p = handler.normalize_input(
+            {"prompt": "hi", "file_path": "  /videos/abc/out.mp4  "}
+        )
+        self.assertEqual(p["file_path"], "videos/abc/out.mp4")
+
+    def test_file_path_rejects_non_string(self):
+        with self.assertRaises(ValueError) as ctx:
+            handler.normalize_input({"prompt": "hi", "file_path": 123})
+        self.assertIn("file_path", str(ctx.exception))
+
+    def test_file_path_rejects_uri(self):
+        with self.assertRaises(ValueError) as ctx:
+            handler.normalize_input(
+                {"prompt": "hi", "file_path": "s3://vol_abc/videos/out.mp4"}
+            )
+        self.assertIn("file_path", str(ctx.exception).lower())
+
 
 class TestRegionFromEndpoint(unittest.TestCase):
     def test_runpod_s3api_host(self):
@@ -152,7 +179,25 @@ class TestDeliverVideo(unittest.TestCase):
         self.assertEqual(out["bytes"], 8)
         self.assertNotIn("video_url", out)
         self.assertNotIn("video", out)
-        upload.assert_called_once_with("job1", mp4)
+        upload.assert_called_once_with(mp4, "job1/MiniMax_H3_00001_.mp4")
+
+    def test_s3_uses_file_path_as_key(self):
+        with tempfile.TemporaryDirectory() as td:
+            mp4 = Path(td) / "MiniMax_H3_00001_.mp4"
+            mp4.write_bytes(b"mp4bytes")
+            with mock.patch.object(handler, "bucket_state", return_value="full"):
+                with mock.patch.object(
+                    handler,
+                    "_upload_video",
+                    return_value=("vol_abc", "videos/abc/out.mp4"),
+                ) as upload:
+                    out = handler.deliver_video(
+                        mp4, "job1", file_path="videos/abc/out.mp4"
+                    )
+        self.assertEqual(out["delivery"], "s3")
+        self.assertEqual(out["key"], "videos/abc/out.mp4")
+        self.assertNotIn("video", out)
+        upload.assert_called_once_with(mp4, "videos/abc/out.mp4")
 
     def test_inline_when_no_bucket(self):
         with tempfile.TemporaryDirectory() as td:
@@ -168,6 +213,20 @@ class TestDeliverVideo(unittest.TestCase):
                         out = handler.deliver_video(mp4, "job1")
             self.assertEqual(out["delivery"], "base64")
             self.assertTrue(out["video"].startswith("data:video/mp4;base64,"))
+
+    def test_inline_ignores_file_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            mp4 = Path(td) / "a.mp4"
+            mp4.write_bytes(b"abc123")
+            with mock.patch.object(handler, "bucket_state", return_value="none"):
+                with mock.patch.object(handler, "MAX_INLINE_VIDEO_BYTES", 100):
+                    with mock.patch.object(handler, "_upload_video") as upload:
+                        out = handler.deliver_video(
+                            mp4, "job1", file_path="videos/abc/out.mp4"
+                        )
+        self.assertEqual(out["delivery"], "base64")
+        self.assertNotIn("key", out)
+        upload.assert_not_called()
 
     def test_inline_too_large(self):
         with tempfile.TemporaryDirectory() as td:
@@ -193,7 +252,7 @@ class TestUploadVideo(unittest.TestCase):
             }
             with mock.patch.dict("os.environ", env, clear=False):
                 with mock.patch("boto3.client", return_value=fake_client) as make:
-                    bucket, key = handler._upload_video("job9", mp4)
+                    bucket, key = handler._upload_video(mp4, "job9/clip.mp4")
         self.assertEqual(bucket, "vol_abc")
         self.assertEqual(key, "job9/clip.mp4")
         make.assert_called_once()
@@ -208,6 +267,30 @@ class TestUploadVideo(unittest.TestCase):
         )
         fake_client.generate_presigned_url.assert_not_called()
 
+    def test_puts_object_at_explicit_key(self):
+        with tempfile.TemporaryDirectory() as td:
+            mp4 = Path(td) / "clip.mp4"
+            mp4.write_bytes(b"data")
+            fake_client = mock.Mock()
+            env = {
+                "BUCKET_ENDPOINT_URL": "https://s3api-eu-ro-1.runpod.io/",
+                "BUCKET_ACCESS_KEY_ID": "ak",
+                "BUCKET_SECRET_ACCESS_KEY": "sk",
+                "BUCKET_NAME": "vol_abc",
+            }
+            with mock.patch.dict("os.environ", env, clear=False):
+                with mock.patch("boto3.client", return_value=fake_client):
+                    bucket, key = handler._upload_video(mp4, "videos/abc/out.mp4")
+        self.assertEqual(bucket, "vol_abc")
+        self.assertEqual(key, "videos/abc/out.mp4")
+        fake_client.upload_file.assert_called_once_with(
+            str(mp4),
+            "vol_abc",
+            "videos/abc/out.mp4",
+            ExtraArgs={"ContentType": "video/mp4"},
+        )
+        fake_client.generate_presigned_url.assert_not_called()
+
     def test_incomplete_env_raises(self):
         with tempfile.TemporaryDirectory() as td:
             mp4 = Path(td) / "clip.mp4"
@@ -216,7 +299,7 @@ class TestUploadVideo(unittest.TestCase):
             env["BUCKET_NAME"] = "vol_abc"
             with mock.patch.dict("os.environ", env, clear=False):
                 with self.assertRaises(RuntimeError):
-                    handler._upload_video("job9", mp4)
+                    handler._upload_video(mp4, "job9/clip.mp4")
 
 
 if __name__ == "__main__":

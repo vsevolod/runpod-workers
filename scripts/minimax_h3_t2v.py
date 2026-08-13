@@ -453,6 +453,8 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         job_input["first_image"] = first_image
     if last_image:
         job_input["last_image"] = last_image
+    if args.file_path and str(args.file_path).strip():
+        job_input["file_path"] = str(args.file_path).strip()
 
     mode_label = "T2V"
     if first_image and last_image:
@@ -473,6 +475,8 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
     if last_image:
         src = args.last_image
         print(f"last:     {src[:80]}{'…' if len(str(src)) > 80 else ''}")
+    if job_input.get("file_path"):
+        print(f"s3 key:   {job_input['file_path']}")
     print(f"output:   {out}")
     print()
     print(
@@ -576,6 +580,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--save-json",
         default=None,
         help="Optional path to write job status JSON (video fields redacted)",
+    )
+    parser.add_argument(
+        "--file-path",
+        dest="file_path",
+        default=None,
+        help="Optional S3 object key for delivery (ignored without BUCKET_*)",
     )
     return parser
 
