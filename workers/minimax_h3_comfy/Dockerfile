@@ -54,15 +54,21 @@ RUN python -m pip install --no-cache-dir uv
 ENV PATH="/.venv/bin:${PATH}"
 RUN uv venv --python 3.12 /.venv
 
-# CUDA torch (cu124)
+# CUDA torch (cu124). uv's default first-index strategy stops at PyPI once
+# it sees `torch` there (no cp312+cu124 wheel) and also cannot pull
+# nvidia-cudnn-cu12==9.1.0.70 from PyPI if the cu124 index listed first.
+# Both indexes are trusted here.
 RUN uv pip install --no-cache torch torchvision torchaudio \
-    --extra-index-url https://download.pytorch.org/whl/cu124
+    --extra-index-url https://download.pytorch.org/whl/cu124 \
+    --index-strategy unsafe-best-match
 
 # Pinned ComfyUI (no custom-node packs for v1)
 RUN git clone https://github.com/Comfy-Org/ComfyUI.git "${COMFYUI_PATH}" \
     && cd "${COMFYUI_PATH}" \
     && git checkout "${COMFYUI_REF}" \
-    && uv pip install --no-cache -r requirements.txt
+    && uv pip install --no-cache -r requirements.txt \
+        --extra-index-url https://download.pytorch.org/whl/cu124 \
+        --index-strategy unsafe-best-match
 
 WORKDIR /app
 
