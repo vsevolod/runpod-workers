@@ -1,0 +1,17 @@
+# Runtime deps for the Qwen-Image-2.1 RunPod worker.
+# Torch is installed separately in the Dockerfile (CUDA wheel).
+#
+# QwenImage21Pipeline is on diffusers main via PR #14804 (merged 2026-09-18)
+# and is not in a tagged release yet. Pin the merge commit.
+
+runpod>=1.7.9
+transformers>=5.17
+accelerate>=1.0.0
+safetensors>=0.4.0
+pillow>=10.0.0
+huggingface-hub>=0.26.0
+hf_transfer>=0.1.0
+numpy>=1.24.0
+sentencepiece>=0.2.0
+protobuf>=4.0.0
+diffusers @ git+https://github.com/huggingface/diffusers.git@6256aa7666cedd47443adc8f82da9a10e110b09c

@@ -7,6 +7,7 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 | Path | Description | Status |
 |------|-------------|--------|
 | [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8 image generation (thin Python handler) | MVP |
+| [`workers/qwen_image_21`](workers/qwen_image_21/) | Qwen-Image-2.1 text-to-image and multi-ref edit (Diffusers) | MVP |
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
 | [`workers/minimax_h3_comfy/`](workers/minimax_h3_comfy/) | MiniMax H3 T2V via headless ComfyUI (native nodes, pruned int8) | scaffold — headless GPU smoke pending |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CivitAI LoRA download to network volume (CPU) | MVP |
@@ -29,11 +30,12 @@ Weights should live on a **Network Volume** (not in the image) unless you intent
 
 ## Remote test clients
 
-Local CLI scripts (need `RUNPOD_API_KEY`; endpoint IDs are hardcoded, overridable via `ENDPOINT_ID`):
+Local CLI scripts (need `RUNPOD_API_KEY`; endpoint IDs are hardcoded unless the table says to set `ENDPOINT_ID`):
 
 | Script | Endpoint (default) | Usage |
 |--------|--------------------|--------|
 | [`scripts/krea2_image.py`](scripts/krea2_image.py) | `9zb0wyo61ck3wk` | text2img / edit / fetch → PNG |
+| [`scripts/qwen_image_21.py`](scripts/qwen_image_21.py) | set `ENDPOINT_ID` | text2img / multi-ref edit / fetch → PNG |
 | [`scripts/joycaption.py`](scripts/joycaption.py) | `yn0krhztuguxxm` | image → caption text |
 | [`scripts/download_lora.py`](scripts/download_lora.py) | set `ENDPOINT_ID` | version ids → volume |
 

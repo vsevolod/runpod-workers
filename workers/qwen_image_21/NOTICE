@@ -1,0 +1,32 @@
+Third-party software notices for workers/qwen_image_21
+
+RunPod worker-sdxl
+------------------
+
+Portions of handler.py are adapted from:
+
+  runpod-workers/worker-sdxl
+  https://github.com/runpod-workers/worker-sdxl
+
+Copyright (c) 2025 RunPod
+
+The adapted portions are licensed under the MIT License. A copy of that
+license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
+
+Model weights
+-------------
+
+Qwen-Image-2.1 weights are not included in this repository. They are
+published by the Qwen team under the Qwen Research License:
+
+  https://huggingface.co/Qwen/Qwen-Image-2.1
+  https://github.com/QwenLM/Qwen-Image-2.1/blob/main/LICENSE
+
+Research and evaluation are covered by that license. Commercial deployment
+needs a separate agreement with Qwen.
+
+Diffusers
+---------
+
+Inference uses Hugging Face Diffusers QwenImage21Pipeline (Apache-2.0),
+pinned in requirements.txt to the commit that added the pipeline.
