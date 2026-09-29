@@ -137,6 +137,8 @@ without an immediate OOM. Pass an official size when the GPU has room.
 }
 ```
 
+Edits return one image; `num_images` must be `1`.
+
 Omit both `width` and `height` and the canvas follows the **last** reference
 at `output_resolution` (default 1024, meaning about a 1024×1024 area). Pass
 both dimensions to force a canvas. References keep their alpha; the vision
