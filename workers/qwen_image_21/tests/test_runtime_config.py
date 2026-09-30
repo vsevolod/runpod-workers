@@ -63,6 +63,40 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertFalse(self.mod.parse_local_files_only(""))
         self.assertFalse(self.mod.parse_local_files_only("0"))
 
+    def test_lora_constants_are_the_v021_rank256_adapter(self):
+        self.assertEqual(self.mod.LORA_REPO_ID, "Viggle/Qwen-Image-2.1-viggle-turbo")
+        self.assertEqual(
+            self.mod.LORA_WEIGHT_NAME,
+            "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+        )
+
+    def test_local_lora_file_wins_over_the_hub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "loras"
+            folder.mkdir()
+            weight = folder / self.mod.LORA_WEIGHT_NAME
+            weight.write_bytes(b"lora")
+            source, name, files_only = self.mod.resolve_lora_source(
+                tmp, local_files_only=False
+            )
+        self.assertEqual(source, str(folder))
+        self.assertEqual(name, self.mod.LORA_WEIGHT_NAME)
+        self.assertTrue(files_only)
+
+    def test_missing_lora_on_a_local_volume_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):
+                self.mod.resolve_lora_source(tmp, local_files_only=True)
+
+    def test_missing_lora_without_local_only_uses_the_hub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, name, files_only = self.mod.resolve_lora_source(
+                tmp, local_files_only=False
+            )
+        self.assertEqual(source, "Viggle/Qwen-Image-2.1-viggle-turbo")
+        self.assertEqual(name, self.mod.LORA_WEIGHT_NAME)
+        self.assertFalse(files_only)
+
 
 if __name__ == "__main__":
     unittest.main()

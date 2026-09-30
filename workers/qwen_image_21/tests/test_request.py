@@ -52,7 +52,7 @@ def _generate(**overrides):
         "width": 1024,
         "height": 1024,
         "images": [],
-        "num_inference_steps": 40,
+        "num_inference_steps": 6,
         "guidance_scale": 1.0,
         "num_images": 1,
         "negative_prompt": None,
@@ -71,7 +71,7 @@ class NormalizeJobInputTests(unittest.TestCase):
         self.assertEqual(out.images, ())
         self.assertFalse(out.size_from_source)
         self.assertEqual(out.output_resolution, 1024)
-        self.assertEqual(out.num_inference_steps, 40)
+        self.assertEqual(out.num_inference_steps, 6)
         self.assertEqual(out.guidance_scale, 1.0)
 
     def test_generate_rejects_images(self):
@@ -142,7 +142,6 @@ class NormalizeJobInputTests(unittest.TestCase):
                 "prompt": "sit them by a fire",
                 "images": [rgb, rgba],
                 "num_images": 1,
-                "num_inference_steps": 40,
                 "guidance_scale": 1.0,
             },
             raw_keys={"type", "prompt", "images"},
@@ -246,6 +245,10 @@ class BuildPipeKwargsTests(unittest.TestCase):
         self.assertEqual(kwargs["width"], 1024)
         self.assertEqual(kwargs["height"], 1024)
         self.assertEqual(kwargs["true_cfg_scale"], 1.0)
+        self.assertEqual(
+            kwargs["sigmas"],
+            [1.0, 0.9375, 0.875, 0.75, 0.5, 0.25],
+        )
         self.assertTrue(kwargs["use_kv_cache"])
         self.assertNotIn("negative_prompt", kwargs)
         self.assertNotIn("generator", kwargs)
@@ -271,14 +274,58 @@ class BuildPipeKwargsTests(unittest.TestCase):
         self.assertEqual(kwargs["output_resolution"], 1024)
 
     def test_schema_defaults_match_the_contract(self):
-        self.assertEqual(INPUT_SCHEMA["num_inference_steps"]["default"], 40)
+        steps = INPUT_SCHEMA["num_inference_steps"]
+        self.assertEqual(steps["default"], 6)
         self.assertEqual(INPUT_SCHEMA["guidance_scale"]["default"], 1.0)
         self.assertEqual(INPUT_SCHEMA["width"]["default"], 1024)
         self.assertIsNone(INPUT_SCHEMA["output_resolution"]["default"])
         self.assertTrue(INPUT_SCHEMA["output_resolution"]["constraints"](None))
         self.assertFalse(INPUT_SCHEMA["width"]["constraints"](1000))
-        self.assertFalse(INPUT_SCHEMA["num_inference_steps"]["constraints"](0))
+        self.assertFalse(steps["constraints"](0))
+        self.assertFalse(steps["constraints"](40))
+        self.assertTrue(steps["constraints"](6))
+        self.assertTrue(steps["constraints"](8))
         self.assertFalse(INPUT_SCHEMA["num_images"]["constraints"](5))
+
+    def test_omitted_steps_use_the_6_step_turbo_schedule(self):
+        payload = {
+            "prompt": "a red fox",
+            "width": 1024,
+            "height": 1024,
+            "images": [],
+            "guidance_scale": 1.0,
+            "num_images": 1,
+        }
+        out = normalize_job_input(payload, raw_keys=set(payload))
+        self.assertEqual(out.num_inference_steps, 6)
+        kwargs = build_pipe_kwargs(out)
+        self.assertEqual(
+            kwargs["sigmas"],
+            [1.0, 0.9375, 0.875, 0.75, 0.5, 0.25],
+        )
+
+    def test_four_steps_omit_sigmas(self):
+        kwargs = build_pipe_kwargs(_generate(num_inference_steps=4))
+        self.assertEqual(kwargs["num_inference_steps"], 4)
+        self.assertNotIn("sigmas", kwargs)
+
+    def test_five_seven_and_eight_use_published_sigma_nodes(self):
+        five = build_pipe_kwargs(_generate(num_inference_steps=5))
+        seven = build_pipe_kwargs(_generate(num_inference_steps=7))
+        eight = build_pipe_kwargs(_generate(num_inference_steps=8))
+        self.assertEqual(five["sigmas"], [1.0, 0.875, 0.75, 0.5, 0.25])
+        self.assertEqual(
+            seven["sigmas"],
+            [1.0, 0.9583333333333334, 0.9166666666666666, 0.875, 0.75, 0.5, 0.25],
+        )
+        self.assertEqual(
+            eight["sigmas"],
+            [1.0, 0.9375, 0.875, 0.75, 0.625, 0.5, 0.25, 0.125],
+        )
+
+    def test_other_step_counts_are_rejected(self):
+        with self.assertRaisesRegex(RequestError, "4, 5, 6, 7, or 8"):
+            _generate(num_inference_steps=40)
 
 
 if __name__ == "__main__":

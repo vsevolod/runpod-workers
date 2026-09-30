@@ -5,7 +5,7 @@
     "width": 1024,
     "height": 1024,
     "seed": 42,
-    "num_inference_steps": 40,
+    "num_inference_steps": 6,
     "guidance_scale": 1.0,
     "num_images": 1
   }

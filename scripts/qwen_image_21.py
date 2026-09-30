@@ -36,7 +36,8 @@ API_BASE = "https://api.runpod.ai/v2"
 POLL_INTERVAL_S = 5.0
 DEFAULT_OUTPUT = "output.png"
 DEFAULT_EDIT_OUTPUT = "edit_output.png"
-DEFAULT_STEPS = 40
+DEFAULT_STEPS = 6
+ALLOWED_STEPS = (4, 5, 6, 7, 8)
 DEFAULT_GUIDANCE = 1.0
 DEFAULT_GEN_SIZE = 1024
 MAX_REFS = 10
@@ -237,7 +238,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Condition-image area. Edit default when size is omitted: 1024.",
     )
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=DEFAULT_STEPS,
+        choices=ALLOWED_STEPS,
+        help="Viggle turbo schedule. 6 is the default; 8 is the dense-text schedule.",
+    )
     parser.add_argument(
         "--guidance-scale",
         type=float,

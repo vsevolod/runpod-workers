@@ -6,8 +6,8 @@ Diffusers `QwenImage21Pipeline`. No ComfyUI. Same handler shape as
 
 | | |
 |--|--|
-| **Model** | [Qwen/Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) (bf16 snapshot, ~33 GB) |
-| **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `6256aa7` (PR [#14804](https://github.com/huggingface/diffusers/pull/14804)) |
+| **Model** | [Qwen/Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) (bf16 snapshot, ~33 GB) plus the [Viggle turbo v0.2.1](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA (rank 256, ~1.4 GB) |
+| **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `6256aa7` (PR [#14804](https://github.com/huggingface/diffusers/pull/14804)). The LoRA stays unmerged. The scheduler runs with `shift_terminal` unset |
 | **Text encoder** | Qwen3-VL 8B, loaded with the snapshot |
 | **VAE** | 64-channel RGBA VAE shipped in the same repo. The Qwen-Image / Krea 2 VAE is not interchangeable |
 | **GPU** | **24 GB** with `OFFLOAD=cpu` at 1024. Native 2048 wants a larger GPU or `OFFLOAD=sequential` |
@@ -37,9 +37,10 @@ Mount the volume in the same datacenter as the endpoint.
   text_encoder/
   vae/
   processor files…
+  loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors
 ```
 
-The snapshot is about **33 GB**. Give the volume **≥ 40 GB**.
+The base snapshot is about **33 GB** and the LoRA is about **1.4 GB**. Give the volume **≥ 40 GB**.
 
 ```bash
 pip install huggingface-hub hf_transfer
@@ -67,7 +68,8 @@ prefers that directory when `model_index.json` is present, otherwise it loads
 
 `OFFLOAD=cpu` keeps one component on GPU at a time
 (`text_encoder → transformer → vae`). bf16 weights do not fit together in 24 GB:
-the transformer is ~14 GB and Qwen3-VL-8B is ~16 GB.
+the transformer is ~14 GB and Qwen3-VL-8B is ~16 GB. The turbo LoRA stays
+attached to the transformer (about 1.4 GB, not merged into the bf16 weights).
 
 ## Deploy (RunPod)
 
@@ -84,11 +86,16 @@ RunPod picks up a new build.
 
 ## API
 
-`guidance_scale` is Diffusers `true_cfg_scale`. Qwen samples this model
+`guidance_scale` is Diffusers `true_cfg_scale`. The turbo student is sampled
 **without** classifier-free guidance, so the default is `1.0` (off). A value
 above 1 requires `negative_prompt` and doubles each step.
 
-`num_inference_steps` defaults to **40**.
+`num_inference_steps` defaults to **6**, with the v0.2.1 sigma nodes
+`1, 0.9375, 0.875, 0.75, 0.5, 0.25`. Allowed counts are 4, 5, 6, 7, and 8.
+4 is the training schedule and sends no custom sigmas. 5 and 7 keep the
+trained low-noise nodes and only split the top of the schedule. 8 is the
+dense-text schedule (`…, 0.625, 0.5, 0.25, 0.125`). Other counts are rejected:
+a uniform 40-step schedule does not match this adapter.
 
 Width and height must be multiples of **32**, each side in 256..2752, and the
 area must fit the largest official preset (`2400×1792`). Recommended sizes:
@@ -116,7 +123,7 @@ without an immediate OOM. Pass an official size when the GPU has room.
     "width": 1024,
     "height": 1024,
     "seed": 42,
-    "num_inference_steps": 40,
+    "num_inference_steps": 6,
     "guidance_scale": 1.0
   }
 }
@@ -132,7 +139,7 @@ without an immediate OOM. Pass an official size when the GPU has room.
     "type": "image_edit",
     "prompt": "these three characters sit around a campfire",
     "images": ["data:image/png;base64,..."],
-    "num_inference_steps": 40
+    "num_inference_steps": 6
   }
 }
 ```
@@ -163,7 +170,7 @@ this worker.
   "width": 1024,
   "height": 1024,
   "type": "image_generate",
-  "num_inference_steps": 40,
+  "num_inference_steps": 6,
   "guidance_scale": 1.0,
   "output_resolution": 1024
 }

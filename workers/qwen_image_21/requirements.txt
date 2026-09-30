@@ -14,4 +14,5 @@ hf_transfer>=0.1.0
 numpy>=1.24.0
 sentencepiece>=0.2.0
 protobuf>=4.0.0
+peft>=0.14.0
 diffusers @ git+https://github.com/huggingface/diffusers.git@6256aa7666cedd47443adc8f82da9a10e110b09c

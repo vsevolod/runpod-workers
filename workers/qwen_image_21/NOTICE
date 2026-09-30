@@ -25,6 +25,13 @@ published by the Qwen team under the Qwen Research License:
 Research and evaluation are covered by that license. Commercial deployment
 needs a separate agreement with Qwen.
 
+The worker also downloads the Viggle turbo v0.2.1 LoRA
+(Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors). That file
+is a derivative of Qwen-Image-2.1 under the same Qwen Research License.
+It is not vendored in this repository. Attribution: distillation and release
+by Viggle, built with Qwen.
+https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo
+
 Diffusers
 ---------
 

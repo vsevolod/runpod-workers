@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Snapshot Qwen-Image-2.1 onto a Network Volume.
+"""Snapshot Qwen-Image-2.1 and the Viggle turbo LoRA onto a Network Volume.
 
-Run on a Pod with the volume mounted (about 33 GB):
+Run on a Pod with the volume mounted (about 35 GB):
 
     pip install huggingface-hub hf_transfer
     export HF_TOKEN=hf_...   # accept the model license on Hugging Face first
     python download_weights.py --output /runpod-volume/qwen_image_21
 
 Does not bake weights into the Docker image.
+The LoRA is written to ``<output>/loras/`` and loaded on top of the base snapshot.
 """
 
 from __future__ import annotations
@@ -18,6 +19,28 @@ import sys
 from pathlib import Path
 
 MODEL_ID = "Qwen/Qwen-Image-2.1"
+
+try:
+    from qwen_image_21_infer.runtime_config import LORA_DIR_NAME, LORA_REPO_ID, LORA_WEIGHT_NAME
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from qwen_image_21_infer.runtime_config import LORA_DIR_NAME, LORA_REPO_ID, LORA_WEIGHT_NAME
+
+
+def _snapshot_download(model_id: str, local_dir: str, token: str | None) -> str:
+    from huggingface_hub import snapshot_download
+
+    return snapshot_download(model_id, local_dir=local_dir, token=token)
+
+
+def _hf_hub_download(
+    repo_id: str, filename: str, local_dir: str, token: str | None
+) -> str:
+    from huggingface_hub import hf_hub_download
+
+    return hf_hub_download(
+        repo_id, filename=filename, local_dir=local_dir, token=token
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,13 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"MODEL_DIR={out}")
     print(f"Snapshot {args.model_id} …")
     try:
-        from huggingface_hub import snapshot_download
-
-        path = snapshot_download(
-            args.model_id,
-            local_dir=str(out),
-            token=args.token,
-        )
+        path = _snapshot_download(args.model_id, str(out), args.token)
     except Exception as err:
         print(f"error: snapshot failed: {err}", file=sys.stderr)
         print(
@@ -80,7 +97,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: snapshot has no model_index.json under {path}", file=sys.stderr)
         return 1
 
+    lora_dir = Path(path) / LORA_DIR_NAME
+    lora_dir.mkdir(parents=True, exist_ok=True)
+    print(f"LoRA {LORA_REPO_ID} {LORA_WEIGHT_NAME} …")
+    try:
+        lora_path = _hf_hub_download(
+            LORA_REPO_ID, LORA_WEIGHT_NAME, str(lora_dir), args.token
+        )
+    except Exception as err:
+        print(f"error: LoRA download failed: {err}", file=sys.stderr)
+        print(
+            "Accept the Qwen Research License on "
+            "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo "
+            "and pass HF_TOKEN.",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"  -> {path}")
+    print(f"  -> {lora_path}")
     print("Done.")
     print()
     print("Endpoint env:")

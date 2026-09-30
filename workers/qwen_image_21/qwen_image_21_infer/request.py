@@ -16,12 +16,25 @@ MAX_SIDE = 2752
 MAX_AREA = 2400 * 1792
 MULTIPLE = 32
 DEFAULT_OUTPUT_RESOLUTION = 1024
-DEFAULT_STEPS = 40
+DEFAULT_STEPS = 6
 DEFAULT_GUIDANCE = 1.0
-MAX_STEPS = 80
 MAX_IMAGES = 4
 MAX_SOURCE_SIDE = 8192
 MAX_DECODED_BYTES = 25 * 1024 * 1024
+
+# Raw sigma nodes for Viggle Qwen-Image-2.1-viggle-turbo v0.2.1.
+# 4 is the training schedule and must be passed with no sigmas argument.
+# 6 is the shipped schedule. 5 and 7 split 1 → 0.875 evenly and keep
+# 0.875, 0.75, 0.5, 0.25. 8 is the dense-text schedule from the model card.
+# The card rounds the 7-step nodes to 0.9583 and 0.9167; these are the
+# exact even splits (1 - 0.875) / 3.
+TURBO_SIGMAS: dict[int, tuple[float, ...] | None] = {
+    4: None,
+    5: (1.0, 0.875, 0.75, 0.5, 0.25),
+    6: (1.0, 0.9375, 0.875, 0.75, 0.5, 0.25),
+    7: (1.0, 0.9583333333333334, 0.9166666666666666, 0.875, 0.75, 0.5, 0.25),
+    8: (1.0, 0.9375, 0.875, 0.75, 0.625, 0.5, 0.25, 0.125),
+}
 
 # Sizes from the Qwen-Image-2.1 model card. All are multiples of 32.
 OFFICIAL_PRESETS: dict[str, tuple[int, int]] = {
@@ -153,8 +166,11 @@ def normalize_job_input(
         raise RequestError("images must be a list")
 
     steps = int(validated.get("num_inference_steps") or DEFAULT_STEPS)
-    if not 1 <= steps <= MAX_STEPS:
-        raise RequestError(f"num_inference_steps must be in 1..{MAX_STEPS}")
+    if steps not in TURBO_SIGMAS:
+        raise RequestError(
+            "num_inference_steps must be 4, 5, 6, 7, or 8 "
+            "(Viggle turbo schedules; 6 is the default)"
+        )
 
     guidance_raw = validated.get("guidance_scale")
     guidance = DEFAULT_GUIDANCE if guidance_raw is None else float(guidance_raw)
@@ -254,6 +270,9 @@ def build_pipe_kwargs(norm: NormalizedRequest) -> dict:
         "output_resolution": norm.output_resolution,
         "use_kv_cache": True,
     }
+    sigmas = TURBO_SIGMAS[norm.num_inference_steps]
+    if sigmas is not None:
+        kwargs["sigmas"] = list(sigmas)
     if norm.negative_prompt:
         kwargs["negative_prompt"] = norm.negative_prompt
     if norm.width is not None and norm.height is not None:
