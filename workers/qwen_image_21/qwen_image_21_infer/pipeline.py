@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 
+from .diagnostics import log_cuda_info, log_runtime_info, log_stage
 from .lora import LoRACatalog, LoRAManager, TURBO_ADAPTER_NAME
 from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
@@ -48,40 +49,50 @@ def load_pipeline(
     offload: str | None = None,
 ) -> QwenImage21Runtime:
     """Load ``Qwen/Qwen-Image-2.1`` in bf16 and place it according to ``OFFLOAD``."""
-    import torch
-    from diffusers import QwenImage21Pipeline
+    with log_stage("runtime_imports"):
+        import torch
+        from diffusers import QwenImage21Pipeline
 
-    source = resolve_model_source(model_dir, model_id)
-    local_files_only = parse_local_files_only()
-    mode = resolve_offload(offload)
-    directory = Path(
-        model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
-    )
-    lora_directory = Path(os.environ.get("LORA_DIR") or directory / LORA_DIR_NAME)
-    lora_catalog = LoRACatalog.scan(lora_directory)
+    log_runtime_info(torch)
+    with log_stage("cuda_probe"):
+        log_cuda_info(torch)
+
+    with log_stage("model_source"):
+        source = resolve_model_source(model_dir, model_id)
+        local_files_only = parse_local_files_only()
+        mode = resolve_offload(offload)
+        directory = Path(
+            model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
+        )
+        lora_directory = Path(os.environ.get("LORA_DIR") or directory / LORA_DIR_NAME)
+    with log_stage("lora_catalog"):
+        lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(
         "Loading Qwen-Image-2.1 from %s (offload=%s, local_files_only=%s)",
         source,
         mode,
         local_files_only,
     )
-    pipe = QwenImage21Pipeline.from_pretrained(
-        source,
-        torch_dtype=torch.bfloat16,
-        local_files_only=local_files_only,
-    )
+    with log_stage("base_model_load"):
+        pipe = QwenImage21Pipeline.from_pretrained(
+            source,
+            torch_dtype=torch.bfloat16,
+            local_files_only=local_files_only,
+        )
     _load_turbo_lora(pipe, model_dir, local_files_only=local_files_only)
-    _use_turbo_scheduler(pipe)
+    with log_stage("turbo_scheduler"):
+        _use_turbo_scheduler(pipe)
     pipe.set_progress_bar_config(disable=True)
 
-    if mode == "cpu":
-        pipe.enable_model_cpu_offload()
-    elif mode == "sequential":
-        pipe.enable_sequential_cpu_offload()
-    else:
-        if not torch.cuda.is_available():
-            raise RuntimeError("OFFLOAD=none requires a CUDA device")
-        pipe.to("cuda")
+    with log_stage(f"placement_{mode}"):
+        if mode == "cpu":
+            pipe.enable_model_cpu_offload()
+        elif mode == "sequential":
+            pipe.enable_sequential_cpu_offload()
+        else:
+            if not torch.cuda.is_available():
+                raise RuntimeError("OFFLOAD=none requires a CUDA device")
+            pipe.to("cuda")
 
     logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=v0.2.1)", mode)
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
@@ -89,17 +100,20 @@ def load_pipeline(
 
 def _load_turbo_lora(pipe, model_dir: str | None, *, local_files_only: bool) -> None:
     """Attach the Viggle adapter at runtime. Do not merge it into bf16 weights."""
-    source, weight_name, files_only = resolve_lora_source(
-        model_dir, local_files_only=local_files_only
-    )
+    with log_stage("turbo_lora_source"):
+        source, weight_name, files_only = resolve_lora_source(
+            model_dir, local_files_only=local_files_only
+        )
     logger.info("Loading Viggle turbo LoRA %s from %s", weight_name, source)
-    pipe.load_lora_weights(
-        source,
-        weight_name=weight_name,
-        local_files_only=files_only,
-        adapter_name=TURBO_ADAPTER_NAME,
-    )
-    pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
+    with log_stage("turbo_lora_load"):
+        pipe.load_lora_weights(
+            source,
+            weight_name=weight_name,
+            local_files_only=files_only,
+            adapter_name=TURBO_ADAPTER_NAME,
+        )
+    with log_stage("turbo_lora_activate"):
+        pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
 
 
 def _use_turbo_scheduler(pipe) -> None:

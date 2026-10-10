@@ -17,6 +17,7 @@ import torch
 from runpod.serverless.utils import rp_cleanup, rp_upload
 from runpod.serverless.utils.rp_validator import validate
 
+from qwen_image_21_infer.diagnostics import log_stage, startup_diagnostics
 from qwen_image_21_infer.lora import LoRAError
 from qwen_image_21_infer.pipeline import load_pipeline
 from qwen_image_21_infer.request import RequestError, normalize_job_input
@@ -39,7 +40,8 @@ class ModelHandler:
     def load_models(self):
         model_dir = os.environ.get("MODEL_DIR", "/runpod-volume/qwen_image_21")
         logger.info("Initializing Qwen-Image-2.1 from MODEL_DIR=%s", model_dir)
-        self.pipe = load_pipeline(model_dir=model_dir)
+        with startup_diagnostics():
+            self.pipe = load_pipeline(model_dir=model_dir)
 
 
 MODELS = ModelHandler()
@@ -116,7 +118,8 @@ def generate_image(job: dict):
     )
 
     try:
-        images = MODELS.pipe.run(norm, seed=int(seed), loras=loras)
+        with log_stage("inference"):
+            images = MODELS.pipe.run(norm, seed=int(seed), loras=loras)
         out_w, out_h = images[0].size
     except LoRAError as err:
         logger.warning("Invalid LoRA request: %s", err)
@@ -146,7 +149,8 @@ def generate_image(job: dict):
 
     job_id = job.get("id") or "local"
     try:
-        image_urls = _save_and_upload_images(images, str(job_id))
+        with log_stage("image_delivery"):
+            image_urls = _save_and_upload_images(images, str(job_id))
     except Exception:
         logger.exception("Upload/save failed; falling back to in-memory base64")
         image_urls = _images_to_base64_data_urls(images)

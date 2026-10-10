@@ -68,11 +68,33 @@ prefers that directory when `model_index.json` is present, otherwise it loads
 | `BUCKET_ENDPOINT_URL` | unset | If set, upload via RunPod S3 helpers instead of base64 |
 | `TORCH_COMPILE_DISABLE` | `1` (Dockerfile) | Skip torch.compile |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | Reduce allocator fragmentation |
+| `QWEN_STARTUP_TRACE_INTERVAL` | `60` | Dump Python thread stacks every N seconds during model loading; `0` disables dumps |
 
 `OFFLOAD=cpu` keeps one component on GPU at a time
 (`text_encoder → transformer → vae`). bf16 weights do not fit together in 24 GB:
 the transformer is ~14 GB and Qwen3-VL-8B is ~16 GB. The turbo LoRA stays
 attached to the transformer (about 1.4 GB, not merged into the bf16 weights).
+
+### Startup diagnostics
+
+At `INFO` level the worker logs `stage=<name> begin/done/failed`, elapsed
+seconds, PID, process RSS, and available cgroup memory usage/limit/OOM counters.
+CUDA free/total/allocated/reserved memory is included after CUDA initializes.
+Runtime logs include library versions, Torch CPU thread count, GPU name,
+compute capability and architectures compiled into Torch.
+
+Separate stages cover imports, source resolution, catalog scanning, base model
+loading, turbo LoRA loading and activation, scheduler setup, CUDA probing,
+and placement on GPU or CPU offload. Inference and image delivery also have
+timings. The last `begin` without a matching `done` identifies the unfinished
+stage. No prompts or image contents are logged by these diagnostics.
+
+During startup, thread stacks go to stderr every 60 seconds by default,
+including when native loading code holds the Python GIL. Faulthandler labels
+these dumps `Timeout`; this is a diagnostic timer and does **not** terminate
+the worker. Dumps stop on successful loading or an exception. A process killed
+externally (such as SIGKILL/OOM) cannot log its own termination reason; check
+RunPod's container exit reason as well.
 
 ## Deploy (RunPod)
 
