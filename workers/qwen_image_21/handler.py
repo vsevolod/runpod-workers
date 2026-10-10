@@ -17,6 +17,7 @@ import torch
 from runpod.serverless.utils import rp_cleanup, rp_upload
 from runpod.serverless.utils.rp_validator import validate
 
+from qwen_image_21_infer.lora import LoRAError
 from qwen_image_21_infer.pipeline import load_pipeline
 from qwen_image_21_infer.request import RequestError, normalize_job_input
 from schemas import INPUT_SCHEMA
@@ -90,7 +91,8 @@ def generate_image(job: dict):
 
     try:
         norm = normalize_job_input(validated_input, raw_keys=raw_keys)
-    except RequestError as err:
+        loras = MODELS.pipe.loras.normalize(validated_input["loras"])
+    except (RequestError, LoRAError) as err:
         return {"error": str(err)}
 
     seed = norm.seed
@@ -103,18 +105,22 @@ def generate_image(job: dict):
         else f"from-source@{norm.output_resolution}"
     )
     logger.info(
-        "job type=%s steps=%s guidance=%s size=%s refs=%s images_out=%s",
+        "job type=%s steps=%s guidance=%s size=%s refs=%s images_out=%s loras=%s",
         norm.type,
         norm.num_inference_steps,
         norm.guidance_scale,
         size_label,
         len(norm.images),
         norm.num_images,
+        ",".join(f"{item.name}@{item.strength:g}" for item in loras) or "none",
     )
 
     try:
-        images = MODELS.pipe.run(norm, seed=int(seed))
+        images = MODELS.pipe.run(norm, seed=int(seed), loras=loras)
         out_w, out_h = images[0].size
+    except LoRAError as err:
+        logger.warning("Invalid LoRA request: %s", err)
+        return {"error": str(err)}
     except torch.cuda.OutOfMemoryError:
         logger.exception("CUDA OOM during generation")
         if torch.cuda.is_available():
@@ -155,6 +161,7 @@ def generate_image(job: dict):
         "num_inference_steps": norm.num_inference_steps,
         "guidance_scale": norm.guidance_scale,
         "output_resolution": norm.output_resolution,
+        "loras": [item.as_dict() for item in loras],
     }
     if norm.type == "image_edit":
         payload["num_refs"] = len(norm.images)

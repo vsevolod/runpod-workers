@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import mimetypes
 import os
 import re
@@ -77,6 +78,41 @@ def _image_to_data_url(path: Path) -> str:
             mime = "image/png"
     encoded = base64.b64encode(data).decode("ascii")
     return f"data:{mime};base64,{encoded}"
+
+
+def _parse_lora(raw: str) -> list[dict[str, Any]]:
+    """Krea 2 CLI syntax: name@strength,other_name; empty means no extras."""
+    items, seen = [], set()
+    for part in raw.strip().split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, separator, strength_text = part.rpartition("@")
+        if not separator:
+            name, strength_text = part, "1"
+        name = Path(name.strip()).name
+        if name.endswith(".safetensors"):
+            name = name[:-len(".safetensors")]
+        try:
+            strength = float(strength_text)
+        except ValueError:
+            print(f"error: bad LoRA strength in {part!r}", file=sys.stderr)
+            raise SystemExit(1) from None
+        if not name or name in {".", ".."} or "/" in name or "\\" in name or "\x00" in name:
+            print(f"error: invalid LoRA name in {part!r}", file=sys.stderr)
+            raise SystemExit(1)
+        if name in seen:
+            print(f"error: duplicate LoRA: {name}", file=sys.stderr)
+            raise SystemExit(1)
+        if not math.isfinite(strength) or not 0 <= strength <= 2:
+            print("error: LoRA strength must be finite and between 0 and 2", file=sys.stderr)
+            raise SystemExit(1)
+        seen.add(name)
+        items.append({"name": name, "strength": strength})
+    if len(items) > 4:
+        print("error: at most 4 LoRAs allowed", file=sys.stderr)
+        raise SystemExit(1)
+    return items
 
 
 def _api_request(
@@ -202,6 +238,7 @@ def _save_result(result: dict[str, Any], dest: Path) -> int:
         "guidance_scale",
         "output_resolution",
         "num_refs",
+        "loras",
     ):
         if key in output:
             print(f"  {key}: {output[key]}")
@@ -238,6 +275,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Condition-image area. Edit default when size is omitted: 1024.",
     )
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--lora", default="",
+        help="Additional LoRAs: name, name@0.8, or comma-separated names (max 4).",
+    )
     parser.add_argument(
         "--steps",
         type=int,
@@ -302,6 +343,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
         "num_images": 1,
+        "loras": _parse_lora(args.lora),
     }
     if args.width is not None:
         job_input["width"] = args.width
@@ -344,6 +386,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
         "num_images": args.num_images,
+        "loras": _parse_lora(args.lora),
     }
     if args.output_resolution is not None:
         job_input["output_resolution"] = args.output_resolution

@@ -10,6 +10,11 @@ def _optional_resolution(value) -> bool:
 
 
 INPUT_SCHEMA = {
+    "loras": {
+        "type": list,
+        "required": False,
+        "default": [],
+    },
     "type": {
         "type": str,
         "required": False,

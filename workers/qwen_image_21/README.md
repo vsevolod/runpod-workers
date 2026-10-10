@@ -38,6 +38,8 @@ Mount the volume in the same datacenter as the endpoint.
   vae/
   processor files…
   loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors
+  loras/my_style.safetensors
+  loras/my_character.safetensors
 ```
 
 The base snapshot is about **33 GB** and the LoRA is about **1.4 GB**. Give the volume **≥ 40 GB**.
@@ -59,6 +61,7 @@ prefers that directory when `model_index.json` is present, otherwise it loads
 |----------|---------|---------|
 | `MODEL_DIR` | `/runpod-volume/qwen_image_21` | Local snapshot. Used when `model_index.json` is there |
 | `MODEL_ID` | `Qwen/Qwen-Image-2.1` | Hub id when the snapshot is missing |
+| `LORA_DIR` | `<MODEL_DIR>/loras` | Local directory for additional adapters. Does not change the built-in Viggle path |
 | `OFFLOAD` | `cpu` | `cpu` (model offload, 24 GB), `sequential` (tighter), `none` (resident on CUDA) |
 | `LOCAL_FILES_ONLY` | unset | `1` after the snapshot is warm |
 | `HF_HOME` | (hf default) | Put on the volume if you load by Hub id instead of `MODEL_DIR` |
@@ -160,6 +163,40 @@ pipeline keeps its alpha.
 Prompt rewriting (the separate Qwen3.5-VL 9B PE checkpoints) is not part of
 this worker.
 
+### Additional LoRAs
+
+Both generation and edit accept the Krea 2 API format:
+
+```json
+"loras": [
+  {"name": "my_style", "strength": 0.8},
+  {"name": "my_character", "strength": 0.5, "type": "lora"}
+]
+```
+
+Put compatible **Qwen-Image-2.1 transformer LoRAs** in `LORA_DIR` as
+`<name>.safetensors`. The catalog is scanned at worker startup; restart workers
+after adding files. Names are exact filename stems, without paths, URLs or
+the `.safetensors` suffix. Symlinks and the built-in Viggle file are excluded.
+No adapters are downloaded from request URLs.
+
+`loras` defaults to `[]`. Up to **four** unique additional adapters are allowed.
+`strength` defaults to `1.0`, must be finite and in `0..2`; zero skips the
+adapter after validating its name. `type` defaults to `"lora"`. Krea 2's
+`"weight_diff"` format is **unsupported** here. Text encoder/VAE adapters,
+missing A/B pairs and incompatible layer dimensions are rejected. Diffusers
+converts supported Qwen checkpoint formats before validation; a LoRA made for
+another Qwen version is not automatically compatible with 2.1.
+
+Viggle turbo stays active at strength **1.0** alongside the requested LoRAs.
+Additional adapters stay unmerged and are loaded for each request, then removed
+even if generation fails. Requests on the same pipeline are serialized to
+prevent adapter state from leaking between jobs. Each extra LoRA consumes
+memory and adds local loading time; leave GPU/RAM headroom.
+
+Unknown or incompatible adapters return an `error` without `refresh_worker`.
+CUDA OOM retains the existing worker restart behavior.
+
 ### Response
 
 ```json
@@ -172,12 +209,15 @@ this worker.
   "type": "image_generate",
   "num_inference_steps": 6,
   "guidance_scale": 1.0,
-  "output_resolution": 1024
+  "output_resolution": 1024,
+  "loras": [{"name": "my_style", "strength": 0.8, "type": "lora"}]
 }
 ```
 
 Edits also return `num_refs`. With `BUCKET_ENDPOINT_URL` set, `images` are
 URLs instead of data URLs.
+`loras` reports effective additional adapters (zero-strength entries are omitted).
+The always-active Viggle turbo adapter is not included in that list.
 
 ## Local client
 
@@ -185,14 +225,21 @@ URLs instead of data URLs.
 export RUNPOD_API_KEY=...
 export ENDPOINT_ID=...
 python scripts/qwen_image_21.py --prompt "a red fox" -o out.png
+python scripts/qwen_image_21.py --prompt "a red fox" \
+  --lora 'my_style@0.8,my_character@0.5' -o styled.png
 python scripts/qwen_image_21.py -i a.png -i b.png \
   --prompt "put both subjects in one photo" -o edit.png
 ```
 
 ## Tests
 
-Contract tests do not load weights or import `handler.py`:
+Tests do not download model weights or require a GPU. Handler/runtime tests
+replace RunPod and Diffusers dependencies with local doubles:
 
 ```bash
 python -m unittest discover -s workers/qwen_image_21/tests -p 'test_*.py' -v
 ```
+
+With Torch, Diffusers, PEFT and safetensors installed, the suite also checks
+actual adapter composition, alpha metadata and cleanup on a tiny CPU model.
+Those integration tests are skipped when these dependencies are absent.

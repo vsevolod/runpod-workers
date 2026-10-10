@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 
+from .lora import LoRACatalog, LoRAManager, TURBO_ADAPTER_NAME
 from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
+    DEFAULT_MODEL_DIR,
+    LORA_DIR_NAME,
     parse_local_files_only,
     resolve_lora_source,
     resolve_model_source,
@@ -18,17 +23,19 @@ logger = logging.getLogger(__name__)
 class QwenImage21Runtime:
     """Resident Diffusers pipeline. One instance per worker process."""
 
-    def __init__(self, pipe):
+    def __init__(self, pipe, lora_catalog: LoRACatalog, *, offload: str | None = None):
         self.pipe = pipe
+        self.loras = LoRAManager(pipe, lora_catalog, offload=offload)
 
-    def run(self, norm: NormalizedRequest, seed: int):
+    def run(self, norm: NormalizedRequest, seed: int, loras=()):
         import torch
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         generator = torch.Generator(device=device).manual_seed(int(seed))
         kwargs = build_pipe_kwargs(norm)
         kwargs["generator"] = generator
-        result = self.pipe(**kwargs)
+        with self.loras.activate(loras):
+            result = self.pipe(**kwargs)
         images = list(result.images)
         if not images:
             raise RuntimeError("Qwen-Image-2.1 pipeline returned no images")
@@ -47,6 +54,11 @@ def load_pipeline(
     source = resolve_model_source(model_dir, model_id)
     local_files_only = parse_local_files_only()
     mode = resolve_offload(offload)
+    directory = Path(
+        model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
+    )
+    lora_directory = Path(os.environ.get("LORA_DIR") or directory / LORA_DIR_NAME)
+    lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(
         "Loading Qwen-Image-2.1 from %s (offload=%s, local_files_only=%s)",
         source,
@@ -72,7 +84,7 @@ def load_pipeline(
         pipe.to("cuda")
 
     logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=v0.2.1)", mode)
-    return QwenImage21Runtime(pipe)
+    return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
 
 
 def _load_turbo_lora(pipe, model_dir: str | None, *, local_files_only: bool) -> None:
@@ -85,7 +97,9 @@ def _load_turbo_lora(pipe, model_dir: str | None, *, local_files_only: bool) -> 
         source,
         weight_name=weight_name,
         local_files_only=files_only,
+        adapter_name=TURBO_ADAPTER_NAME,
     )
+    pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
 
 
 def _use_turbo_scheduler(pipe) -> None:
