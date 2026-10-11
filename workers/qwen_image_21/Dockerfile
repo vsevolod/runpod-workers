@@ -1,4 +1,4 @@
-# Qwen-Image-2.1 — thin RunPod serverless worker (Diffusers).
+# Qwen-Image-2.1-Turbo — thin RunPod serverless worker (Diffusers).
 # Weights live on Network Volume (MODEL_DIR), not in this image.
 #
 # RunPod GitHub Integration:
@@ -54,8 +54,8 @@ COPY workers/qwen_image_21/schemas.py \
      /app/
 COPY workers/qwen_image_21/qwen_image_21_infer /app/qwen_image_21_infer
 
-ENV MODEL_DIR=/runpod-volume/qwen_image_21 \
-    MODEL_ID=Qwen/Qwen-Image-2.1 \
+ENV MODEL_DIR=/runpod-volume/qwen_image_21_turbo \
+    MODEL_ID=Qwen/Qwen-Image-2.1-Turbo \
     OFFLOAD=cpu \
     PYTHONPATH=/app \
     TORCH_COMPILE_DISABLE=1 \

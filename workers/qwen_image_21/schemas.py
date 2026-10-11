@@ -49,8 +49,8 @@ INPUT_SCHEMA = {
     "num_inference_steps": {
         "type": int,
         "required": False,
-        "default": 6,
-        "constraints": lambda steps: isinstance(steps, int) and steps in (4, 5, 6, 7, 8),
+        "default": 8,
+        "constraints": lambda steps: type(steps) is int and steps == 8,
     },
     # Maps to Diffusers true_cfg_scale. Values <= 1 leave classifier-free guidance off.
     "guidance_scale": {

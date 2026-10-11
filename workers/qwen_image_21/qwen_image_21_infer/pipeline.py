@@ -7,17 +7,16 @@ import os
 from pathlib import Path
 
 from .diagnostics import log_cuda_info, log_runtime_info, log_stage
-from .lora import LoRACatalog, LoRAManager, TURBO_ADAPTER_NAME
+from .lora import LoRACatalog, LoRAManager
 from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
     DEFAULT_MODEL_DIR,
     LORA_DIR_NAME,
-    TURBO_REVISION,
     parse_disable_mmap,
     parse_local_files_only,
-    resolve_lora_source,
     resolve_model_source,
     resolve_offload,
+    validate_turbo_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,7 @@ def load_pipeline(
     model_id: str | None = None,
     offload: str | None = None,
 ) -> QwenImage21Runtime:
-    """Load ``Qwen/Qwen-Image-2.1`` in bf16 and place it according to ``OFFLOAD``."""
+    """Load ``Qwen/Qwen-Image-2.1-Turbo`` in bf16 and place it according to ``OFFLOAD``."""
     with log_stage("runtime_imports"):
         import torch
         from diffusers import QwenImage21Pipeline
@@ -71,7 +70,7 @@ def load_pipeline(
     with log_stage("lora_catalog"):
         lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(
-        "Loading Qwen-Image-2.1 from %s (offload=%s, local_files_only=%s, disable_mmap=%s)",
+        "Loading Qwen-Image-2.1-Turbo from %s (offload=%s, local_files_only=%s, disable_mmap=%s)",
         source,
         mode,
         local_files_only,
@@ -84,9 +83,10 @@ def load_pipeline(
             local_files_only=local_files_only,
             disable_mmap=disable_mmap,
         )
-    _load_turbo_lora(pipe, model_dir, local_files_only=local_files_only)
-    with log_stage("turbo_scheduler"):
-        _use_turbo_scheduler(pipe)
+    # Keep both the scheduler and sample_sigmas supplied by the checkpoint.
+    # Older Diffusers drops sample_sigmas at load time, which must fail visibly.
+    with log_stage("turbo_config"):
+        validate_turbo_config(pipe.config, source)
     pipe.set_progress_bar_config(disable=True)
 
     with log_stage(f"placement_{mode}"):
@@ -99,7 +99,10 @@ def load_pipeline(
                 raise RuntimeError("OFFLOAD=none requires a CUDA device")
             pipe.to("cuda")
 
-    logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=%s)", mode, TURBO_REVISION)
+    logger.info(
+        "Qwen-Image-2.1-Turbo ready (offload=%s, steps=%s)",
+        mode, len(pipe.config["sample_sigmas"]),
+    )
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
 
 
@@ -128,31 +131,3 @@ def _load_base_pipeline(pipe_class, source: str, *, local_files_only: bool, disa
             disable_mmap=disable_mmap,
             **components,
         )
-
-
-def _load_turbo_lora(pipe, model_dir: str | None, *, local_files_only: bool) -> None:
-    """Attach the Viggle adapter at runtime. Do not merge it into bf16 weights."""
-    with log_stage("turbo_lora_source"):
-        source, weight_name, files_only = resolve_lora_source(
-            model_dir, local_files_only=local_files_only
-        )
-    logger.info("Loading Viggle turbo LoRA %s from %s", weight_name, source)
-    with log_stage("turbo_lora_load"):
-        pipe.load_lora_weights(
-            source,
-            weight_name=weight_name,
-            local_files_only=files_only,
-            adapter_name=TURBO_ADAPTER_NAME,
-        )
-    with log_stage("turbo_lora_activate"):
-        pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
-
-
-def _use_turbo_scheduler(pipe) -> None:
-    """The base config's shift_terminal=0.02 wrecks the turbo schedule's last step."""
-    from diffusers import FlowMatchEulerDiscreteScheduler
-
-    pipe.scheduler = FlowMatchEulerDiscreteScheduler.from_config(
-        pipe.scheduler.config,
-        shift_terminal=None,
-    )

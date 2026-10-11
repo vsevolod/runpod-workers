@@ -37,8 +37,8 @@ API_BASE = "https://api.runpod.ai/v2"
 POLL_INTERVAL_S = 5.0
 DEFAULT_OUTPUT = "output.png"
 DEFAULT_EDIT_OUTPUT = "edit_output.png"
-DEFAULT_STEPS = 6
-ALLOWED_STEPS = (4, 5, 6, 7, 8)
+DEFAULT_STEPS = 8
+ALLOWED_STEPS = (8,)
 DEFAULT_GUIDANCE = 1.0
 DEFAULT_GEN_SIZE = 1024
 MAX_REFS = 10
@@ -284,7 +284,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_STEPS,
         choices=ALLOWED_STEPS,
-        help="Viggle turbo schedule. 6 is the default; 8 is the dense-text schedule.",
+        help="Official Qwen-Image-2.1-Turbo checkpoint schedule (8 steps).",
     )
     parser.add_argument(
         "--guidance-scale",

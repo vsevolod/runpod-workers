@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from qwen_image_21_infer import pipeline, runtime_config
@@ -100,6 +100,35 @@ class PipelineLoadingTests(unittest.TestCase):
                 )
             ],
         )
+
+    def test_turbo_load_preserves_checkpoint_scheduler_and_has_no_builtin_adapter(self):
+        schedule = [1, .98, .95, .92, .89, .84, .70, .41]
+        pipe = Mock()
+        pipe.config = {"_class_name": "QwenImage21Pipeline", "sample_sigmas": schedule}
+        scheduler = pipe.scheduler
+        torch = SimpleNamespace(bfloat16="bf16", cuda=SimpleNamespace(is_available=lambda: True))
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(sys.modules, {
+            "torch": torch, "diffusers": SimpleNamespace(QwenImage21Pipeline=Mock()),
+        }), patch.object(pipeline, "_load_base_pipeline", return_value=pipe), patch.object(
+            pipeline, "log_runtime_info"
+        ), patch.object(pipeline, "log_cuda_info"), patch.dict(os.environ, {}, clear=True):
+            runtime = pipeline.load_pipeline(tmp, offload="none")
+        self.assertIs(runtime.pipe.scheduler, scheduler)
+        self.assertEqual(runtime.pipe.config["sample_sigmas"], schedule)
+        pipe.load_lora_weights.assert_not_called()
+        pipe.set_adapters.assert_not_called()
+        pipe.to.assert_called_once_with("cuda")
+
+    def test_hub_pipeline_without_saved_turbo_schedule_is_rejected(self):
+        pipe = Mock(config={"_class_name": "QwenImage21Pipeline"})
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(sys.modules, {
+            "torch": SimpleNamespace(), "diffusers": SimpleNamespace(QwenImage21Pipeline=Mock()),
+        }), patch.object(pipeline, "_load_base_pipeline", return_value=pipe), patch.object(
+            pipeline, "log_runtime_info"
+        ), patch.object(pipeline, "log_cuda_info"), patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "Turbo"):
+                pipeline.load_pipeline(tmp)
+        pipe.enable_model_cpu_offload.assert_not_called()
 
 
 HAS_LOADING_DEPS = all(

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -26,12 +27,12 @@ class RuntimeConfigTests(unittest.TestCase):
 
     def test_missing_snapshot_falls_back_to_hub_id(self):
         with tempfile.TemporaryDirectory() as tmp:
-            source = self.mod.resolve_model_source(tmp, "Qwen/Qwen-Image-2.1")
-        self.assertEqual(source, "Qwen/Qwen-Image-2.1")
+            source = self.mod.resolve_model_source(tmp, "Qwen/Qwen-Image-2.1-Turbo")
+        self.assertEqual(source, "Qwen/Qwen-Image-2.1-Turbo")
 
     def test_snapshot_with_model_index_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "model_index.json").write_text("{}", encoding="utf-8")
+            Path(tmp, "model_index.json").write_text(json.dumps({"_class_name": "QwenImage21Pipeline", "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41]}), encoding="utf-8")
             source = self.mod.resolve_model_source(tmp, "ignored/id")
         self.assertEqual(source, tmp)
 
@@ -63,46 +64,26 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertFalse(self.mod.parse_local_files_only(""))
         self.assertFalse(self.mod.parse_local_files_only("0"))
 
-    def test_lora_constants_are_the_v03_rank256_adapter(self):
-        self.assertEqual(self.mod.LORA_REPO_ID, "Viggle/Qwen-Image-2.1-viggle-turbo")
-        self.assertEqual(self.mod.TURBO_REVISION, "v0.3")
-        self.assertEqual(
-            self.mod.LORA_WEIGHT_NAME,
-            "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
-        )
-        self.assertTrue(
-            self.mod.is_bundled_turbo_lora(
-                "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors"
-            )
-        )
-        self.assertFalse(self.mod.is_bundled_turbo_lora("lenovo_qwen21.safetensors"))
+    def test_turbo_defaults_use_a_separate_volume_directory(self):
+        self.assertEqual(self.mod.DEFAULT_MODEL_ID, "Qwen/Qwen-Image-2.1-Turbo")
+        self.assertEqual(self.mod.DEFAULT_MODEL_DIR, "/runpod-volume/qwen_image_21_turbo")
 
-    def test_local_lora_file_wins_over_the_hub(self):
+    def test_old_or_invalid_local_snapshot_is_rejected(self):
+        configs = [
+            {}, {"_class_name": "QwenImage21Pipeline"},
+            {"_class_name": "OtherPipeline", "sample_sigmas": [1] * 8},
+            {"_class_name": "QwenImage21Pipeline", "sample_sigmas": [1] * 8},
+            {"_class_name": "QwenImage21Pipeline", "sample_sigmas": [1, .9]},
+        ]
         with tempfile.TemporaryDirectory() as tmp:
-            folder = Path(tmp) / "loras"
-            folder.mkdir()
-            weight = folder / self.mod.LORA_WEIGHT_NAME
-            weight.write_bytes(b"lora")
-            source, name, files_only = self.mod.resolve_lora_source(
-                tmp, local_files_only=False
-            )
-        self.assertEqual(source, str(folder))
-        self.assertEqual(name, self.mod.LORA_WEIGHT_NAME)
-        self.assertTrue(files_only)
-
-    def test_missing_lora_on_a_local_volume_is_an_error(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(FileNotFoundError):
-                self.mod.resolve_lora_source(tmp, local_files_only=True)
-
-    def test_missing_lora_without_local_only_uses_the_hub(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            source, name, files_only = self.mod.resolve_lora_source(
-                tmp, local_files_only=False
-            )
-        self.assertEqual(source, "Viggle/Qwen-Image-2.1-viggle-turbo")
-        self.assertEqual(name, self.mod.LORA_WEIGHT_NAME)
-        self.assertFalse(files_only)
+            for config in configs:
+                with self.subTest(config=config):
+                    Path(tmp, "model_index.json").write_text(json.dumps(config))
+                    with self.assertRaisesRegex(ValueError, "Turbo"):
+                        self.mod.resolve_model_source(tmp)
+            Path(tmp, "model_index.json").write_text("invalid json")
+            with self.assertRaisesRegex(ValueError, "Turbo"):
+                self.mod.resolve_model_source(tmp)
 
 
 if __name__ == "__main__":

@@ -16,24 +16,18 @@ license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
 Model weights
 -------------
 
-Qwen-Image-2.1 weights are not included in this repository. They are
+Qwen-Image-2.1-Turbo weights are not included in this repository. They are
 published by the Qwen team under the Qwen Research License:
 
-  https://huggingface.co/Qwen/Qwen-Image-2.1
+  https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo
   https://github.com/QwenLM/Qwen-Image-2.1/blob/main/LICENSE
 
 Research and evaluation are covered by that license. Commercial deployment
 needs a separate agreement with Qwen.
 
-The worker also downloads the Viggle turbo v0.2.1 LoRA
-(Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors). That file
-is a derivative of Qwen-Image-2.1 under the same Qwen Research License.
-It is not vendored in this repository. Attribution: distillation and release
-by Viggle, built with Qwen.
-https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo
-
 Diffusers
 ---------
 
 Inference uses Hugging Face Diffusers QwenImage21Pipeline (Apache-2.0),
-pinned in requirements.txt to the commit that added the pipeline.
+pinned in requirements.txt to the commit that added pipeline-configured
+sampling sigmas required by the official Turbo checkpoint.

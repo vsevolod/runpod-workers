@@ -16,26 +16,11 @@ MAX_SIDE = 2752
 MAX_AREA = 2400 * 1792
 MULTIPLE = 32
 DEFAULT_OUTPUT_RESOLUTION = 1024
-DEFAULT_STEPS = 6
+DEFAULT_STEPS = 8
 DEFAULT_GUIDANCE = 1.0
 MAX_IMAGES = 4
 MAX_SOURCE_SIDE = 8192
 MAX_DECODED_BYTES = 25 * 1024 * 1024
-
-# Raw sigma nodes for Viggle Qwen-Image-2.1-viggle-turbo v0.3.
-# v0.3 keeps the v0.2.1 6-step ladder. 4 is the training schedule and must
-# be passed with no sigmas argument. 5 and 7 split 1 → 0.875 evenly and keep
-# 0.875, 0.75, 0.5, 0.25. The card rounds the 7-step nodes to 0.9583 and
-# 0.9167; these are the exact even splits (1 - 0.875) / 3.
-# 8 is the older dense-text ladder. v0.3 says moving those low-noise nodes
-# softens the image; the 9-step hybrid (turbo off for the last two) is not wired.
-TURBO_SIGMAS: dict[int, tuple[float, ...] | None] = {
-    4: None,
-    5: (1.0, 0.875, 0.75, 0.5, 0.25),
-    6: (1.0, 0.9375, 0.875, 0.75, 0.5, 0.25),
-    7: (1.0, 0.9583333333333334, 0.9166666666666666, 0.875, 0.75, 0.5, 0.25),
-    8: (1.0, 0.9375, 0.875, 0.75, 0.625, 0.5, 0.25, 0.125),
-}
 
 # Sizes from the Qwen-Image-2.1 model card. All are multiples of 32.
 OFFICIAL_PRESETS: dict[str, tuple[int, int]] = {
@@ -166,11 +151,11 @@ def normalize_job_input(
     if not isinstance(images_raw, list):
         raise RequestError("images must be a list")
 
-    steps = int(validated.get("num_inference_steps") or DEFAULT_STEPS)
-    if steps not in TURBO_SIGMAS:
+    steps = validated.get("num_inference_steps", DEFAULT_STEPS)
+    if type(steps) is not int or steps != DEFAULT_STEPS:
         raise RequestError(
-            "num_inference_steps must be 4, 5, 6, 7, or 8 "
-            "(Viggle turbo schedules; 6 is the default)"
+            "num_inference_steps must be 8 for Qwen-Image-2.1-Turbo; "
+            "the checkpoint supplies its own fixed sampling schedule"
         )
 
     guidance_raw = validated.get("guidance_scale")
@@ -271,9 +256,7 @@ def build_pipe_kwargs(norm: NormalizedRequest) -> dict:
         "output_resolution": norm.output_resolution,
         "use_kv_cache": True,
     }
-    sigmas = TURBO_SIGMAS[norm.num_inference_steps]
-    if sigmas is not None:
-        kwargs["sigmas"] = list(sigmas)
+    # Do not pass sigmas: the official checkpoint owns the sampling grid.
     if norm.negative_prompt:
         kwargs["negative_prompt"] = norm.negative_prompt
     if norm.width is not None and norm.height is not None:

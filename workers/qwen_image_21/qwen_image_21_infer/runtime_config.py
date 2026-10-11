@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import math
 import os
 from pathlib import Path
 
-DEFAULT_MODEL_ID = "Qwen/Qwen-Image-2.1"
-DEFAULT_MODEL_DIR = "/runpod-volume/qwen_image_21"
-LORA_REPO_ID = "Viggle/Qwen-Image-2.1-viggle-turbo"
-LORA_WEIGHT_NAME = "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors"
+DEFAULT_MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
+DEFAULT_MODEL_DIR = "/runpod-volume/qwen_image_21_turbo"
 LORA_DIR_NAME = "loras"
-# Ready-log label. The 6-step sigma nodes are unchanged from v0.2.1.
-TURBO_REVISION = "v0.3"
+TURBO_STEPS = 8
 
 _OFFLOAD_ALIASES = {
     "cpu": "cpu",
@@ -23,11 +22,8 @@ _OFFLOAD_ALIASES = {
 }
 
 
-def is_bundled_turbo_lora(filename: str) -> bool:
-    """True for Viggle turbo weights the worker loads itself.
-
-    Older revisions stay on the volume during a swap. They are not request LoRAs.
-    """
+def is_obsolete_accelerator_lora(filename: str) -> bool:
+    """Exclude obsolete Viggle accelerators left in a shared LoRA directory."""
     return Path(filename).name.startswith("Qwen-Image-2.1-viggle-turbo")
 
 
@@ -37,6 +33,7 @@ def resolve_model_source(model_dir: str | None = None, model_id: str | None = No
         model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
     )
     if (directory / "model_index.json").is_file():
+        validate_turbo_snapshot(directory)
         return str(directory)
     if model_id is not None:
         return model_id
@@ -58,29 +55,38 @@ def resolve_offload(value: str | None = None) -> str:
         raise ValueError(f"OFFLOAD must be one of {known} (got {value!r})") from err
 
 
-def resolve_lora_source(
-    model_dir: str | None = None,
-    *,
-    local_files_only: bool | None = None,
-) -> tuple[str, str, bool]:
-    """Return ``(directory or repo id, weight filename, local_files_only)``.
-
-    A file already on the volume wins. ``LOCAL_FILES_ONLY`` with no file is an
-    error. Otherwise the Hub repo is returned and Diffusers downloads the adapter.
-    """
-    files_only = parse_local_files_only() if local_files_only is None else local_files_only
-    directory = Path(
-        model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
-    )
-    for folder in (directory / LORA_DIR_NAME, directory):
-        if (folder / LORA_WEIGHT_NAME).is_file():
-            return str(folder), LORA_WEIGHT_NAME, True
-    if files_only:
-        raise FileNotFoundError(
-            f"Viggle turbo LoRA {LORA_WEIGHT_NAME} is not under {directory}. "
-            "Re-run download_weights.py so it fetches the adapter into loras/."
+def validate_turbo_config(config, source: str) -> None:
+    """Require a saved eight-step grid; never silently use the base model schedule."""
+    sigmas = config.get("sample_sigmas")
+    valid = (
+        isinstance(sigmas, (list, tuple))
+        and len(sigmas) == TURBO_STEPS
+        and all(
+            isinstance(sigma, (int, float)) and not isinstance(sigma, bool)
+            and math.isfinite(sigma) and 0 < sigma <= 1
+            for sigma in sigmas
         )
-    return LORA_REPO_ID, LORA_WEIGHT_NAME, False
+        and all(left > right for left, right in zip(sigmas, sigmas[1:]))
+    )
+    if not valid:
+        raise ValueError(
+            f"Qwen-Image-2.1-Turbo requires a saved {TURBO_STEPS}-step sample_sigmas "
+            f"schedule (source: {source}). Download the official Turbo checkpoint "
+            "into a separate directory and update MODEL_DIR/MODEL_ID; "
+            "the old base-model/Viggle snapshot cannot be reused."
+        )
+
+
+def validate_turbo_snapshot(directory: Path | str) -> None:
+    """Validate local metadata before loading weights or overwriting a snapshot."""
+    index = Path(directory) / "model_index.json"
+    try:
+        config = json.loads(index.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as err:
+        raise ValueError(f"Invalid Qwen-Image-2.1-Turbo model_index.json: {index}") from err
+    if not isinstance(config, dict) or config.get("_class_name") != "QwenImage21Pipeline":
+        raise ValueError(f"Expected Qwen-Image-2.1-Turbo QwenImage21Pipeline in {index}")
+    validate_turbo_config(config, str(directory))
 
 
 def parse_local_files_only(value: str | None = None) -> bool:

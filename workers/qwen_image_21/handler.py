@@ -21,6 +21,7 @@ from qwen_image_21_infer.diagnostics import log_stage, startup_diagnostics
 from qwen_image_21_infer.lora import LoRAError
 from qwen_image_21_infer.pipeline import load_pipeline
 from qwen_image_21_infer.request import RequestError, normalize_job_input
+from qwen_image_21_infer.runtime_config import DEFAULT_MODEL_DIR
 from schemas import INPUT_SCHEMA
 
 logging.basicConfig(
@@ -38,8 +39,8 @@ class ModelHandler:
         self.load_models()
 
     def load_models(self):
-        model_dir = os.environ.get("MODEL_DIR", "/runpod-volume/qwen_image_21")
-        logger.info("Initializing Qwen-Image-2.1 from MODEL_DIR=%s", model_dir)
+        model_dir = os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
+        logger.info("Initializing Qwen-Image-2.1-Turbo from MODEL_DIR=%s", model_dir)
         with startup_diagnostics():
             self.pipe = load_pipeline(model_dir=model_dir)
 

@@ -11,9 +11,7 @@ from qwen_image_21_infer.lora import (
     LoRACatalog,
     LoRAError,
     LoRAManager,
-    TURBO_ADAPTER_NAME,
 )
-from qwen_image_21_infer.runtime_config import LORA_WEIGHT_NAME
 
 
 class Tensor:
@@ -34,8 +32,8 @@ class Pipeline:
                 ("linear", SimpleNamespace(in_features=8, out_features=6))
             ]
         )
-        self.loaded = {TURBO_ADAPTER_NAME}
-        self.active = [(TURBO_ADAPTER_NAME, 1.0)]
+        self.loaded = set()
+        self.active = []
         self.state = {
             "transformer.linear.lora_A.weight": Tensor(2, 8),
             "transformer.linear.lora_B.weight": Tensor(6, 2),
@@ -54,6 +52,7 @@ class Pipeline:
             raise ValueError("internal loader details")
 
     def set_adapters(self, names, adapter_weights):
+        assert names, "Cannot activate an empty adapter list on a pristine pipeline"
         assert set(names) <= self.loaded
         self.active = list(zip(names, adapter_weights))
 
@@ -62,6 +61,7 @@ class Pipeline:
 
     def delete_adapters(self, names):
         self.loaded.difference_update(names)
+        self.active = [(n, w) for n, w in self.active if n not in names]
 
 
 class LoRATests(unittest.TestCase):
@@ -72,7 +72,7 @@ class LoRATests(unittest.TestCase):
         for name in [
             "style",
             "character",
-            Path(LORA_WEIGHT_NAME).stem,
+            "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256",
             "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256",
         ]:
             (self.root / f"{name}.safetensors").write_bytes(b"weights")
@@ -108,7 +108,7 @@ class LoRATests(unittest.TestCase):
             [{"name": "style", "extra": 1}],
             [{"name": "style"}, {"name": "style"}],
             [{"name": "style"}] * 5,
-            [{"name": Path(LORA_WEIGHT_NAME).stem}],
+            [{"name": "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256"}],
             [{"name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256"}],
         ]
         for raw in invalid:
@@ -131,19 +131,19 @@ class LoRATests(unittest.TestCase):
             self.fail("symlink must not be loaded")
         self.assertEqual(self.pipe.reads, [])
 
-    def test_multiple_adapters_keep_turbo_and_restore_after_success(self):
+    def test_multiple_adapters_restore_base_after_success(self):
         selected = self.catalog.normalize(
             [{"name": "style", "strength": 0.8}, {"name": "character", "strength": 0.4}]
         )
         with self.manager.activate(selected):
-            self.assertEqual([w for _, w in self.pipe.active], [1.0, 0.8, 0.4])
-            self.assertEqual(len(self.pipe.loaded), 3)
+            self.assertEqual([w for _, w in self.pipe.active], [0.8, 0.4])
+            self.assertEqual(len(self.pipe.loaded), 2)
             self.assertIs(self.pipe.last_load["_pipeline"], self.pipe)
             self.assertEqual(
                 self.pipe.last_load["metadata"], {"transformer.lora_alpha": 2}
             )
-        self.assertEqual(self.pipe.active, [(TURBO_ADAPTER_NAME, 1.0)])
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+        self.assertEqual(self.pipe.active, [])
+        self.assertEqual(self.pipe.loaded, set())
         self.assertTrue(
             all(
                 options["local_files_only"] and options["use_safetensors"]
@@ -151,14 +151,14 @@ class LoRATests(unittest.TestCase):
             )
         )
         with self.manager.activate(()):
-            self.assertEqual(self.pipe.active, [(TURBO_ADAPTER_NAME, 1.0)])
+            self.assertEqual(self.pipe.active, [])
 
-    def test_generation_failure_restores_turbo(self):
+    def test_generation_failure_restores_base(self):
         with self.assertRaisesRegex(RuntimeError, "generation failed"):
             with self.manager.activate(self.catalog.normalize([{"name": "style"}])):
                 raise RuntimeError("generation failed")
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
-        self.assertEqual(self.pipe.active, [(TURBO_ADAPTER_NAME, 1.0)])
+        self.assertEqual(self.pipe.loaded, set())
+        self.assertEqual(self.pipe.active, [])
 
     def test_partial_load_failure_is_safe_and_leaves_no_adapter(self):
         self.pipe.fail_load = True
@@ -166,8 +166,8 @@ class LoRATests(unittest.TestCase):
             with self.manager.activate(self.catalog.normalize([{"name": "style"}])):
                 self.fail("must not generate")
         self.assertNotIn("internal loader details", str(error.exception))
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
-        self.assertEqual(self.pipe.active, [(TURBO_ADAPTER_NAME, 1.0)])
+        self.assertEqual(self.pipe.loaded, set())
+        self.assertEqual(self.pipe.active, [])
 
     def test_failed_attachment_restores_cpu_offload_hooks(self):
         for mode, method in [
@@ -188,13 +188,13 @@ class LoRATests(unittest.TestCase):
 
     def test_partial_adapter_is_removed_even_if_diffusers_dropped_its_config(self):
         self.pipe.fail_load = True
-        self.pipe.get_list_adapters = lambda: {"transformer": [TURBO_ADAPTER_NAME]}
+        self.pipe.get_list_adapters = lambda: {"transformer": []}
         with (
             self.assertRaises(LoRAError),
             self.manager.activate(self.catalog.normalize([{"name": "style"}])),
         ):
             self.fail("must not generate")
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+        self.assertEqual(self.pipe.loaded, set())
 
     def test_wrong_model_and_broken_pairs_rejected_before_injection(self):
         invalid = [
@@ -222,7 +222,7 @@ class LoRATests(unittest.TestCase):
                     self.manager.activate(self.catalog.normalize([{"name": "style"}])),
                 ):
                     self.fail("must not generate")
-                self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+                self.assertEqual(self.pipe.loaded, set())
 
     def test_malformed_or_conflicting_fused_mlp_is_rejected_before_injection(self):
         target = "transformer.transformer_blocks.0.img_mlp"
@@ -241,7 +241,7 @@ class LoRATests(unittest.TestCase):
                     self.catalog.normalize([{"name": "style"}])
                 ):
                     self.fail("invalid fused weights must not generate")
-                self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+                self.assertEqual(self.pipe.loaded, set())
 
 
 if __name__ == "__main__":

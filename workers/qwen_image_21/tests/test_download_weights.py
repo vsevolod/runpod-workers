@@ -5,9 +5,12 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _PATH = Path(__file__).parents[1] / "download_weights.py"
 
@@ -29,51 +32,46 @@ class DownloadWeightsTests(unittest.TestCase):
         cls.mod = _load()
 
     def test_model_id(self):
-        self.assertEqual(self.mod.MODEL_ID, "Qwen/Qwen-Image-2.1")
-        self.assertEqual(self.mod.LORA_REPO_ID, "Viggle/Qwen-Image-2.1-viggle-turbo")
-        self.assertEqual(
-            self.mod.LORA_WEIGHT_NAME,
-            "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
-        )
+        self.assertEqual(self.mod.MODEL_ID, "Qwen/Qwen-Image-2.1-Turbo")
 
-    def test_downloads_base_snapshot_and_turbo_lora(self):
-        import tempfile
-
+    def test_downloads_only_turbo_snapshot(self):
         calls = []
 
-        def snapshot_download(model_id, local_dir, token):
-            calls.append(("snapshot", model_id, local_dir, token))
+        def download(model_id, local_dir, token):
+            calls.append((model_id, local_dir, token))
             path = Path(local_dir)
             path.mkdir(parents=True, exist_ok=True)
-            (path / "model_index.json").write_text("{}", encoding="utf-8")
+            (path / "model_index.json").write_text(json.dumps({
+                "_class_name": "QwenImage21Pipeline",
+                "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41],
+            }))
             return str(path)
 
-        def hf_hub_download(repo_id, filename, local_dir, token):
-            calls.append(("lora", repo_id, filename, local_dir, token))
-            return str(Path(local_dir) / filename)
-
-        self.mod._snapshot_download = snapshot_download
-        self.mod._hf_hub_download = hf_hub_download
-        with tempfile.TemporaryDirectory() as tmp:
-            with contextlib.redirect_stdout(io.StringIO()):
-                code = self.mod.main(
-                    [
-                        "--output",
-                        tmp,
-                        "--token",
-                        "hf_test",
-                        "--model-id",
-                        "Qwen/Qwen-Image-2.1",
-                    ]
-                )
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            self.mod, "_snapshot_download", side_effect=download
+        ), patch.object(self.mod, "_hf_hub_download", create=True, side_effect=AssertionError("No built-in LoRA download allowed")), contextlib.redirect_stdout(io.StringIO()):
+            code = self.mod.main(["--output", tmp, "--token", "hf_test"])
         self.assertEqual(code, 0)
-        self.assertEqual(calls[0][0], "snapshot")
-        self.assertEqual(calls[0][1], "Qwen/Qwen-Image-2.1")
-        self.assertEqual(calls[1][0], "lora")
-        self.assertEqual(calls[1][1], "Viggle/Qwen-Image-2.1-viggle-turbo")
-        self.assertEqual(calls[1][2], self.mod.LORA_WEIGHT_NAME)
-        self.assertEqual(Path(calls[1][3]), Path(tmp).resolve() / "loras")
-        self.assertEqual(calls[1][4], "hf_test")
+        self.assertEqual(calls, [("Qwen/Qwen-Image-2.1-Turbo", str(Path(tmp).resolve()), "hf_test")])
+
+    def test_old_snapshot_is_rejected_before_downloading(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            self.mod, "_snapshot_download"
+        ) as download, contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            Path(tmp, "model_index.json").write_text("{}")
+            self.assertEqual(self.mod.main(["--output", tmp]), 1)
+            download.assert_not_called()
+
+    def test_downloaded_snapshot_must_have_turbo_schedule(self):
+        for content in (None, "{}", "not json"):
+            with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                def download(*args):
+                    if content is not None:
+                        Path(tmp, "model_index.json").write_text(content)
+                    return tmp
+                with patch.object(self.mod, "_snapshot_download", side_effect=download) as fetch:
+                    self.assertEqual(self.mod.main(["--output", tmp]), 1)
+                    fetch.assert_called_once()
 
     def test_help_exits_cleanly(self):
         with contextlib.redirect_stdout(io.StringIO()):

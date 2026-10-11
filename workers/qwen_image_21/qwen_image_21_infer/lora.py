@@ -10,10 +10,9 @@ from pathlib import Path
 from threading import RLock
 from types import MappingProxyType
 
-from .runtime_config import is_bundled_turbo_lora
+from .runtime_config import is_obsolete_accelerator_lora
 
 logger = logging.getLogger(__name__)
-TURBO_ADAPTER_NAME = "viggle_turbo"
 MAX_LORAS_PER_REQUEST = 4
 
 
@@ -55,7 +54,7 @@ class LoRACatalog:
             raise RuntimeError(f"LoRA path is not a directory: {root}")
         paths = {}
         for path in sorted(root.glob("*.safetensors")):
-            if is_bundled_turbo_lora(path.name) or path.is_symlink() or not path.is_file():
+            if is_obsolete_accelerator_lora(path.name) or path.is_symlink() or not path.is_file():
                 continue
             if not _safe_name(path.stem):
                 raise RuntimeError(f"Invalid LoRA ID: {path.stem!r}")
@@ -126,17 +125,16 @@ class LoRAManager:
             names = []
             try:
                 for index, selection in enumerate(selections):
-                    # Internal IDs are independent of filenames and cannot collide with Viggle.
+                    # Internal IDs are independent of user filenames.
                     adapter_name = f"request_lora_{index}"
                     names.append(adapter_name)
                     self._load(selection, adapter_name)
-                self.pipe.set_adapters(
-                    [TURBO_ADAPTER_NAME, *names],
-                    adapter_weights=[1.0, *(item.strength for item in selections)],
-                )
+                if names:
+                    self.pipe.set_adapters(
+                        names, adapter_weights=[item.strength for item in selections]
+                    )
                 yield
             finally:
-                self.pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
                 if names:
                     # A failed PEFT injection can drop its config while leaving
                     # layer weights. Diffusers deletion also handles absent IDs.

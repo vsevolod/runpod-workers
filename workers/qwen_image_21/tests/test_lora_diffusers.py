@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from qwen_image_21_infer.lora import LoRACatalog, LoRAManager, TURBO_ADAPTER_NAME
+from qwen_image_21_infer.lora import LoRACatalog, LoRAManager
 
 HAS_DIFFUSERS = all(
     importlib.util.find_spec(name) is not None
@@ -62,12 +62,6 @@ class DiffusersLoRATests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.pipe = self.Pipeline(self.Transformer())
-        state = {
-            "transformer.linear.lora_A.weight": torch.ones(2, 8),
-            "transformer.linear.lora_B.weight": torch.full((6, 2), 0.5),
-        }
-        self.pipe.load_lora_weights(state, adapter_name=TURBO_ADAPTER_NAME)
-        self.pipe.set_adapters([TURBO_ADAPTER_NAME], adapter_weights=[1.0])
         config = LoraConfig(r=2, lora_alpha=4, target_modules=["linear"])
         for name, up in [("style", 0.25), ("character", 0.75)]:
             self.pipe.save_lora_weights(
@@ -88,31 +82,31 @@ class DiffusersLoRATests(unittest.TestCase):
         )
 
     def test_real_weighted_output_metadata_and_cleanup(self):
-        self.assert_output(8.0)
+        self.assert_output(0.0)
         selected = self.manager.normalize(
             [{"name": "style", "strength": 0.8}, {"name": "character", "strength": 0.4}]
         )
         with self.manager.activate(selected):
-            # Metadata alpha/rank=2: 8 + 4*2*0.8 + 12*2*0.4 = 24.
-            self.assert_output(24.0)
-        self.assert_output(8.0)
+            # Metadata alpha/rank=2: 4*2*0.8 + 12*2*0.4 = 16.
+            self.assert_output(16.0)
+        self.assert_output(0.0)
         self.assertEqual(
-            self.pipe.get_list_adapters(), {"transformer": [TURBO_ADAPTER_NAME]}
+            self.pipe.get_list_adapters().get("transformer", []), []
         )
-        self.assertEqual(set(self.pipe.transformer.linear.lora_A), {TURBO_ADAPTER_NAME})
+        self.assertEqual(set(self.pipe.transformer.linear.lora_A), set())
         with self.manager.activate(
             self.manager.normalize([{"name": "style", "strength": 0.5}])
         ):
-            self.assert_output(12.0)
-        self.assert_output(8.0)
+            self.assert_output(4.0)
+        self.assert_output(0.0)
 
     def test_real_cleanup_on_generation_failure(self):
         with self.assertRaisesRegex(RuntimeError, "generation failed"):
             with self.manager.activate(self.manager.normalize([{"name": "style"}])):
-                self.assert_output(16.0)
+                self.assert_output(8.0)
                 raise RuntimeError("generation failed")
-        self.assert_output(8.0)
-        self.assertEqual(self.pipe.get_active_adapters(), [TURBO_ADAPTER_NAME])
+        self.assert_output(0.0)
+        self.assertEqual(self.pipe.get_list_adapters().get("transformer", []), [])
 
     def test_comfy_fused_qwen21_mlp_preserves_weighted_output_and_cleanup(self):
         import json
@@ -128,13 +122,6 @@ class DiffusersLoRATests(unittest.TestCase):
             axes_dims_rope=(2, 2, 4),
         )
         pipe = self.Pipeline(transformer)
-        pipe.load_lora_weights(
-            {
-                "transformer.transformer_blocks.0.attn.to_q.lora_A.weight": torch.zeros(2, 16),
-                "transformer.transformer_blocks.0.attn.to_q.lora_B.weight": torch.zeros(16, 2),
-            },
-            adapter_name=TURBO_ADAPTER_NAME,
-        )
         mlp = transformer.transformer_blocks[0].img_mlp
         x = torch.linspace(-0.5, 0.5, 16).reshape(1, 16)
         baseline = mlp(x).detach().clone()
@@ -172,8 +159,8 @@ class DiffusersLoRATests(unittest.TestCase):
                 with manager.activate(selected):
                     torch.testing.assert_close(mlp(x), expected)
                 torch.testing.assert_close(mlp(x), baseline)
-                self.assertEqual(pipe.get_active_adapters(), [TURBO_ADAPTER_NAME])
-                self.assertEqual(pipe.get_list_adapters(), {"transformer": [TURBO_ADAPTER_NAME]})
+                self.assertEqual(set(mlp.proj.lora_A), set())
+                self.assertEqual(pipe.get_list_adapters().get("transformer", []), [])
 
 
 if __name__ == "__main__":

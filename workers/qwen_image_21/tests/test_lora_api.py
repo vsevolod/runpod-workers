@@ -11,8 +11,8 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from qwen_image_21_infer.lora import LoRACatalog, TURBO_ADAPTER_NAME
-from qwen_image_21_infer.pipeline import QwenImage21Runtime, _load_turbo_lora
+from qwen_image_21_infer.lora import LoRACatalog
+from qwen_image_21_infer.pipeline import QwenImage21Runtime
 from test_lora import Pipeline
 
 WORKER = Path(__file__).parents[1]
@@ -109,15 +109,16 @@ class LoRAAPITests(unittest.TestCase):
             kwargs, adapters = self.pipe.calls[-1]
             self.assertNotIn("loras", kwargs)
             self.assertEqual(kwargs["generator"].seed, 42)
-            self.assertEqual(adapters[0], (TURBO_ADAPTER_NAME, 1.0))
-            self.assertEqual(adapters[1][1], 0.8)
-            self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+            self.assertEqual(adapters, [("request_lora_0", 0.8)])
+            self.assertEqual(output["num_inference_steps"], 8)
+            self.assertNotIn("sigmas", kwargs)
+            self.assertEqual(self.pipe.loaded, set())
         self.assertIn("image", self.pipe.calls[-1][0])
 
     def test_omitted_loras_preserve_existing_api(self):
         output = self.handler.generate_image({"input": {"prompt": "fox"}})
         self.assertEqual(output["loras"], [])
-        self.assertEqual(self.pipe.calls[-1][1], [(TURBO_ADAPTER_NAME, 1.0)])
+        self.assertEqual(self.pipe.calls[-1][1], [])
 
     def test_invalid_name_and_incompatible_weights_do_not_refresh_worker(self):
         for name in ["missing", "style"]:
@@ -128,30 +129,15 @@ class LoRAAPITests(unittest.TestCase):
             self.assertIn("error", output)
             self.assertNotIn("refresh_worker", output)
             self.assertEqual(self.pipe.calls, [])
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+        self.assertEqual(self.pipe.loaded, set())
 
-    def test_oom_keeps_restart_behavior_and_restores_turbo(self):
+    def test_oom_keeps_restart_behavior_and_restores_base(self):
         self.pipe.failure = OutOfMemoryError("OOM")
         output = self.handler.generate_image(
             {"input": {"prompt": "fox", "loras": [{"name": "style"}]}}
         )
         self.assertTrue(output["refresh_worker"])
-        self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
-
-    def test_builtin_adapter_has_stable_name_and_unit_strength(self):
-        pipe = Mock()
-        with patch(
-            "qwen_image_21_infer.pipeline.resolve_lora_source",
-            return_value=("/volume", "turbo.safetensors", True),
-        ):
-            _load_turbo_lora(pipe, None, local_files_only=True)
-        self.assertEqual(
-            pipe.load_lora_weights.call_args.kwargs["adapter_name"], TURBO_ADAPTER_NAME
-        )
-        pipe.set_adapters.assert_called_once_with(
-            [TURBO_ADAPTER_NAME], adapter_weights=[1.0]
-        )
-
+        self.assertEqual(self.pipe.loaded, set())
 
 class ClientLoRATests(unittest.TestCase):
     @classmethod
@@ -159,6 +145,13 @@ class ClientLoRATests(unittest.TestCase):
         cls.client = load_module(
             "_qwen_lora_client", WORKER.parents[1] / "scripts" / "qwen_image_21.py"
         )
+
+    def test_cli_uses_only_the_official_eight_step_schedule(self):
+        parser = self.client._build_parser()
+        self.assertEqual(parser.parse_args([]).steps, 8)
+        with patch("sys.stderr"):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["--steps", "6"])
 
     def test_cli_krea_syntax(self):
         self.assertEqual(
