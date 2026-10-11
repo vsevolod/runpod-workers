@@ -12,6 +12,7 @@ from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
     DEFAULT_MODEL_DIR,
     LORA_DIR_NAME,
+    parse_disable_mmap,
     parse_local_files_only,
     resolve_lora_source,
     resolve_model_source,
@@ -61,6 +62,7 @@ def load_pipeline(
         source = resolve_model_source(model_dir, model_id)
         local_files_only = parse_local_files_only()
         mode = resolve_offload(offload)
+        disable_mmap = parse_disable_mmap()
         directory = Path(
             model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
         )
@@ -68,16 +70,18 @@ def load_pipeline(
     with log_stage("lora_catalog"):
         lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(
-        "Loading Qwen-Image-2.1 from %s (offload=%s, local_files_only=%s)",
+        "Loading Qwen-Image-2.1 from %s (offload=%s, local_files_only=%s, disable_mmap=%s)",
         source,
         mode,
         local_files_only,
+        disable_mmap,
     )
     with log_stage("base_model_load"):
-        pipe = QwenImage21Pipeline.from_pretrained(
+        pipe = _load_base_pipeline(
+            QwenImage21Pipeline,
             source,
-            torch_dtype=torch.bfloat16,
             local_files_only=local_files_only,
+            disable_mmap=disable_mmap,
         )
     _load_turbo_lora(pipe, model_dir, local_files_only=local_files_only)
     with log_stage("turbo_scheduler"):
@@ -96,6 +100,33 @@ def load_pipeline(
 
     logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=v0.2.1)", mode)
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
+
+
+def _load_base_pipeline(pipe_class, source: str, *, local_files_only: bool, disable_mmap: bool):
+    import torch
+
+    components = {}
+    if disable_mmap:
+        from transformers import Qwen3VLForConditionalGeneration
+
+        # Diffusers forwards disable_mmap only to ModelMixin components, not
+        # Transformers models. Preload the encoder so all base weights opt out.
+        with log_stage("text_encoder_load"):
+            components["text_encoder"] = Qwen3VLForConditionalGeneration.from_pretrained(
+                source,
+                subfolder="text_encoder",
+                dtype=torch.bfloat16,
+                local_files_only=local_files_only,
+                disable_mmap=True,
+            )
+    with log_stage("pipeline_components_load"):
+        return pipe_class.from_pretrained(
+            source,
+            torch_dtype=torch.bfloat16,
+            local_files_only=local_files_only,
+            disable_mmap=disable_mmap,
+            **components,
+        )
 
 
 def _load_turbo_lora(pipe, model_dir: str | None, *, local_files_only: bool) -> None:

@@ -69,11 +69,29 @@ prefers that directory when `model_index.json` is present, otherwise it loads
 | `TORCH_COMPILE_DISABLE` | `1` (Dockerfile) | Skip torch.compile |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | Reduce allocator fragmentation |
 | `QWEN_STARTUP_TRACE_INTERVAL` | `60` | Dump Python thread stacks every N seconds during model loading; `0` disables dumps |
+| `QWEN_DISABLE_MMAP` | `1` | Read base weights into RAM instead of memory-mapping the network volume; `0` restores the original loading path |
 
 `OFFLOAD=cpu` keeps one component on GPU at a time
 (`text_encoder → transformer → vae`). bf16 weights do not fit together in 24 GB:
 the transformer is ~14 GB and Qwen3-VL-8B is ~16 GB. The turbo LoRA stays
 attached to the transformer (about 1.4 GB, not merged into the bf16 weights).
+
+### Network-volume loading experiment
+
+`QWEN_DISABLE_MMAP=1` is enabled by default to compare cold-start performance
+against mmap on the network volume. The text encoder is loaded separately
+with Transformers' `disable_mmap=True`, then passed into the pipeline.
+Diffusers loads the transformer and VAE with the same option. Turbo and
+request-scoped LoRA loading remain as before.
+
+This reads base weights eagerly and increases startup RAM usage. Compare
+the **whole** `stage=startup` duration, not only `stage=placement_none`:
+file reading now happens inside `text_encoder_load` and
+`pipeline_components_load`, before placement on GPU. Check cgroup memory
+metrics as well. The runtime logs `disable_mmap=True` when enabled.
+
+For an A/B comparison or rollback, set `QWEN_DISABLE_MMAP=0` and replace
+the worker. A new image is required before this setting takes effect.
 
 ### Startup diagnostics
 
