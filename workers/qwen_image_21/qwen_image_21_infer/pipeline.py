@@ -12,6 +12,7 @@ from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
     DEFAULT_MODEL_DIR,
     LORA_DIR_NAME,
+    TURBO_REVISION,
     parse_disable_mmap,
     parse_local_files_only,
     resolve_lora_source,
@@ -98,7 +99,7 @@ def load_pipeline(
                 raise RuntimeError("OFFLOAD=none requires a CUDA device")
             pipe.to("cuda")
 
-    logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=v0.2.1)", mode)
+    logger.info("Qwen-Image-2.1 ready (offload=%s, viggle_turbo=%s)", mode, TURBO_REVISION)
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
 
 

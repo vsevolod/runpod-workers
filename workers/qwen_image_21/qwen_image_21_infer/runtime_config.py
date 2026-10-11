@@ -8,8 +8,10 @@ from pathlib import Path
 DEFAULT_MODEL_ID = "Qwen/Qwen-Image-2.1"
 DEFAULT_MODEL_DIR = "/runpod-volume/qwen_image_21"
 LORA_REPO_ID = "Viggle/Qwen-Image-2.1-viggle-turbo"
-LORA_WEIGHT_NAME = "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors"
+LORA_WEIGHT_NAME = "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors"
 LORA_DIR_NAME = "loras"
+# Ready-log label. The 6-step sigma nodes are unchanged from v0.2.1.
+TURBO_REVISION = "v0.3"
 
 _OFFLOAD_ALIASES = {
     "cpu": "cpu",
@@ -19,6 +21,14 @@ _OFFLOAD_ALIASES = {
     "cuda": "none",
     "gpu": "none",
 }
+
+
+def is_bundled_turbo_lora(filename: str) -> bool:
+    """True for Viggle turbo weights the worker loads itself.
+
+    Older revisions stay on the volume during a swap. They are not request LoRAs.
+    """
+    return Path(filename).name.startswith("Qwen-Image-2.1-viggle-turbo")
 
 
 def resolve_model_source(model_dir: str | None = None, model_id: str | None = None) -> str:

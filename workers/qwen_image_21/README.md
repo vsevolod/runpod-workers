@@ -6,7 +6,7 @@ Diffusers `QwenImage21Pipeline`. No ComfyUI. Same handler shape as
 
 | | |
 |--|--|
-| **Model** | [Qwen/Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) (bf16 snapshot, ~33 GB) plus the [Viggle turbo v0.2.1](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA (rank 256, ~1.4 GB) |
+| **Model** | [Qwen/Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1) (bf16 snapshot, ~33 GB) plus the [Viggle turbo v0.3](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo) LoRA (rank 256, ~1.4 GB, unmerged) |
 | **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `6256aa7` (PR [#14804](https://github.com/huggingface/diffusers/pull/14804)). The LoRA stays unmerged. The scheduler runs with `shift_terminal` unset |
 | **Text encoder** | Qwen3-VL 8B, loaded with the snapshot |
 | **VAE** | 64-channel RGBA VAE shipped in the same repo. The Qwen-Image / Krea 2 VAE is not interchangeable |
@@ -37,7 +37,7 @@ Mount the volume in the same datacenter as the endpoint.
   text_encoder/
   vae/
   processor files…
-  loras/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors
+  loras/Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors
   loras/my_style.safetensors
   loras/my_character.safetensors
 ```
@@ -133,12 +133,14 @@ RunPod picks up a new build.
 **without** classifier-free guidance, so the default is `1.0` (off). A value
 above 1 requires `negative_prompt` and doubles each step.
 
-`num_inference_steps` defaults to **6**, with the v0.2.1 sigma nodes
-`1, 0.9375, 0.875, 0.75, 0.5, 0.25`. Allowed counts are 4, 5, 6, 7, and 8.
-4 is the training schedule and sends no custom sigmas. 5 and 7 keep the
-trained low-noise nodes and only split the top of the schedule. 8 is the
-dense-text schedule (`…, 0.625, 0.5, 0.25, 0.125`). Other counts are rejected:
-a uniform 40-step schedule does not match this adapter.
+`num_inference_steps` defaults to **6**, with the v0.3 sigma nodes
+`1, 0.9375, 0.875, 0.75, 0.5, 0.25` (the same ladder as v0.2.1). Allowed
+counts are 4, 5, 6, 7, and 8. 4 is the training schedule and sends no custom
+sigmas. 5 and 7 keep the trained low-noise nodes and only split the top of
+the schedule. 8 is the older dense-text ladder (`…, 0.625, 0.5, 0.25, 0.125`);
+v0.3 says moving those low-noise nodes softens the image. The v0.3 9-step
+hybrid, which turns the LoRA off for the last two steps, is not implemented.
+Other counts are rejected: a uniform 40-step schedule does not match this adapter.
 
 Width and height must be multiples of **32**, each side in 256..2752, and the
 area must fit the largest official preset (`2400×1792`). Recommended sizes:

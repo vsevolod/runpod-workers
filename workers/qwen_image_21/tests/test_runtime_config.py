@@ -63,12 +63,19 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertFalse(self.mod.parse_local_files_only(""))
         self.assertFalse(self.mod.parse_local_files_only("0"))
 
-    def test_lora_constants_are_the_v021_rank256_adapter(self):
+    def test_lora_constants_are_the_v03_rank256_adapter(self):
         self.assertEqual(self.mod.LORA_REPO_ID, "Viggle/Qwen-Image-2.1-viggle-turbo")
+        self.assertEqual(self.mod.TURBO_REVISION, "v0.3")
         self.assertEqual(
             self.mod.LORA_WEIGHT_NAME,
-            "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+            "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
         )
+        self.assertTrue(
+            self.mod.is_bundled_turbo_lora(
+                "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors"
+            )
+        )
+        self.assertFalse(self.mod.is_bundled_turbo_lora("lenovo_qwen21.safetensors"))
 
     def test_local_lora_file_wins_over_the_hub(self):
         with tempfile.TemporaryDirectory() as tmp:

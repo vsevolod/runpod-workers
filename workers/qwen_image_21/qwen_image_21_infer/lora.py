@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import RLock
 from types import MappingProxyType
 
-from .runtime_config import LORA_WEIGHT_NAME
+from .runtime_config import is_bundled_turbo_lora
 
 logger = logging.getLogger(__name__)
 TURBO_ADAPTER_NAME = "viggle_turbo"
@@ -55,7 +55,7 @@ class LoRACatalog:
             raise RuntimeError(f"LoRA path is not a directory: {root}")
         paths = {}
         for path in sorted(root.glob("*.safetensors")):
-            if path.name == LORA_WEIGHT_NAME or path.is_symlink() or not path.is_file():
+            if is_bundled_turbo_lora(path.name) or path.is_symlink() or not path.is_file():
                 continue
             if not _safe_name(path.stem):
                 raise RuntimeError(f"Invalid LoRA ID: {path.stem!r}")

@@ -69,7 +69,12 @@ class LoRATests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        for name in ["style", "character", Path(LORA_WEIGHT_NAME).stem]:
+        for name in [
+            "style",
+            "character",
+            Path(LORA_WEIGHT_NAME).stem,
+            "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256",
+        ]:
             (self.root / f"{name}.safetensors").write_bytes(b"weights")
         self.catalog = LoRACatalog.scan(self.root)
         self.pipe = Pipeline()
@@ -104,6 +109,7 @@ class LoRATests(unittest.TestCase):
             [{"name": "style"}, {"name": "style"}],
             [{"name": "style"}] * 5,
             [{"name": Path(LORA_WEIGHT_NAME).stem}],
+            [{"name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256"}],
         ]
         for raw in invalid:
             with self.subTest(raw=raw), self.assertRaises(LoRAError):

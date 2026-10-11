@@ -22,12 +22,13 @@ MAX_IMAGES = 4
 MAX_SOURCE_SIDE = 8192
 MAX_DECODED_BYTES = 25 * 1024 * 1024
 
-# Raw sigma nodes for Viggle Qwen-Image-2.1-viggle-turbo v0.2.1.
-# 4 is the training schedule and must be passed with no sigmas argument.
-# 6 is the shipped schedule. 5 and 7 split 1 → 0.875 evenly and keep
-# 0.875, 0.75, 0.5, 0.25. 8 is the dense-text schedule from the model card.
-# The card rounds the 7-step nodes to 0.9583 and 0.9167; these are the
-# exact even splits (1 - 0.875) / 3.
+# Raw sigma nodes for Viggle Qwen-Image-2.1-viggle-turbo v0.3.
+# v0.3 keeps the v0.2.1 6-step ladder. 4 is the training schedule and must
+# be passed with no sigmas argument. 5 and 7 split 1 → 0.875 evenly and keep
+# 0.875, 0.75, 0.5, 0.25. The card rounds the 7-step nodes to 0.9583 and
+# 0.9167; these are the exact even splits (1 - 0.875) / 3.
+# 8 is the older dense-text ladder. v0.3 says moving those low-noise nodes
+# softens the image; the 9-step hybrid (turbo off for the last two) is not wired.
 TURBO_SIGMAS: dict[int, tuple[float, ...] | None] = {
     4: None,
     5: (1.0, 0.875, 0.75, 0.5, 0.25),

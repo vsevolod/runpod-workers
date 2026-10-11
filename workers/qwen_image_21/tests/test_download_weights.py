@@ -33,7 +33,7 @@ class DownloadWeightsTests(unittest.TestCase):
         self.assertEqual(self.mod.LORA_REPO_ID, "Viggle/Qwen-Image-2.1-viggle-turbo")
         self.assertEqual(
             self.mod.LORA_WEIGHT_NAME,
-            "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+            "Qwen-Image-2.1-viggle-turbo-v0.3-6step-lora-r256.safetensors",
         )
 
     def test_downloads_base_snapshot_and_turbo_lora(self):
