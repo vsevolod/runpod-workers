@@ -218,6 +218,25 @@ class LoRATests(unittest.TestCase):
                     self.fail("must not generate")
                 self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
 
+    def test_malformed_or_conflicting_fused_mlp_is_rejected_before_injection(self):
+        target = "transformer.transformer_blocks.0.img_mlp"
+        down = f"{target}.gate_up.lora_A.weight"
+        up = f"{target}.gate_up.lora_B.weight"
+        for state in (
+            {down: Tensor(2, 8)},
+            {up: Tensor(12, 2)},
+            {down: Tensor(2, 8), up: Tensor(11, 2)},
+            {down: Tensor(2, 8), up: Tensor(12, 3)},
+            {down: Tensor(2, 8), up: Tensor(12, 2), f"{target}.proj.lora_A.weight": Tensor(2, 8)},
+        ):
+            with self.subTest(state=state):
+                self.pipe.state = state
+                with self.assertRaises(LoRAError), self.manager.activate(
+                    self.catalog.normalize([{"name": "style"}])
+                ):
+                    self.fail("invalid fused weights must not generate")
+                self.assertEqual(self.pipe.loaded, {TURBO_ADAPTER_NAME})
+
 
 if __name__ == "__main__":
     unittest.main()

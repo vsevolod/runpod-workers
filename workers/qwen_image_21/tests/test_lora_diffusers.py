@@ -114,6 +114,67 @@ class DiffusersLoRATests(unittest.TestCase):
         self.assert_output(8.0)
         self.assertEqual(self.pipe.get_active_adapters(), [TURBO_ADAPTER_NAME])
 
+    def test_comfy_fused_qwen21_mlp_preserves_weighted_output_and_cleanup(self):
+        import json
+        from diffusers import QwenImage21Transformer2DModel
+        from peft import LoraConfig
+        from safetensors.torch import save_file
+
+        torch = self.torch
+        torch.manual_seed(7)
+        transformer = QwenImage21Transformer2DModel(
+            in_channels=4, out_channels=4, num_layers=1, attention_head_dim=8,
+            num_attention_heads=2, context_in_dim=16, mlp_ratio=2,
+            axes_dims_rope=(2, 2, 4),
+        )
+        pipe = self.Pipeline(transformer)
+        pipe.load_lora_weights(
+            {
+                "transformer.transformer_blocks.0.attn.to_q.lora_A.weight": torch.zeros(2, 16),
+                "transformer.transformer_blocks.0.attn.to_q.lora_B.weight": torch.zeros(16, 2),
+            },
+            adapter_name=TURBO_ADAPTER_NAME,
+        )
+        mlp = transformer.transformer_blocks[0].img_mlp
+        x = torch.linspace(-0.5, 0.5, 16).reshape(1, 16)
+        baseline = mlp(x).detach().clone()
+        a = torch.linspace(0.01, 0.05, 32).reshape(2, 16)
+        # Distinct halves expose swapping gate and up, or slicing A instead of B.
+        b_gate, b_up = torch.full((32, 2), 0.02), torch.full((32, 2), 0.07)
+        out_a, out_b = torch.full((2, 32), 0.03), torch.full((16, 2), 0.04)
+        state = {
+            "diffusion_model.transformer_blocks.0.img_mlp.gate_up.lora_A.weight": a,
+            "diffusion_model.transformer_blocks.0.img_mlp.gate_up.lora_B.weight": torch.cat([b_gate, b_up]),
+            "diffusion_model.transformer_blocks.0.img_mlp.out.lora_A.weight": out_a,
+            "diffusion_model.transformer_blocks.0.img_mlp.out.lora_B.weight": out_b,
+        }
+        for with_metadata, scale, out_scale in ((False, 0.6, 0.6), (True, 1.8, 1.2)):
+            with self.subTest(metadata=with_metadata):
+                metadata = None
+                if with_metadata:
+                    config = LoraConfig(
+                        r=2, lora_alpha=4, target_modules=["gate_up", "out"],
+                        rank_pattern={"img_mlp.gate_up": 2},
+                        alpha_pattern={"img_mlp.gate_up": 6},
+                    ).to_dict()
+                    config["target_modules"] = list(config["target_modules"])
+                    metadata = {"lora_adapter_metadata": json.dumps({
+                        f"transformer.{key}": value for key, value in config.items()
+                    })}
+                save_file(state, str(Path(self.tmp.name) / "fused.safetensors"), metadata=metadata)
+                manager = LoRAManager(pipe, LoRACatalog.scan(self.tmp.name))
+                selected = manager.normalize([{"name": "fused", "strength": 0.6}])
+                # Independent fused SwiGLU calculation, including alpha/rank scaling.
+                gate = torch.nn.functional.linear(x, mlp.gate_layer.weight) + scale * (x @ a.T @ b_gate.T)
+                up = torch.nn.functional.linear(x, mlp.proj.weight) + scale * (x @ a.T @ b_up.T)
+                hidden = torch.nn.functional.silu(gate) * up
+                expected = torch.nn.functional.linear(hidden, mlp.out.weight) + out_scale * (hidden @ out_a.T @ out_b.T)
+                with manager.activate(selected):
+                    torch.testing.assert_close(mlp(x), expected)
+                torch.testing.assert_close(mlp(x), baseline)
+                self.assertEqual(pipe.get_active_adapters(), [TURBO_ADAPTER_NAME])
+                self.assertEqual(pipe.get_list_adapters(), {"transformer": [TURBO_ADAPTER_NAME]})
+
 
 if __name__ == "__main__":
     unittest.main()

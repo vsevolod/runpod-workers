@@ -159,6 +159,7 @@ class LoRAManager:
         except Exception:
             logger.exception("Could not read LoRA %s", selection.name)
             raise LoRAError(f"Could not load LoRA: {selection.name}") from None
+        state, metadata = _split_fused_mlp_lora(state, metadata, selection.name)
         self._validate(state, selection.name)
         attached = False
         try:
@@ -228,3 +229,55 @@ class LoRAManager:
                 or outputs != module.out_features
             ):
                 invalid("weight shape mismatch")
+
+
+def _split_fused_mlp_lora(state, metadata, name):
+    """Map ComfyUI's Qwen 2.1 [gate; up] LoRA to Diffusers' two linears."""
+    suffixes = (".lora_A.weight", ".lora_B.weight")
+    targets = {
+        key[: -len(suffix)]
+        for key in state
+        for suffix in suffixes
+        if key.startswith("transformer.") and key.endswith(f".img_mlp.gate_up{suffix}")
+    }
+    if not targets:
+        return state, metadata
+    converted = dict(state)
+    for target in sorted(targets):
+        down, up = (state.get(target + suffix) for suffix in suffixes)
+        if (
+            down is None or up is None or down.ndim != 2 or up.ndim != 2
+            or not down.is_floating_point() or not up.is_floating_point()
+            or down.shape[0] < 1 or up.shape[1] != down.shape[0]
+            or up.shape[0] < 2 or up.shape[0] % 2
+        ):
+            raise LoRAError(f"Invalid LoRA {name}: malformed fused MLP A/B weights")
+        branches = [target.removesuffix("gate_up") + leaf for leaf in ("gate_layer", "proj")]
+        if any(branch + suffix in state for branch in branches for suffix in suffixes):
+            raise LoRAError(f"Invalid LoRA {name}: conflicting fused MLP weights")
+        # B has output rows [gate; up]; A's input projection is shared.
+        for branch, rows in zip(branches, up.chunk(2, dim=0)):
+            converted[branch + suffixes[0]] = down
+            converted[branch + suffixes[1]] = rows.contiguous()
+        for suffix in suffixes:
+            del converted[target + suffix]
+    if metadata:
+        metadata = dict(metadata)
+        # PEFT metadata can name the fused target explicitly. Retain scaling,
+        # but make target selection and rank/alpha patterns follow the split.
+        metadata["transformer.target_modules"] = [
+            key.removeprefix("transformer.").removesuffix(suffixes[0])
+            for key in converted if key.endswith(suffixes[0])
+        ]
+        for field in ("transformer.rank_pattern", "transformer.alpha_pattern"):
+            if metadata.get(field):
+                patterns = {}
+                for key, value in metadata[field].items():
+                    if key in {"gate_up", "img_mlp.gate_up"} or key.endswith(".img_mlp.gate_up"):
+                        for leaf in ("gate_layer", "proj"):
+                            patterns[key.removesuffix("gate_up") + leaf] = value
+                    else:
+                        patterns[key] = value
+                metadata[field] = patterns
+    logger.info("Converted %d fused MLP LoRA target(s) for %s", len(targets), name)
+    return converted, metadata

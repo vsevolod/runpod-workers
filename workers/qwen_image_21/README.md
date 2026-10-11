@@ -228,6 +228,12 @@ missing A/B pairs and incompatible layer dimensions are rejected. Diffusers
 converts supported Qwen checkpoint formats before validation; a LoRA made for
 another Qwen version is not automatically compatible with 2.1.
 
+ComfyUI Qwen 2.1 adapters with fused `img_mlp.gate_up` A/B weights are
+supported: the worker splits B's `[gate; up]` output rows into Diffusers'
+`gate_layer` and `proj`, sharing A. PEFT target/rank/alpha metadata is updated
+for the split while preserving adapter scaling. Broken pairs, odd output-row
+counts and checkpoints mixing fused and separate weights are rejected.
+
 Viggle turbo stays active at strength **1.0** alongside the requested LoRAs.
 Additional adapters stay unmerged and are loaded for each request, then removed
 even if generation fails. Requests on the same pipeline are serialized to
