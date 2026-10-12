@@ -235,10 +235,8 @@ def _extract_image_bytes(output: dict[str, Any]) -> bytes:
     images = output.get("images")
     if isinstance(images, list) and images:
         url = images[0]
-    if not url:
-        url = output.get("image_url")
     if not isinstance(url, str) or not url:
-        raise ValueError("no images/image_url in output")
+        raise ValueError("no images in output")
 
     match = re.match(r"data:image/[^;]+;base64,(.+)$", url, re.DOTALL)
     b64 = match.group(1) if match else url
@@ -255,8 +253,6 @@ def _maybe_save_json(result: dict[str, Any], output: dict[str, Any], path: str |
             f"<{len(x)} chars>" if isinstance(x, str) else x
             for x in out_copy["images"]
         ]
-    if isinstance(out_copy.get("image_url"), str):
-        out_copy["image_url"] = f"<{len(out_copy['image_url'])} chars>"
     dump["output"] = out_copy
     Path(path).write_text(
         json.dumps(dump, indent=2, ensure_ascii=False) + "\n",

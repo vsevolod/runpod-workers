@@ -196,10 +196,8 @@ def _extract_image_bytes(output: dict[str, Any]) -> bytes:
     images = output.get("images")
     if isinstance(images, list) and images:
         url = images[0]
-    if not url:
-        url = output.get("image_url")
     if not isinstance(url, str) or not url:
-        raise ValueError("no images/image_url in output")
+        raise ValueError("no images in output")
     match = re.match(r"data:image/[^;]+;base64,(.+)$", url, re.DOTALL)
     payload = match.group(1) if match else url
     return base64.b64decode(payload, validate=False)

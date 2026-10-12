@@ -190,7 +190,6 @@ def generate_image(job: dict):
 
     payload = {
         "images": image_urls,
-        "image_url": image_urls[0],
         "seed": int(seed),
         "width": out_w,
         "height": out_h,

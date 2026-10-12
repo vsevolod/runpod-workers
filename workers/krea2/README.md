@@ -289,7 +289,6 @@ Response:
 {
   "output": {
     "images": ["data:image/png;base64,..."],
-    "image_url": "data:image/png;base64,...",
     "seed": 42,
     "width": 1024,
     "height": 1024,
@@ -305,6 +304,8 @@ Response:
 }
 ```
 
+Images are returned only in the `images` array; there is no `image_url` alias.
+With `BUCKET_ENDPOINT_URL` set, its entries are URLs instead of base64 data URLs.
 Edit responses keep top-level `grounding_px` / `ref_boost` / `fit_mode` and add top-level **`num_refs`** (`1` or `2`).
 
 ### curl

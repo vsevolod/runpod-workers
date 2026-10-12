@@ -265,7 +265,6 @@ CUDA OOM retains the existing worker restart behavior.
 ```json
 {
   "images": ["data:image/png;base64,..."],
-  "image_url": "data:image/png;base64,...",
   "seed": 42,
   "width": 1024,
   "height": 1024,
@@ -277,6 +276,7 @@ CUDA OOM retains the existing worker restart behavior.
 }
 ```
 
+Images are returned only in the `images` array; there is no `image_url` alias.
 Edits also return `num_refs`. With `BUCKET_ENDPOINT_URL` set, `images` are
 URLs instead of data URLs.
 `loras` reports effective additional adapters (zero-strength entries are omitted).
