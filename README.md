@@ -44,6 +44,29 @@ failure or shutdown. Readiness signals live in a fresh temporary directory for
 each startup. The worker accepts jobs only after every required component is
 ready and the downloader has exited successfully.
 
+### Existing endpoint startup commands
+
+For Qwen Image and Krea2, leave the endpoint's Docker start command empty to use
+the image's default `CMD`, or set it to `sh /app/start.sh`. An override such as
+`python /app/handler.py` or `download_weights.py && handler.py` bypasses the shared
+bootstrap and its overlapping downloads.
+
+Only use `sh /app/start.sh` once the endpoint's **active image** contains that
+file. A successful push or an endpoint configuration release does not prove the
+new image was built and activated. In particular, Qwen's older `57261f6` image
+has no `start.sh`. While that image is still active, this transitional Docker
+start command preserves its sequential startup and automatically uses the
+bootstrap after a new image is activated:
+
+```text
+sh -c "if [ -f /app/start.sh ]; then exec sh /app/start.sh; else python -u /app/download_weights.py && exec env LOCAL_FILES_ONLY=1 python -u /app/handler.py; fi"
+```
+
+After the new image is active, remove the transitional override so future
+deployments follow the image's `CMD`. Check both the repository configuration's
+start command and the active endpoint template's `dockerArgs`; updating the
+Dockerfile alone does not remove an existing template override.
+
 ## Remote test clients
 
 Local CLI scripts (need `RUNPOD_API_KEY`; endpoint IDs are hardcoded unless the table says to set `ENDPOINT_ID`):

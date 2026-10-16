@@ -191,6 +191,10 @@ RunPod's container exit reason as well.
 
 Push to the branch configured in RunPod's GitHub integration, then verify that
 the matching commit has a completed build and is the endpoint's active image.
+Use the image's default Docker start command or `sh /app/start.sh`; the older
+`download_weights.py && handler.py` override bypasses the shared bootstrap.
+While the old image is active, use the compatible command documented in
+[startup command migration](../../README.md#existing-endpoint-startup-commands).
 
 ## API
 

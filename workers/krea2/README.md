@@ -20,7 +20,7 @@ workers/krea2/
 ├── handler.py              # RunPod entry + ModelHandler load-once
 ├── schemas.py
 ├── download_weights.py     # startup download (not baked into image)
-├── start.sh                # download first, then exec handler
+├── start.sh                # shared bootstrap with overlapping downloads
 ├── test_input.json
 ├── requirements.txt
 └── krea2_infer/            # vendored krea-2 + FP8 / INT8 loaders
@@ -66,6 +66,10 @@ Keep your current `DIT_QUANT` selection (`int8_convrot` is used by the existing
 any explicit `DIT_PATH` / `VAE_PATH` pointing at old remote weights. The entrypoint
 sets `LOCAL_FILES_ONLY=1` and waits for each required component; no pre-populated model volume
 is required.
+
+The endpoint's Docker start command must use the image's default `CMD` or
+`sh /app/start.sh`. Remove old commands that launch `handler.py` directly after
+the new image is active; see [startup command migration](../../README.md#existing-endpoint-startup-commands).
 
 ### Optional persistent snapshot
 
