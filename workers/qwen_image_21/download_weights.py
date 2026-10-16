@@ -16,8 +16,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from pathlib import Path
+
+workers_dir = Path(__file__).resolve().parents[1]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.model_download import ModelDownloader, add_download_arguments
 
 MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
 
@@ -28,33 +32,13 @@ except ImportError:
     from qwen_image_21_infer.runtime_config import validate_turbo_snapshot
 
 
-def _snapshot_download(model_id: str, local_dir: str, token: str | None) -> str:
-    from huggingface_hub import snapshot_download
-
-    return snapshot_download(model_id, local_dir=local_dir, token=token)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--output",
-        default=os.environ.get("MODEL_DIR", "./models/qwen_image_21_turbo"),
-        help="Diffusers snapshot directory (default: MODEL_DIR or ./models/qwen_image_21_turbo)",
-    )
+    add_download_arguments(parser, default_output="./models/qwen_image_21_turbo")
     parser.add_argument(
         "--model-id",
         default=os.environ.get("MODEL_ID", MODEL_ID),
         help=f"Hugging Face repo id (default: {MODEL_ID})",
-    )
-    parser.add_argument(
-        "--hf-home",
-        default=os.environ.get("HF_HOME", ""),
-        help="Optional HF cache root. The snapshot itself is written to --output.",
-    )
-    parser.add_argument(
-        "--token",
-        default=os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"),
-        help="Hugging Face token (or set HF_TOKEN)",
     )
     args = parser.parse_args(argv)
 
@@ -65,22 +49,14 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as err:
             print(f"error: {err}. Choose a new --output directory for Turbo.", file=sys.stderr)
             return 1
-    out.mkdir(parents=True, exist_ok=True)
-
-    if args.hf_home:
-        hf_home = Path(args.hf_home).expanduser().resolve()
-        hf_home.mkdir(parents=True, exist_ok=True)
-        os.environ["HF_HOME"] = str(hf_home)
-        os.environ["HUGGINGFACE_HUB_CACHE"] = str(hf_home / "hub")
-        print(f"HF_HOME={hf_home}")
-
-    os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
-
     print(f"MODEL_DIR={out}")
-    started = time.monotonic()
-    print(f"stage=model_download begin model={args.model_id} path={out}", flush=True)
     try:
-        path = _snapshot_download(args.model_id, str(out), args.token)
+        with ModelDownloader(out, hf_home=args.hf_home, token=args.token) as downloads:
+            path = downloads.snapshot(args.model_id, local_dir=out)
+            validate_turbo_snapshot(path)
+    except ValueError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
     except Exception as err:
         print(f"error: snapshot failed: {err}", file=sys.stderr)
         print(
@@ -90,14 +66,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    try:
-        validate_turbo_snapshot(path)
-    except ValueError as err:
-        print(f"error: {err}", file=sys.stderr)
-        return 1
-
-    print(f"  -> {path}")
-    print(f"stage=model_download done elapsed_s={time.monotonic() - started:.2f}", flush=True)
     print()
     print("Endpoint env:")
     print(f"  MODEL_DIR={out}")

@@ -29,6 +29,10 @@ workers/qwen_image_21/
 
 ## Model storage and startup
 
+Hub transfers, cache/token setup and timing use the shared
+[`model_download` module](../shared/model_download.py), copied into the image.
+`download_weights.py` keeps Qwen's model selection and Turbo snapshot validation.
+
 Use an **80 GB container disk**. On every fresh worker, `start.sh` downloads the
 official snapshot (about 32.5 GB) directly from Hugging Face to
 `/models/qwen_image_21_turbo`, validates its Turbo schedule, then starts the

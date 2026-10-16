@@ -28,6 +28,10 @@ workers/krea2/
 
 ## Model storage and startup
 
+Hub transfers, cache/token setup and timing use the shared
+[`model_download` module](../shared/model_download.py), copied into the image.
+`download_weights.py` keeps Krea's FP8/INT8 selection and TE/VAE preparation.
+
 Use an **80 GB container disk**. On each fresh worker, `start.sh` downloads the
 DiT selected by `DIT_QUANT` to `/models/krea2`, plus the text encoder and clean
 Diffusers VAE to the local HF cache at `/models/hf`. It then starts the handler

@@ -4,6 +4,8 @@ set -eu
 APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export MODEL_DIR="${MODEL_DIR:-/models/qwen_image_21_turbo}"
 export HF_HOME="${HF_HOME:-/models/hf}"
+export HF_HUB_CACHE="$HF_HOME/hub"
+export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
 
 # snapshot_download resumes interrupted downloads and checks existing files.
 # A partial snapshot must never be handed to the inference process.

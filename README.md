@@ -11,7 +11,7 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
 | [`workers/minimax_h3_comfy/`](workers/minimax_h3_comfy/) | MiniMax H3 T2V via headless ComfyUI (native nodes, pruned int8) | scaffold — headless GPU smoke pending |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CivitAI LoRA download to network volume (CPU) | MVP |
-| `workers/shared/` | Shared utilities (reserved) | empty |
+| [`workers/shared/`](workers/shared/) | Shared model downloads and local HF cache setup for Qwen Image and Krea2 | used by both workers |
 
 MiniMax H3 design/plan:
 
@@ -26,7 +26,15 @@ Each worker has its own `Dockerfile`. On RunPod **Deploy with GitHub**, set:
 - **Dockerfile path** → e.g. `workers/krea2/Dockerfile`
 - **Build context** → repository root
 
-Weights should live on a **Network Volume** (not in the image) unless you intentionally bake them.
+Qwen Image and Krea2 download base weights to **container disk** at worker startup
+using [`shared/model_download.py`](workers/shared/model_download.py). Their
+Dockerfiles copy the shared package into each image, so the build context must
+remain the repository root. Other workers keep their existing storage setup.
+
+The shared module owns Hub transfers, local cache configuration, token handling,
+download timing and file aliases. Each worker's `download_weights.py` keeps its
+model selection, validation and CLI-specific options. Existing CLI commands and
+the download-before-handler startup order are preserved.
 
 ## Remote test clients
 

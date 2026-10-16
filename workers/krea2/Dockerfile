@@ -53,6 +53,7 @@ COPY workers/krea2/schemas.py \
      workers/krea2/test_input.json \
      /app/
 COPY workers/krea2/krea2_infer /app/krea2_infer
+COPY workers/shared /app/shared
 
 ENV MODEL_DIR=/models/krea2 \
     HF_HOME=/models/hf \

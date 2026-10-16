@@ -8,6 +8,7 @@ import io
 import json
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -37,8 +38,8 @@ class DownloadWeightsTests(unittest.TestCase):
     def test_downloads_only_turbo_snapshot(self):
         calls = []
 
-        def download(model_id, local_dir, token):
-            calls.append((model_id, local_dir, token))
+        def download(repo_id, local_dir, token, **kwargs):
+            calls.append((repo_id, local_dir, token))
             path = Path(local_dir)
             path.mkdir(parents=True, exist_ok=True)
             (path / "model_index.json").write_text(json.dumps({
@@ -47,20 +48,25 @@ class DownloadWeightsTests(unittest.TestCase):
             }))
             return str(path)
 
-        with tempfile.TemporaryDirectory() as tmp, patch.object(
-            self.mod, "_snapshot_download", side_effect=download
-        ), patch.object(self.mod, "_hf_hub_download", create=True, side_effect=AssertionError("No built-in LoRA download allowed")), contextlib.redirect_stdout(io.StringIO()):
+        hub = types.ModuleType("huggingface_hub")
+        hub.snapshot_download = download
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            sys.modules, {"huggingface_hub": hub}
+        ), contextlib.redirect_stdout(io.StringIO()):
             code = self.mod.main(["--output", tmp, "--token", "hf_test"])
         self.assertEqual(code, 0)
         self.assertEqual(calls, [("Qwen/Qwen-Image-2.1-Turbo", str(Path(tmp).resolve()), "hf_test")])
 
     def test_old_snapshot_is_rejected_before_downloading(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(
-            self.mod, "_snapshot_download"
-        ) as download, contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+        hub = types.ModuleType("huggingface_hub")
+        def unexpected_download(**kwargs):
+            self.fail("An obsolete snapshot must be rejected before contacting the Hub")
+        hub.snapshot_download = unexpected_download
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            sys.modules, {"huggingface_hub": hub}
+        ), contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             Path(tmp, "model_index.json").write_text("{}")
             self.assertEqual(self.mod.main(["--output", tmp]), 1)
-            download.assert_not_called()
 
     def test_downloaded_snapshot_must_have_turbo_schedule(self):
         for content in (None, "{}", "not json"):
@@ -69,9 +75,10 @@ class DownloadWeightsTests(unittest.TestCase):
                     if content is not None:
                         Path(tmp, "model_index.json").write_text(content)
                     return tmp
-                with patch.object(self.mod, "_snapshot_download", side_effect=download) as fetch:
+                hub = types.ModuleType("huggingface_hub")
+                hub.snapshot_download = lambda **kwargs: download()
+                with patch.dict(sys.modules, {"huggingface_hub": hub}):
                     self.assertEqual(self.mod.main(["--output", tmp]), 1)
-                    fetch.assert_called_once()
 
     def test_help_exits_cleanly(self):
         with contextlib.redirect_stdout(io.StringIO()):

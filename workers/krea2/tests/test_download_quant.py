@@ -65,7 +65,7 @@ class DownloadQuantResolveTests(unittest.TestCase):
         # cache setup and INT8 hardlink against a real temporary filesystem.
         hub = types.ModuleType("huggingface_hub")
 
-        def download(*, repo_id, filename, local_dir, token):
+        def download(*, repo_id, filename, local_dir, token, cache_dir):
             self.assertEqual(repo_id, "Comfy-Org/Krea-2")
             path = Path(local_dir) / filename
             path.parent.mkdir(parents=True, exist_ok=True)

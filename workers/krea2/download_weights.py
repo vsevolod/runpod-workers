@@ -16,8 +16,12 @@ import argparse
 import importlib.util
 import os
 import sys
-import time
 from pathlib import Path
+
+workers_dir = Path(__file__).resolve().parents[1]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.model_download import ModelDownloader, add_download_arguments, link_or_copy
 
 # FP8 pack (default / legacy)
 DIT_REPO_FP8 = "AlperKTS/Krea2_FP8"
@@ -61,25 +65,9 @@ def resolve_download_quant(value: str | None) -> tuple[bool, bool]:
     raise ValueError(f"Unsupported download quant mode: {value!r}")
 
 
-def _hf_download(repo_id: str, filename: str, dest_dir: Path, token: str | None) -> Path:
-    from huggingface_hub import hf_hub_download
-
-    path = hf_hub_download(
-        repo_id=repo_id,
-        filename=filename,
-        local_dir=str(dest_dir),
-        token=token,
-    )
-    return Path(path)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--output",
-        default=os.environ.get("MODEL_DIR", "./models/krea2"),
-        help="Directory for DiT/VAE safetensors (default: MODEL_DIR or ./models/krea2)",
-    )
+    add_download_arguments(parser, default_output="./models/krea2")
     parser.add_argument(
         "--quant",
         default=os.environ.get("DIT_QUANT", "fp8"),
@@ -87,12 +75,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Which DiT quant pack to download (default: DIT_QUANT or fp8). "
         "Same aliases as DIT_QUANT (fp8, int8_convrot, int8, int8_tensorwise, …); "
         "'both' fetches FP8 and INT8 ConvRot.",
-    )
-    parser.add_argument(
-        "--hf-home",
-        default=os.environ.get("HF_HOME", ""),
-        help="Optional HF cache root (text encoder + VAE config). "
-        "If empty, uses default huggingface cache.",
     )
     parser.add_argument(
         "--skip-dit",
@@ -109,23 +91,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip Qwen3-VL-4B-Instruct snapshot",
     )
-    parser.add_argument(
-        "--token",
-        default=os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"),
-        help="Hugging Face token (or set HF_TOKEN)",
-    )
     args = parser.parse_args(argv)
 
     out = Path(args.output).expanduser().resolve()
-    out.mkdir(parents=True, exist_ok=True)
-
-    if args.hf_home:
-        hf_home = Path(args.hf_home).expanduser().resolve()
-        hf_home.mkdir(parents=True, exist_ok=True)
-        os.environ["HF_HOME"] = str(hf_home)
-        os.environ["HUGGINGFACE_HUB_CACHE"] = str(hf_home / "hub")
-        print(f"HF_HOME={hf_home}")
-
     print(f"MODEL_DIR={out}")
     try:
         want_fp8, want_int8 = resolve_download_quant(args.quant)
@@ -133,61 +101,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {err}", file=sys.stderr)
         return 2
     print(f"download quant={args.quant!r} -> fp8={want_fp8} int8_convrot={want_int8}")
-    started = time.monotonic()
-    print(f"stage=model_download begin path={out} quant={args.quant}", flush=True)
+    with ModelDownloader(out, hf_home=args.hf_home, token=args.token) as downloads:
+        if not args.skip_dit:
+            if want_fp8:
+                downloads.file(DIT_REPO_FP8, DIT_FILE_FP8)
+            if want_int8:
+                dit = downloads.file(DIT_REPO_INT8, DIT_FILE_INT8)
+                link_or_copy(dit, out / DIT_FILE_INT8_FLAT)
 
-    if not args.skip_dit:
-        if want_fp8:
-            print(f"Downloading DiT {DIT_REPO_FP8}/{DIT_FILE_FP8} …")
-            dit = _hf_download(DIT_REPO_FP8, DIT_FILE_FP8, out, args.token)
-            print(f"  -> {dit}")
-        if want_int8:
-            print(f"Downloading DiT {DIT_REPO_INT8}/{DIT_FILE_INT8} …")
-            dit = _hf_download(DIT_REPO_INT8, DIT_FILE_INT8, out, args.token)
-            print(f"  -> {dit}")
-            # Prefer a flat filename next to FP8 for simple DIT_PATH / candidates.
-            flat = out / DIT_FILE_INT8_FLAT
-            nested = out / DIT_FILE_INT8
-            if nested.is_file() and not flat.is_file():
-                try:
-                    flat.hardlink_to(nested)
-                    print(f"  hardlink {flat} -> {nested}")
-                except OSError:
-                    import shutil
+        if not args.skip_vae_file:
+            # Community single-file is optional; the clean HF VAE is downloaded below.
+            try:
+                downloads.file(DIT_REPO_FP8, VAE_FILE)
+            except Exception as err:
+                print(f"  AlperKTS VAE not available ({err}); will use {VAE_REPO} cache only")
 
-                    shutil.copy2(nested, flat)
-                    print(f"  copied {nested} -> {flat}")
-
-    if not args.skip_vae_file:
-        # Prefer community single-file if present on the FP8 repo; otherwise HF repo.
-        try:
-            print(f"Trying VAE {DIT_REPO_FP8}/{VAE_FILE} …")
-            vae = _hf_download(DIT_REPO_FP8, VAE_FILE, out, args.token)
-            print(f"  -> {vae}")
-        except Exception as err:
-            print(f"  AlperKTS VAE not available ({err}); will use {VAE_REPO} cache only")
-
-    if not args.skip_text_encoder:
-        from huggingface_hub import snapshot_download
-
-        text_encoder_id = os.environ.get("TEXT_ENCODER_ID", TEXT_ENCODER_ID)
-        if Path(text_encoder_id).is_dir():
-            te_path = str(Path(text_encoder_id).resolve())
-            print("Using existing local text encoder")
-        else:
-            print(f"Snapshot {text_encoder_id} …")
-            te_path = snapshot_download(text_encoder_id, token=args.token)
-        print(f"  -> {te_path}")
-
-        print(f"Snapshot {VAE_REPO} (vae subfolder) …")
-        vae_repo_path = snapshot_download(
-            VAE_REPO,
-            allow_patterns=["vae/*", "VAE/*", "*.json"],
-            token=args.token,
-        )
-        print(f"  -> {vae_repo_path}")
-
-    print(f"stage=model_download done elapsed_s={time.monotonic() - started:.2f}", flush=True)
+        if not args.skip_text_encoder:
+            text_encoder_id = os.environ.get("TEXT_ENCODER_ID", TEXT_ENCODER_ID)
+            if Path(text_encoder_id).is_dir():
+                print(f"Using existing local text encoder: {Path(text_encoder_id).resolve()}")
+            else:
+                downloads.snapshot(text_encoder_id)
+            downloads.snapshot(VAE_REPO, allow_patterns=["vae/*", "VAE/*", "*.json"])
     print()
     print("Model directory layout:")
     if want_fp8:
