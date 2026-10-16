@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Snapshot the official Qwen-Image-2.1-Turbo checkpoint onto a Network Volume.
+"""Download the official Qwen-Image-2.1-Turbo snapshot before inference starts.
 
-Run on a Pod with the volume mounted (allow at least 40 GB):
+The container entrypoint runs this on every fresh worker. For a manual download:
 
     pip install huggingface-hub hf_transfer
     export HF_TOKEN=hf_...   # accept the model license on Hugging Face first
-    python download_weights.py --output /runpod-volume/qwen_image_21_turbo
+    python download_weights.py --output /models/qwen_image_21_turbo
 
 Does not bake weights into the Docker image.
 The checkpoint contains the accelerated weights and eight-step sampling schedule.
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
@@ -76,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
     print(f"MODEL_DIR={out}")
-    print(f"Snapshot {args.model_id} …")
+    started = time.monotonic()
+    print(f"stage=model_download begin model={args.model_id} path={out}", flush=True)
     try:
         path = _snapshot_download(args.model_id, str(out), args.token)
     except Exception as err:
@@ -95,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"  -> {path}")
-    print("Done.")
+    print(f"stage=model_download done elapsed_s={time.monotonic() - started:.2f}", flush=True)
     print()
     print("Endpoint env:")
     print(f"  MODEL_DIR={out}")

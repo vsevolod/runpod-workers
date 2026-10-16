@@ -21,14 +21,44 @@ workers/qwen_image_21/
 ├── handler.py
 ├── schemas.py
 ├── download_weights.py
+├── start.sh
 ├── test_input.json
 ├── requirements.txt
 └── qwen_image_21_infer/
 ```
 
-## Network volume
+## Model storage and startup
 
-Mount the volume in the same datacenter as the endpoint.
+Use an **80 GB container disk**. On every fresh worker, `start.sh` downloads the
+official snapshot (about 32.5 GB) directly from Hugging Face to
+`/models/qwen_image_21_turbo`, validates its Turbo schedule, then starts the
+handler with `LOCAL_FILES_ONLY=1`. The HF cache also stays on container disk at
+`/models/hf`. An interrupted download resumes on the next attempt in the same
+container; a failed download exits without starting inference.
+
+The handler memory-maps the **local** weights (`QWEN_DISABLE_MMAP=0`). Model
+download time is logged separately as `stage=model_download`; include it when
+comparing cold starts through the first completed image. A new worker downloads
+again because container storage is temporary.
+
+Existing endpoint env overrides must be updated explicitly:
+
+```text
+MODEL_DIR=/models/qwen_image_21_turbo
+HF_HOME=/models/hf
+QWEN_DISABLE_MMAP=0
+LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras
+```
+
+Keep the attached volume for additional LoRAs. If your adapters are in a
+different directory, preserve that path in `LORA_DIR`.
+
+### Optional volume snapshot
+
+A persistent snapshot can still be downloaded manually for other deployments.
+Regional network volumes must be in the same datacenter as the endpoint;
+Global Volumes are not tied to a datacenter. The default container startup
+downloads from the Hub rather than copying this snapshot.
 
 ```text
 /runpod-volume/qwen_image_21_turbo/
@@ -77,17 +107,17 @@ a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `MODEL_DIR` | `/runpod-volume/qwen_image_21_turbo` | Local snapshot. Used when `model_index.json` is there |
-| `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub id when the snapshot is missing |
-| `LORA_DIR` | `<MODEL_DIR>/loras` | Local directory for additional adapters; can point to the old snapshot's `loras/` |
+| `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot downloaded before handler startup |
+| `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub repo downloaded at startup |
+| `LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` (Dockerfile) | Additional adapters on the attached volume; preserve your existing adapter path |
 | `OFFLOAD` | `cpu` | `cpu` (model offload, 24 GB), `sequential` (tighter), `none` (resident on CUDA) |
-| `LOCAL_FILES_ONLY` | unset | `1` after the snapshot is warm |
-| `HF_HOME` | (hf default) | Put on the volume if you load by Hub id instead of `MODEL_DIR` |
+| `LOCAL_FILES_ONLY` | `1` (set by start.sh) | Inference loads only the completed local snapshot |
+| `HF_HOME` | `/models/hf` (Dockerfile) | Local HF cache; keep off the remote volume |
 | `BUCKET_ENDPOINT_URL` | unset | If set, upload via RunPod S3 helpers instead of base64 |
 | `TORCH_COMPILE_DISABLE` | `1` (Dockerfile) | Skip torch.compile |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` | Reduce allocator fragmentation |
 | `QWEN_STARTUP_TRACE_INTERVAL` | `60` | Dump Python thread stacks every N seconds during model loading; `0` disables dumps |
-| `QWEN_DISABLE_MMAP` | `1` | Read base weights into RAM instead of memory-mapping the network volume; `0` restores the original loading path |
+| `QWEN_DISABLE_MMAP` | `0` | Memory-map base weights; `1` opts into eager loading with higher startup RAM usage |
 
 `OFFLOAD=cpu` keeps one component on GPU at a time
 (`text_encoder → transformer → vae`). bf16 weights do not fit together in 24 GB:
@@ -96,20 +126,26 @@ part of the transformer checkpoint; no accelerator LoRA is attached.
 
 ### Network-volume loading experiment
 
-`QWEN_DISABLE_MMAP=1` is enabled by default to compare cold-start performance
-against mmap on the network volume. The text encoder is loaded separately
-with Transformers' `disable_mmap=True`, then passed into the pipeline.
+`QWEN_DISABLE_MMAP=0` is the default to keep startup RAM usage lower.
+Set `QWEN_DISABLE_MMAP=1` only to compare eager loading against mmap on a
+worker with sufficient RAM headroom. In this experimental mode the text encoder
+is loaded separately with Transformers' `disable_mmap=True`, then passed into the pipeline.
 Diffusers loads the transformer and VAE with the same option.
 Request-scoped LoRA loading uses its own existing loading path.
 
-This reads base weights eagerly and increases startup RAM usage. Compare
+Eager loading increases startup RAM usage. A 62 GB container reached about
+58 GB before its first request and RunPod reported container OOM during that
+request at 1024 with an additional LoRA. CPU offload controls GPU placement;
+it does not remove this host-memory loading peak. Compare
 the **whole** `stage=startup` duration, not only `stage=placement_none`:
 file reading now happens inside `text_encoder_load` and
 `pipeline_components_load`, before placement on GPU. Check cgroup memory
 metrics as well. The runtime logs `disable_mmap=True` when enabled.
 
-For an A/B comparison or rollback, set `QWEN_DISABLE_MMAP=0` and replace
-the worker. A new image is required before this setting takes effect.
+On existing deployments, set `QWEN_DISABLE_MMAP=0` in the endpoint environment
+and replace the worker, including any paused FlashBoot worker. Images that
+already support this variable do not need a rebuild for the override. Rebuild
+the image to pick up the changed default for future deployments.
 
 ### Startup diagnostics
 
@@ -139,11 +175,11 @@ RunPod's container exit reason as well.
 | **Dockerfile path** | `workers/qwen_image_21/Dockerfile` |
 | **Build context** | `.` (repo root) |
 | **GPU** | 24 GB class with `OFFLOAD=cpu`; 48 GB+ if you set `OFFLOAD=none` and generate at 2048 |
-| **Volume** | the snapshot above, same datacenter |
-| **Container disk** | 20+ GB |
+| **Volume** | Optional for additional LoRAs; base weights download to container disk |
+| **Container disk** | 80 GB |
 
-A plain `git push` may not rebuild the worker. Publish a GitHub Release so
-RunPod picks up a new build.
+Push to the branch configured in RunPod's GitHub integration, then verify that
+the matching commit has a completed build and is the endpoint's active image.
 
 ## API
 

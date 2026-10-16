@@ -1,5 +1,5 @@
 # Qwen-Image-2.1-Turbo — thin RunPod serverless worker (Diffusers).
-# Weights live on Network Volume (MODEL_DIR), not in this image.
+# Weights download to container disk at worker startup, not into this image.
 #
 # RunPod GitHub Integration:
 #   Dockerfile path:  workers/qwen_image_21/Dockerfile
@@ -50,16 +50,20 @@ RUN uv pip install --no-cache -r /app/requirements.txt
 COPY workers/qwen_image_21/schemas.py \
      workers/qwen_image_21/handler.py \
      workers/qwen_image_21/download_weights.py \
+     workers/qwen_image_21/start.sh \
      workers/qwen_image_21/test_input.json \
      /app/
 COPY workers/qwen_image_21/qwen_image_21_infer /app/qwen_image_21_infer
 
-ENV MODEL_DIR=/runpod-volume/qwen_image_21_turbo \
+ENV MODEL_DIR=/models/qwen_image_21_turbo \
     MODEL_ID=Qwen/Qwen-Image-2.1-Turbo \
+    HF_HOME=/models/hf \
+    LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras \
+    QWEN_DISABLE_MMAP=0 \
     OFFLOAD=cpu \
     PYTHONPATH=/app \
     TORCH_COMPILE_DISABLE=1 \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# No weight download at build time — mount Network Volume at runtime.
-CMD ["python", "-u", "/app/handler.py"]
+# Download first; handler uses only the completed local snapshot.
+CMD ["sh", "/app/start.sh"]

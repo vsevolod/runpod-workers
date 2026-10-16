@@ -95,8 +95,8 @@ def parse_local_files_only(value: str | None = None) -> bool:
 
 
 def parse_disable_mmap(value: str | None = None) -> bool:
-    """Opt out of mmap for network-volume weights; keep an explicit rollback."""
-    raw = value if value is not None else os.environ.get("QWEN_DISABLE_MMAP", "1")
+    """Keep mmap's lower RAM usage by default; eager loading is an opt-in experiment."""
+    raw = value if value is not None else os.environ.get("QWEN_DISABLE_MMAP", "0")
     key = str(raw).strip().lower()
     if key in {"1", "true", "yes", "on"}:
         return True

@@ -14,10 +14,13 @@ from qwen_image_21_infer import pipeline, runtime_config
 
 
 class PipelineLoadingTests(unittest.TestCase):
-    def test_mmap_experiment_is_enabled_by_default_and_can_be_rolled_back(self):
+    def test_memory_efficient_mmap_is_default_and_eager_loading_is_opt_in(self):
         with patch.dict(os.environ, {}, clear=True):
             parse = runtime_config.parse_disable_mmap
-            self.assertTrue(parse())
+            self.assertFalse(parse())
+        for value in ("1", "true", "yes", "on"):
+            with patch.dict(os.environ, {"QWEN_DISABLE_MMAP": value}):
+                self.assertTrue(parse())
         for value in ("0", "false", "no", "off"):
             with patch.dict(os.environ, {"QWEN_DISABLE_MMAP": value}):
                 self.assertFalse(parse())
