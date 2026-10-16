@@ -35,6 +35,29 @@ class DownloadWeightsTests(unittest.TestCase):
     def test_model_id(self):
         self.assertEqual(self.mod.MODEL_ID, "Qwen/Qwen-Image-2.1-Turbo")
 
+    def test_prefetch_only_releases_a_validated_snapshot(self):
+        for valid in [True, False]:
+            with self.subTest(valid=valid), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                state = root / "state"
+                state.mkdir()
+                hub = types.ModuleType("huggingface_hub")
+                hub.HfApi = lambda **kwargs: types.SimpleNamespace(model_info=lambda repo: types.SimpleNamespace(sha="a" * 40))
+                def snapshot(**kwargs):
+                    self.assertEqual(kwargs["revision"], "a" * 40)
+                    path = Path(kwargs["local_dir"])
+                    path.mkdir(parents=True, exist_ok=True)
+                    (path / "model_index.json").write_text(json.dumps({
+                        "_class_name": "QwenImage21Pipeline",
+                        "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41] if valid else [],
+                    }))
+                    return str(path)
+                hub.snapshot_download = snapshot
+                with patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    code = self.mod.main(["--output", str(root / "model"), "--prefetch-state-dir", str(state)])
+                self.assertEqual(code, 0 if valid else 1)
+                self.assertEqual((state / "all.json").exists(), valid)
+
     def test_downloads_only_turbo_snapshot(self):
         calls = []
 

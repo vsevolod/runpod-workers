@@ -32,17 +32,24 @@ Hub transfers, cache/token setup and timing use the shared
 [`model_download` module](../shared/model_download.py), copied into the image.
 `download_weights.py` keeps Krea's FP8/INT8 selection and TE/VAE preparation.
 
-Use an **80 GB container disk**. On each fresh worker, `start.sh` downloads the
-DiT selected by `DIT_QUANT` to `/models/krea2`, plus the text encoder and clean
-Diffusers VAE to the local HF cache at `/models/hf`. It then starts the handler
-with `LOCAL_FILES_ONLY=1`. A failed download exits without starting inference;
-an interrupted transfer can resume in the same container. New containers download
-again because their storage is temporary.
+Use an **80 GB container disk**. On each fresh worker, `start.sh` starts the
+shared bootstrap with a separate CPU-only downloader. ML imports run immediately
+with `LOCAL_FILES_ONLY=1`. The download order is DiT → clean Diffusers VAE → text
+encoder. DiT files go to `/models/krea2`; HF snapshots go to `/models/hf`.
+
+The loader waits for each component immediately before loading it, so DiT can
+load into VRAM while VAE/encoder downloads continue. Each repo is pinned to one
+commit for the session, and the VAE/encoder loaders receive the exact local
+snapshot paths. Loading into VRAM remains sequential. No requests are accepted
+until all required components are loaded and the downloader exits successfully.
+A failed transfer or model load aborts startup and reaps the downloader.
+New containers download again because their storage is temporary.
 
 The startup download skips the optional Comfy VAE single-file and uses the HF
 VAE cache. Additional LoRAs remain on the attached volume at
-`/runpod-volume/krea2/loras`. Download time is logged as `stage=model_download`;
-include it when comparing time to the first completed image.
+`/runpod-volume/krea2/loras`. Logs distinguish `model_download`, `component_ready`,
+`wait_component` and `component_load`. Include the entire startup and first
+generation when comparing speed; overlapping stages must not be added together.
 
 Existing endpoint environment values override Dockerfile defaults. After
 publishing the new image, update the endpoint explicitly:
@@ -57,7 +64,7 @@ DIT_QUANT=int8_convrot
 Keep your current `DIT_QUANT` selection (`int8_convrot` is used by the existing
 `krea2-workers` endpoint; new images still default to `fp8`). Remove or update
 any explicit `DIT_PATH` / `VAE_PATH` pointing at old remote weights. The entrypoint
-sets `LOCAL_FILES_ONLY=1` after downloads finish; no pre-populated model volume
+sets `LOCAL_FILES_ONLY=1` and waits for each required component; no pre-populated model volume
 is required.
 
 ### Optional persistent snapshot
@@ -138,7 +145,7 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `MODEL_DIR` | `/models/krea2` (Dockerfile) | DiT files downloaded before handler startup |
+| `MODEL_DIR` | `/models/krea2` (Dockerfile) | DiT files downloaded before DiT loading |
 | `LORA_DIR` | `/runpod-volume/krea2/loras` | Directory of pre-placed LoRA `.safetensors` (scanned once at start) |
 | `DIT_QUANT` | `fp8` | `fp8` or `int8_convrot` — selects DiT load + Linear runtime |
 | `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path (must match `DIT_QUANT`) |

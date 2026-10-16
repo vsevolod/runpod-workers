@@ -116,6 +116,36 @@ class ModelDownloadTests(unittest.TestCase):
         self.assertEqual(args.hf_home, "/models/hf")
         self.assertEqual(args.token, "legacy-token")
 
+    def test_prefetch_pins_one_revision_per_repo_for_all_transfers(self):
+        hub = types.ModuleType("huggingface_hub")
+        revisions = []
+        metadata = []
+        root = self.root
+
+        class API:
+            def __init__(self, *, token):
+                pass
+
+            def model_info(self, repo_id):
+                metadata.append(repo_id)
+                return types.SimpleNamespace(sha="a" * 40 if len(metadata) == 1 else "b" * 40)
+
+        def transfer(**kwargs):
+            revisions.append(kwargs["revision"])
+            path = root / kwargs.get("filename", "snapshot")
+            path.touch()
+            return str(path)
+
+        hub.HfApi = API
+        hub.hf_hub_download = transfer
+        hub.snapshot_download = transfer
+        with patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()):
+            with self.mod.ModelDownloader(root / "models", pin_revisions=True) as downloads:
+                downloads.file("example/model", "first.safetensors")
+                downloads.snapshot("example/model", allow_patterns=["vae/*"])
+        self.assertEqual(metadata, ["example/model"])
+        self.assertEqual(revisions, ["a" * 40, "a" * 40])
+
 
 if __name__ == "__main__":
     unittest.main()

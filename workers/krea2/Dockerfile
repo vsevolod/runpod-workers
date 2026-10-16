@@ -62,5 +62,5 @@ ENV MODEL_DIR=/models/krea2 \
     TORCH_COMPILE_DISABLE=1 \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Download first; all base components load from the completed local files/cache.
+# Download in the background; load each component after its local files are ready.
 CMD ["sh", "/app/start.sh"]

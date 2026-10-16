@@ -33,16 +33,23 @@ Hub transfers, cache/token setup and timing use the shared
 [`model_download` module](../shared/model_download.py), copied into the image.
 `download_weights.py` keeps Qwen's model selection and Turbo snapshot validation.
 
-Use an **80 GB container disk**. On every fresh worker, `start.sh` downloads the
-official snapshot (about 32.5 GB) directly from Hugging Face to
-`/models/qwen_image_21_turbo`, validates its Turbo schedule, then starts the
-handler with `LOCAL_FILES_ONLY=1`. The HF cache also stays on container disk at
-`/models/hf`. An interrupted download resumes on the next attempt in the same
-container; a failed download exits without starting inference.
+Use an **80 GB container disk**. On every fresh worker, `start.sh` starts the
+shared bootstrap and a separate CPU-only downloader. The official snapshot
+(about 32.5 GB) downloads directly from Hugging Face to
+`/models/qwen_image_21_turbo` while the handler imports Torch/Diffusers. The
+pipeline waits for the complete, validated Turbo snapshot after imports and
+CUDA probing, before inspecting model files. Its existing mmap/CPU-offload
+behavior is preserved; Qwen does not eagerly move all components into VRAM.
+
+Downloads use a fixed repo commit for the session and the HF cache stays local
+at `/models/hf`. `LOCAL_FILES_ONLY=1` prevents implicit runtime downloads.
+A failed download or model load aborts startup and reaps the downloader. An
+interrupted transfer can resume in the same container.
 
 The handler memory-maps the **local** weights (`QWEN_DISABLE_MMAP=0`). Model
-download time is logged separately as `stage=model_download`; include it when
-comparing cold starts through the first completed image. A new worker downloads
+download time and the final wait are logged as `model_download` and
+`wait_component`; include the entire interval through the first completed image
+when comparing cold starts. A new worker downloads
 again because container storage is temporary.
 
 Existing endpoint env overrides must be updated explicitly:
@@ -111,7 +118,7 @@ a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot downloaded before handler startup |
+| `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot validated before model loading |
 | `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub repo downloaded at startup |
 | `LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` (Dockerfile) | Additional adapters on the attached volume; preserve your existing adapter path |
 | `OFFLOAD` | `cpu` | `cpu` (model offload, 24 GB), `sequential` (tighter), `none` (resident on CUDA) |

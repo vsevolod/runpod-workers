@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 def add_download_arguments(parser: argparse.ArgumentParser, *, default_output: str) -> None:
+    parser.add_argument("--prefetch-state-dir", default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--output", default=os.environ.get("MODEL_DIR", default_output),
         help="Model directory (default: MODEL_DIR or %(default)s)",
@@ -29,10 +30,13 @@ def add_download_arguments(parser: argparse.ArgumentParser, *, default_output: s
 
 
 class ModelDownloader:
-    def __init__(self, output: str | Path, *, hf_home: str | Path | None = None, token: str | None = None):
+    def __init__(self, output: str | Path, *, hf_home: str | Path | None = None,
+                 token: str | None = None, pin_revisions: bool = False):
         self.output = Path(output).expanduser().resolve()
         self.output.mkdir(parents=True, exist_ok=True)
         self.token = token
+        self.pin_revisions = pin_revisions
+        self.revisions = {}
         self.cache_dir = None
         if hf_home:
             home = Path(hf_home).expanduser().resolve()
@@ -52,23 +56,31 @@ class ModelDownloader:
         status = "failed" if exc_type is not None else "done"
         print(f"stage=model_download {status} elapsed_s={time.monotonic() - self.started:.2f}", flush=True)
 
-    def _hub_options(self) -> dict:
+    def _hub_options(self, repo_id: str) -> dict:
         options = {"token": self.token}
         if self.cache_dir is not None:
             # Explicit cache_dir also works if another caller imported the Hub
             # before this session selected HF_HOME.
             options["cache_dir"] = str(self.cache_dir)
+        if self.pin_revisions:
+            if repo_id not in self.revisions:
+                from huggingface_hub import HfApi
+
+                self.revisions[repo_id] = HfApi(token=self.token).model_info(repo_id).sha
+            options["revision"] = self.revisions[repo_id]
         return options
 
     def snapshot(self, repo_id: str, *, local_dir: str | Path | None = None,
                  allow_patterns: list[str] | None = None) -> Path:
         from huggingface_hub import snapshot_download
 
-        options = self._hub_options()
+        options = self._hub_options(repo_id)
         if local_dir is not None:
             options["local_dir"] = str(local_dir)
         if allow_patterns is not None:
             options["allow_patterns"] = allow_patterns
+        if self.pin_revisions:
+            options["max_workers"] = 4
         print(f"Snapshot {repo_id} …", flush=True)
         path = Path(snapshot_download(repo_id=repo_id, **options))
         print(f"  -> {path}", flush=True)
@@ -79,7 +91,7 @@ class ModelDownloader:
 
         print(f"Downloading {repo_id}/{filename} …", flush=True)
         path = Path(hf_hub_download(
-            repo_id=repo_id, filename=filename, local_dir=str(self.output), **self._hub_options(),
+            repo_id=repo_id, filename=filename, local_dir=str(self.output), **self._hub_options(repo_id),
         ))
         print(f"  -> {path}", flush=True)
         return path

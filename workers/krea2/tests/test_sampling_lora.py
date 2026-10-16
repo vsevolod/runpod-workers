@@ -233,6 +233,65 @@ class SamplingLoRALifecycleTest(unittest.TestCase):
 
 
 class PipelineLoRAWiringTest(unittest.TestCase):
+    def test_prefetch_loads_dit_while_later_components_are_still_downloading(self):
+        workers = Path(__file__).parents[2]
+        sys.path.insert(0, str(workers))
+        from shared.prefetch import PrefetchSession
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "download.py"
+            script.write_text('''
+import argparse, time
+from pathlib import Path
+from shared.prefetch import ComponentPublisher
+p = argparse.ArgumentParser(); p.add_argument('--prefetch-state-dir'); a = p.parse_args()
+publisher = ComponentPublisher(a.prefetch_state_dir)
+root = Path(__file__).parent
+def wait(name):
+    deadline = time.monotonic() + 5
+    while not (root / name).exists():
+        if time.monotonic() > deadline: raise RuntimeError('Loader did not consume '+name)
+        time.sleep(.01)
+(root / 'krea2_turbo_fp8.safetensors').touch()
+publisher.ready('dit', root / 'krea2_turbo_fp8.safetensors')
+wait('dit_loaded')
+(root / 'vae').mkdir()
+publisher.ready('vae', root / 'vae')
+wait('vae_loaded')
+(root / 'encoder').mkdir()
+publisher.ready('text_encoder', root / 'encoder')
+publisher.ready('all', root)
+''')
+            events = []
+            def load_dit(path, **kwargs):
+                self.assertTrue(path.is_file())
+                self.assertFalse((root / "vae").exists())
+                events.append("dit")
+                (root / "dit_loaded").touch()
+                return nn.Module()
+            def load_vae(path, **kwargs):
+                self.assertTrue((root / "vae").is_dir(), "VAE was loaded before its download finished")
+                self.assertEqual(kwargs["repo_id"], str(root / "vae"))
+                events.append("vae")
+                (root / "vae_loaded").touch()
+                return mock.sentinel.ae
+            def load_encoder(model_id, **kwargs):
+                self.assertEqual(model_id, str(root / "encoder"))
+                self.assertTrue(Path(model_id).is_dir())
+                events.append("encoder")
+                return mock.sentinel.encoder
+            with PrefetchSession([sys.executable, str(script)], env={**os.environ, "PYTHONPATH": str(workers)}) as downloads:
+                downloads.wait("dit", timeout=3)
+                with mock.patch.object(_pipeline, "load_dit", side_effect=load_dit), mock.patch.object(
+                    _pipeline, "load_autoencoder", side_effect=load_vae,
+                ), mock.patch.object(_pipeline, "load_text_encoder", side_effect=load_encoder), mock.patch.object(
+                    _pipeline, "LoRAManager",
+                ), mock.patch.dict(os.environ, {"DIT_QUANT": "fp8", "LORA_DIR": ""}):
+                    pipe = _pipeline.load_pipeline(root, device="cpu", local_files_only=True)
+            self.assertEqual(events, ["dit", "vae", "encoder"])
+            self.assertIs(pipe.encoder, mock.sentinel.encoder)
+
     def make_pipeline(self, manager):
         return _pipeline.Krea2Pipeline(
             dit=mock.sentinel.dit,

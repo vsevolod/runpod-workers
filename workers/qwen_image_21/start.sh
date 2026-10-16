@@ -7,8 +7,7 @@ export HF_HOME="${HF_HOME:-/models/hf}"
 export HF_HUB_CACHE="$HF_HOME/hub"
 export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
 
-# snapshot_download resumes interrupted downloads and checks existing files.
-# A partial snapshot must never be handed to the inference process.
-python -u "$APP_DIR/download_weights.py"
-export LOCAL_FILES_ONLY=1
-exec python -u "$APP_DIR/handler.py"
+SHARED_DIR="$APP_DIR/shared"
+if [ ! -d "$SHARED_DIR" ]; then SHARED_DIR="$APP_DIR/../shared"; fi
+# Imports overlap downloads; the pipeline waits for the validated snapshot.
+exec python -u "$SHARED_DIR/bootstrap.py" --app-dir "$APP_DIR"

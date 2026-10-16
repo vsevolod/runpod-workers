@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
+
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.prefetch import wait_for_component
 
 from .diagnostics import log_cuda_info, log_runtime_info, log_stage
 from .lora import LoRACatalog, LoRAManager
@@ -58,6 +64,9 @@ def load_pipeline(
     with log_stage("cuda_probe"):
         log_cuda_info(torch)
 
+    # Imports/probing run while the separate process fetches the snapshot.
+    # Preserve mmap and CPU offload; do not inspect a partial model directory.
+    wait_for_component("all")
     with log_stage("model_source"):
         source = resolve_model_source(model_dir, model_id)
         local_files_only = parse_local_files_only()

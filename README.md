@@ -34,7 +34,15 @@ remain the repository root. Other workers keep their existing storage setup.
 The shared module owns Hub transfers, local cache configuration, token handling,
 download timing and file aliases. Each worker's `download_weights.py` keeps its
 model selection, validation and CLI-specific options. Existing CLI commands and
-the download-before-handler startup order are preserved.
+the local model layout are preserved. A CPU-only downloader process overlaps
+downloads with ML imports. Krea2 waits separately for DiT, VAE and text encoder,
+so each completed component can load while the next one downloads. Qwen waits
+for its validated snapshot after imports, preserving mmap and CPU offload.
+
+The shared `bootstrap.py` owns the download process and cleans it up on loading
+failure or shutdown. Readiness signals live in a fresh temporary directory for
+each startup. The worker accepts jobs only after every required component is
+ready and the downloader has exited successfully.
 
 ## Remote test clients
 

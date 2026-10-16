@@ -9,9 +9,15 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
+
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.prefetch import loading_component, wait_for_component
 
 import torch
 from safetensors.torch import load_file
@@ -178,6 +184,7 @@ def load_autoencoder(
     device: torch.device,
     dtype: torch.dtype = torch.bfloat16,
     local_files_only: bool = False,
+    repo_id: str = DEFAULT_VAE_REPO,
 ) -> QwenAutoencoder:
     logger.info(
         "Loading VAE (local=%s, local_files_only=%s)",
@@ -187,6 +194,7 @@ def load_autoencoder(
     ae = QwenAutoencoder(
         vae_path=str(vae_path) if vae_path else None,
         local_files_only=local_files_only,
+        repo_id=repo_id,
     )
     return ae.to(device=device, dtype=dtype).eval().requires_grad_(False)
 
@@ -364,6 +372,7 @@ def load_pipeline(
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA device requested but torch.cuda.is_available() is False")
 
+    wait_for_component("dit")
     resolved_dit = _resolve_path(
         model_dir, dit_path or os.environ.get("DIT_PATH"), dit_candidates
     )
@@ -373,32 +382,31 @@ def load_pipeline(
             f"Expected one of: {', '.join(dit_candidates)}. Set DIT_PATH or MODEL_DIR."
         )
 
+    logger.info("Resolved DiT path=%s quant_mode=%s", resolved_dit, mode)
+    with loading_component("dit"):
+        dit = load_dit(
+            resolved_dit, device=device, compute_dtype=dtype, quant_mode=mode
+        )
+    lora_catalog = LoRACatalog.scan(lora_dir)
+    lora_manager = LoRAManager(dit, lora_catalog, dtype)
+    vae_source = wait_for_component("vae")
     resolved_vae = _resolve_path(
         model_dir, vae_path or os.environ.get("VAE_PATH"), VAE_CANDIDATES
     )
-    if resolved_vae is None:
-        logger.warning(
-            "No local VAE safetensors in %s; will load %s/%s from Hugging Face",
-            model_dir,
-            DEFAULT_VAE_REPO,
-            DEFAULT_VAE_SUBFOLDER,
+    with loading_component("vae"):
+        ae = load_autoencoder(
+            resolved_vae, device=device, dtype=dtype, local_files_only=local_files_only,
+            repo_id=str(vae_source) if vae_source is not None else DEFAULT_VAE_REPO,
         )
-
-    logger.info("Resolved DiT path=%s quant_mode=%s", resolved_dit, mode)
-    dit = load_dit(
-        resolved_dit, device=device, compute_dtype=dtype, quant_mode=mode
-    )
-    lora_catalog = LoRACatalog.scan(lora_dir)
-    lora_manager = LoRAManager(dit, lora_catalog, dtype)
-    ae = load_autoencoder(
-        resolved_vae, device=device, dtype=dtype, local_files_only=local_files_only
-    )
-    encoder = load_text_encoder(
-        text_encoder_id,
-        device=device,
-        dtype=dtype,
-        local_files_only=local_files_only,
-    )
+    encoder_source = wait_for_component("text_encoder")
+    with loading_component("text_encoder"):
+        encoder = load_text_encoder(
+            str(encoder_source) if encoder_source is not None else text_encoder_id,
+            device=device,
+            dtype=dtype,
+            local_files_only=local_files_only,
+        )
+    wait_for_component("all")
 
     if device.type == "cuda":
         free, total = torch.cuda.mem_get_info()

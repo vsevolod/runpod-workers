@@ -22,6 +22,7 @@ workers_dir = Path(__file__).resolve().parents[1]
 if (workers_dir / "shared").is_dir():
     sys.path.insert(0, str(workers_dir))
 from shared.model_download import ModelDownloader, add_download_arguments, link_or_copy
+from shared.prefetch import ComponentPublisher
 
 # FP8 pack (default / legacy)
 DIT_REPO_FP8 = "AlperKTS/Krea2_FP8"
@@ -101,13 +102,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {err}", file=sys.stderr)
         return 2
     print(f"download quant={args.quant!r} -> fp8={want_fp8} int8_convrot={want_int8}")
-    with ModelDownloader(out, hf_home=args.hf_home, token=args.token) as downloads:
+    publisher = ComponentPublisher(args.prefetch_state_dir)
+    with ModelDownloader(out, hf_home=args.hf_home, token=args.token,
+                         pin_revisions=bool(args.prefetch_state_dir)) as downloads:
         if not args.skip_dit:
             if want_fp8:
-                downloads.file(DIT_REPO_FP8, DIT_FILE_FP8)
+                dit = downloads.file(DIT_REPO_FP8, DIT_FILE_FP8)
             if want_int8:
                 dit = downloads.file(DIT_REPO_INT8, DIT_FILE_INT8)
                 link_or_copy(dit, out / DIT_FILE_INT8_FLAT)
+            publisher.ready("dit", dit)
 
         if not args.skip_vae_file:
             # Community single-file is optional; the clean HF VAE is downloaded below.
@@ -117,12 +121,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  AlperKTS VAE not available ({err}); will use {VAE_REPO} cache only")
 
         if not args.skip_text_encoder:
+            vae = downloads.snapshot(VAE_REPO, allow_patterns=["vae/*", "VAE/*", "*.json"])
+            publisher.ready("vae", vae)
             text_encoder_id = os.environ.get("TEXT_ENCODER_ID", TEXT_ENCODER_ID)
             if Path(text_encoder_id).is_dir():
                 print(f"Using existing local text encoder: {Path(text_encoder_id).resolve()}")
+                encoder = Path(text_encoder_id).resolve()
             else:
-                downloads.snapshot(text_encoder_id)
-            downloads.snapshot(VAE_REPO, allow_patterns=["vae/*", "VAE/*", "*.json"])
+                encoder = downloads.snapshot(text_encoder_id)
+            publisher.ready("text_encoder", encoder)
+    publisher.ready("all", out)
     print()
     print("Model directory layout:")
     if want_fp8:

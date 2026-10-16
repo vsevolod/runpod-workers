@@ -22,6 +22,7 @@ workers_dir = Path(__file__).resolve().parents[1]
 if (workers_dir / "shared").is_dir():
     sys.path.insert(0, str(workers_dir))
 from shared.model_download import ModelDownloader, add_download_arguments
+from shared.prefetch import ComponentPublisher
 
 MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
 
@@ -50,8 +51,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {err}. Choose a new --output directory for Turbo.", file=sys.stderr)
             return 1
     print(f"MODEL_DIR={out}")
+    publisher = ComponentPublisher(args.prefetch_state_dir)
     try:
-        with ModelDownloader(out, hf_home=args.hf_home, token=args.token) as downloads:
+        with ModelDownloader(out, hf_home=args.hf_home, token=args.token,
+                             pin_revisions=bool(args.prefetch_state_dir)) as downloads:
             path = downloads.snapshot(args.model_id, local_dir=out)
             validate_turbo_snapshot(path)
     except ValueError as err:
@@ -66,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    publisher.ready("all", out)
     print()
     print("Endpoint env:")
     print(f"  MODEL_DIR={out}")

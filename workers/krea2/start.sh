@@ -7,8 +7,7 @@ export HF_HOME="${HF_HOME:-/models/hf}"
 export HF_HUB_CACHE="$HF_HOME/hub"
 export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
 
-# Download the selected DiT plus HF text encoder and clean Diffusers VAE.
-# Resume incomplete transfers; do not start inference after a failed download.
-python -u "$APP_DIR/download_weights.py" --skip-vae-file
-export LOCAL_FILES_ONLY=1
-exec python -u "$APP_DIR/handler.py"
+SHARED_DIR="$APP_DIR/shared"
+if [ ! -d "$SHARED_DIR" ]; then SHARED_DIR="$APP_DIR/../shared"; fi
+# Bootstrap overlaps imports/model loading with a separate download process.
+exec python -u "$SHARED_DIR/bootstrap.py" --app-dir "$APP_DIR" --download-arg=--skip-vae-file

@@ -14,6 +14,39 @@ from qwen_image_21_infer import pipeline, runtime_config
 
 
 class PipelineLoadingTests(unittest.TestCase):
+    def test_imports_overlap_prefetch_but_pipeline_never_loads_a_partial_snapshot(self):
+        sys.path.insert(0, str(Path(__file__).parents[2]))
+        from shared.prefetch import PrefetchSession
+        schedule = [1, .98, .95, .92, .89, .84, .70, .41]
+        pipe = Mock(config={"_class_name": "QwenImage21Pipeline", "sample_sigmas": schedule})
+        torch = SimpleNamespace(bfloat16="bf16", cuda=SimpleNamespace(is_available=lambda: True))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / "download.py"
+            script.write_text('''
+import argparse, json, time
+from pathlib import Path
+from shared.prefetch import ComponentPublisher
+p = argparse.ArgumentParser(); p.add_argument('--prefetch-state-dir'); a = p.parse_args()
+root = Path(__file__).parent
+deadline = time.monotonic() + 5
+while not (root / 'imports_done').exists():
+    if time.monotonic() > deadline: raise RuntimeError('Imports never overlapped download')
+    time.sleep(.01)
+(root / 'model_index.json').write_text(json.dumps({'_class_name':'QwenImage21Pipeline','sample_sigmas':[1,.98,.95,.92,.89,.84,.70,.41]}))
+(root / 'complete').touch()
+ComponentPublisher(a.prefetch_state_dir).ready('all', root)
+''')
+            def load(*args, **kwargs):
+                self.assertTrue((root / "complete").is_file(), "Pipeline read an incomplete snapshot")
+                return pipe
+            with PrefetchSession([sys.executable, str(script)], env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[2])}):
+                with patch.dict(sys.modules, {"torch": torch, "diffusers": SimpleNamespace(QwenImage21Pipeline=Mock())}), patch.object(
+                    pipeline, "log_runtime_info", side_effect=lambda _: (root / "imports_done").touch(),
+                ), patch.object(pipeline, "log_cuda_info"), patch.object(pipeline, "_load_base_pipeline", side_effect=load), patch.dict(os.environ, {}, clear=True):
+                    runtime = pipeline.load_pipeline(str(root), offload="none")
+            self.assertIs(runtime.pipe, pipe)
+
     def test_memory_efficient_mmap_is_default_and_eager_loading_is_opt_in(self):
         with patch.dict(os.environ, {}, clear=True):
             parse = runtime_config.parse_disable_mmap

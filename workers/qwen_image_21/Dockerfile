@@ -66,5 +66,5 @@ ENV MODEL_DIR=/models/qwen_image_21_turbo \
     TORCH_COMPILE_DISABLE=1 \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Download first; handler uses only the completed local snapshot.
+# Overlap downloads with imports; load only the completed local snapshot.
 CMD ["sh", "/app/start.sh"]
