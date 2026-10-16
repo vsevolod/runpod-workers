@@ -1,5 +1,5 @@
 # Krea 2 Turbo (FP8 default / INT8 ConvRot via DIT_QUANT) — thin RunPod serverless worker
-# Weights live on Network Volume (MODEL_DIR), not in this image.
+# Weights download to container disk at worker startup, not into this image.
 #
 # RunPod GitHub Integration:
 #   Dockerfile path:  workers/krea2/Dockerfile
@@ -49,15 +49,17 @@ RUN uv pip install --no-cache -r /app/requirements.txt
 COPY workers/krea2/schemas.py \
      workers/krea2/handler.py \
      workers/krea2/download_weights.py \
+     workers/krea2/start.sh \
      workers/krea2/test_input.json \
      /app/
 COPY workers/krea2/krea2_infer /app/krea2_infer
 
-ENV MODEL_DIR=/runpod-volume/krea2 \
+ENV MODEL_DIR=/models/krea2 \
+    HF_HOME=/models/hf \
     LORA_DIR=/runpod-volume/krea2/loras \
     PYTHONPATH=/app \
     TORCH_COMPILE_DISABLE=1 \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# No weight download at build time — mount Network Volume at runtime.
-CMD ["python", "-u", "/app/handler.py"]
+# Download first; all base components load from the completed local files/cache.
+CMD ["sh", "/app/start.sh"]

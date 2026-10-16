@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Bootstrap Krea 2 DiT (FP8 or INT8 ConvRot) + TE/VAE caches onto a Network Volume.
+"""Download Krea 2 DiT (FP8 or INT8 ConvRot) + TE/VAE before inference starts.
 
-Run on a Pod with the volume mounted, or any machine with disk + HF access:
+The container entrypoint runs this on every fresh worker. For a manual download:
 
-    python download_weights.py --output /runpod-volume/krea2
-    python download_weights.py --output /runpod-volume/krea2 --quant int8_convrot
+    python download_weights.py --output /models/krea2 --hf-home /models/hf
+    python download_weights.py --output /models/krea2 --hf-home /models/hf --quant int8_convrot
 
-Does NOT bake weights into the Docker image (prefer volume for ~13–18 GB DiT/VAE
-plus HF text-encoder cache).
+Does NOT bake weights into the Docker image. Both the DiT files and HF caches
+can live on container disk; an attached volume is only needed for extra LoRAs.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import argparse
 import importlib.util
 import os
 import sys
+import time
 from pathlib import Path
 
 # FP8 pack (default / legacy)
@@ -132,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {err}", file=sys.stderr)
         return 2
     print(f"download quant={args.quant!r} -> fp8={want_fp8} int8_convrot={want_int8}")
+    started = time.monotonic()
+    print(f"stage=model_download begin path={out} quant={args.quant}", flush=True)
 
     if not args.skip_dit:
         if want_fp8:
@@ -167,8 +170,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_text_encoder:
         from huggingface_hub import snapshot_download
 
-        print(f"Snapshot {TEXT_ENCODER_ID} …")
-        te_path = snapshot_download(TEXT_ENCODER_ID, token=args.token)
+        text_encoder_id = os.environ.get("TEXT_ENCODER_ID", TEXT_ENCODER_ID)
+        if Path(text_encoder_id).is_dir():
+            te_path = str(Path(text_encoder_id).resolve())
+            print("Using existing local text encoder")
+        else:
+            print(f"Snapshot {text_encoder_id} …")
+            te_path = snapshot_download(text_encoder_id, token=args.token)
         print(f"  -> {te_path}")
 
         print(f"Snapshot {VAE_REPO} (vae subfolder) …")
@@ -179,9 +187,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"  -> {vae_repo_path}")
 
-    print("Done.")
+    print(f"stage=model_download done elapsed_s={time.monotonic() - started:.2f}", flush=True)
     print()
-    print("Volume layout (recommended):")
+    print("Model directory layout:")
     if want_fp8:
         print(f"  {out}/{DIT_FILE_FP8}")
     if want_int8:

@@ -19,15 +19,48 @@ workers/krea2/
 ├── Dockerfile              # Dockerfile path for RunPod; see build context below
 ├── handler.py              # RunPod entry + ModelHandler load-once
 ├── schemas.py
-├── download_weights.py     # volume bootstrap (not baked into image)
+├── download_weights.py     # startup download (not baked into image)
+├── start.sh                # download first, then exec handler
 ├── test_input.json
 ├── requirements.txt
 └── krea2_infer/            # vendored krea-2 + FP8 / INT8 loaders
 ```
 
-## Network volume
+## Model storage and startup
 
-Mount the same datacenter volume on the endpoint.
+Use an **80 GB container disk**. On each fresh worker, `start.sh` downloads the
+DiT selected by `DIT_QUANT` to `/models/krea2`, plus the text encoder and clean
+Diffusers VAE to the local HF cache at `/models/hf`. It then starts the handler
+with `LOCAL_FILES_ONLY=1`. A failed download exits without starting inference;
+an interrupted transfer can resume in the same container. New containers download
+again because their storage is temporary.
+
+The startup download skips the optional Comfy VAE single-file and uses the HF
+VAE cache. Additional LoRAs remain on the attached volume at
+`/runpod-volume/krea2/loras`. Download time is logged as `stage=model_download`;
+include it when comparing time to the first completed image.
+
+Existing endpoint environment values override Dockerfile defaults. After
+publishing the new image, update the endpoint explicitly:
+
+```text
+MODEL_DIR=/models/krea2
+HF_HOME=/models/hf
+LORA_DIR=/runpod-volume/krea2/loras
+DIT_QUANT=int8_convrot
+```
+
+Keep your current `DIT_QUANT` selection (`int8_convrot` is used by the existing
+`krea2-workers` endpoint; new images still default to `fp8`). Remove or update
+any explicit `DIT_PATH` / `VAE_PATH` pointing at old remote weights. The entrypoint
+sets `LOCAL_FILES_ONLY=1` after downloads finish; no pre-populated model volume
+is required.
+
+### Optional persistent snapshot
+
+The downloader can also bootstrap a volume manually. Regional network volumes
+must be in the same datacenter as the endpoint; Global Volumes are not tied to
+a datacenter. The default startup downloads directly to container disk.
 
 ### Disk budget (this worker, not Comfy)
 
@@ -84,7 +117,7 @@ python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volum
 | `qwen_image_vae.safetensors` | Optional try; else clean HF VAE |
 | `qwen3vl_4b_fp8_scaled.safetensors` (~5.2 GB) | **No** — ComfyUI `text_encoders/` format |
 
-Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. Cache the HF model on the volume so cold starts do not re-download it.
+Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. The startup downloader warms its local HF cache before inference, honoring `TEXT_ENCODER_ID` when overridden.
 
 ### DiT quant modes (`DIT_QUANT`)
 
@@ -101,14 +134,14 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `MODEL_DIR` | `/runpod-volume/krea2` | DiT / optional VAE files |
+| `MODEL_DIR` | `/models/krea2` (Dockerfile) | DiT files downloaded before handler startup |
 | `LORA_DIR` | `/runpod-volume/krea2/loras` | Directory of pre-placed LoRA `.safetensors` (scanned once at start) |
 | `DIT_QUANT` | `fp8` | `fp8` or `int8_convrot` — selects DiT load + Linear runtime |
 | `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path (must match `DIT_QUANT`) |
 | `VAE_PATH` | auto under `MODEL_DIR` | Override VAE safetensors path |
 | `TEXT_ENCODER_ID` | `Qwen/Qwen3-VL-4B-Instruct` | HF id or local snapshot path |
-| `HF_HOME` | (hf default) | Put on volume for faster/offline loads |
-| `LOCAL_FILES_ONLY` | unset | `1` after cache is warm |
+| `HF_HOME` | `/models/hf` (Dockerfile) | Local cache for the text encoder and clean VAE |
+| `LOCAL_FILES_ONLY` | `1` (set by start.sh) | Inference uses only completed local files/caches |
 | `BUCKET_ENDPOINT_URL` | unset | If set, upload via RunPod S3 helpers instead of base64 |
 | `TORCH_COMPILE_DISABLE` | `1` (Dockerfile) | Skip torch.compile / Inductor (no gcc in image) |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (Dockerfile) | Reduce CUDA allocator fragmentation |
@@ -117,9 +150,10 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 
 Repo may be **public or private** (connect GitHub in RunPod for private). Do not commit tokens or weights.
 
-1. Create Network Volume (**≥25–30 GB** free: FP8 DiT + HF TE + VAE; more if LoRAs).
-2. Run `download_weights.py` on a **Pod** (not serverless) with that volume attached.
-3. **Serverless → New Endpoint → Import Git Repository** (not an always-on Pod for serving)
+1. **Serverless → New Endpoint → Import Git Repository** (not an always-on Pod for serving).
+2. Set **Container disk = 80 GB** and the local model/cache paths above. The worker
+   downloads its own base weights at startup.
+3. Attach a volume only if using additional LoRAs, preserving their `LORA_DIR`.
 
 ### GitHub / Docker settings (monorepo)
 
@@ -134,11 +168,11 @@ Wrong build context (e.g. `workers/krea2`) makes `COPY workers/krea2/...` fail d
 Other endpoint knobs:
 
 - GPU: **24 GB** class (A5000 / 3090 / 4090 / L4, etc.)
-- Attach the volume (same DC as the endpoint)
-- Container disk: 20+ GB
+- Attach a volume if needed for additional LoRAs
+- Container disk: **80 GB**
 - FlashBoot: on
 - Active workers: `0` (or `1` for warm)
-- Env: `MODEL_DIR=/runpod-volume/krea2`, ideally `HF_HOME=/runpod-volume/hf`
+- Env: `MODEL_DIR=/models/krea2`, `HF_HOME=/models/hf`; preserve `DIT_QUANT` and the existing `LORA_DIR`
 
 ### Updating the endpoint after code changes
 
@@ -328,7 +362,7 @@ From monorepo root (same as RunPod: context `.`, Dockerfile under `workers/krea2
 docker build -f workers/krea2/Dockerfile -t runpod-krea2:latest .
 ```
 
-You still need GPU + `MODEL_DIR` mount to actually generate.
+Generation needs a GPU and enough container disk for the startup downloads.
 
 ## Design notes
 
