@@ -189,8 +189,11 @@ RunPod's container exit reason as well.
 | **Volume** | Optional for additional LoRAs; base weights download to container disk |
 | **Container disk** | 80 GB |
 
-Push to the branch configured in RunPod's GitHub integration, then verify that
-the matching commit has a completed build and is the endpoint's active image.
+Push worker changes to `master` and wait for the **Build Runpod workers** GitHub
+Actions workflow to publish `ghcr.io/vsevolod/runpod-workers-qwen_image_21:<commit-sha>`.
+Configure Runpod to use that exact image tag/digest, preserving the endpoint ID
+and existing GPU/LoRA settings. See the shared [deployment instructions](../../README.md#qwen-image-and-krea2-build-on-github-run-on-runpod).
+Verify that the intended image is active before running a GPU smoke request.
 Use the image's default Docker start command or `sh /app/start.sh`; the older
 `download_weights.py && handler.py` override bypasses the shared bootstrap.
 While the old image is active, use the compatible command documented in

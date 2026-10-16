@@ -1,0 +1,82 @@
+name: Build Runpod workers
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/build-workers.yml
+      - workers/shared/**
+      - workers/qwen_image_21/**
+      - workers/krea2/**
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the validated images to GHCR
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: [qwen_image_21, krea2]
+    env:
+      WORKER: ${{ matrix.worker }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Make room for CUDA dependencies
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+      - name: Select image name
+        shell: bash
+        run: |
+          printf 'IMAGE=ghcr.io/%s-%s:%s\n' "${GITHUB_REPOSITORY,,}" "$WORKER" "$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Build the complete CUDA image
+        shell: bash
+        run: |
+          docker build --platform linux/amd64 \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --file "workers/${WORKER}/Dockerfile" --tag "$IMAGE" .
+      - name: Check dependencies and startup packaging
+        shell: bash
+        run: |
+          docker run --rm --entrypoint uv "$IMAGE" pip check --python /.venv/bin/python
+          docker run --rm --entrypoint python "$IMAGE" -u /app/shared/bootstrap.py --help
+          docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
+          docker run --rm --entrypoint python "$IMAGE" -m unittest discover -s /app/shared/tests -p 'test_*.py'
+      - name: Check model runtime imports without loading weights
+        shell: bash
+        run: |
+          docker run --rm --env WORKER --entrypoint python "$IMAGE" -c '
+          import importlib, os, torch
+          importlib.import_module(os.environ["WORKER"] + "_infer.pipeline")
+          if os.environ["WORKER"] == "qwen_image_21":
+              from diffusers import QwenImage21Pipeline
+          else:
+              from diffusers import AutoencoderKLQwenImage
+              from transformers import Qwen3VLForConditionalGeneration
+          print("Runtime imports OK; torch=" + torch.__version__)
+          '
+      - name: Publish validated image
+        if: github.event_name == 'push' || inputs.publish
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+      - name: Record image name
+        shell: bash
+        run: |
+          printf '%s\n' "$IMAGE" >> "$GITHUB_STEP_SUMMARY"

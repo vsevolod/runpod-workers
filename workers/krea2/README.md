@@ -165,12 +165,15 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 
 Repo may be **public or private** (connect GitHub in RunPod for private). Do not commit tokens or weights.
 
-1. **Serverless → New Endpoint → Import Git Repository** (not an always-on Pod for serving).
+1. Build through the **Build Runpod workers** GitHub Actions workflow, then use
+   **Serverless → New Endpoint → Import from Docker Registry**, or update the
+   existing endpoint's template while retaining its ID. The image is
+   `ghcr.io/vsevolod/runpod-workers-krea2:<commit-sha>`.
 2. Set **Container disk = 80 GB** and the local model/cache paths above. The worker
    downloads its own base weights at startup.
 3. Attach a volume only if using additional LoRAs, preserving their `LORA_DIR`.
 
-### GitHub / Docker settings (monorepo)
+### Build settings (monorepo)
 
 | Setting | Value | Notes |
 |---------|-------|--------|
@@ -191,16 +194,17 @@ Other endpoint knobs:
 
 ### Updating the endpoint after code changes
 
-A plain `git push` may **not** rebuild the worker. Per [RunPod GitHub integration](https://docs.runpod.io/serverless/workers/github-integration), create a **GitHub Release** (tag) to trigger a new build, then check the endpoint **Builds** tab.
+Worker changes pushed to `master` trigger the GitHub Actions build and GHCR
+publication. For a manual build:
 
 ```bash
-git push origin master
-gh release create krea2-vX.Y.Z --target master \
-  --title "krea2: short summary" \
-  --notes "What changed"
+gh workflow run build-workers.yml --ref master -f publish=true
+gh run list --workflow build-workers.yml
 ```
 
-If a release appears on GitHub but **no** new row shows under Builds, re-check GitHub app access to this repo, or **Clone Endpoint** / re-import from GitHub (forces a fresh build from branch tip).
+After the workflow succeeds, update the Runpod endpoint to the exact published
+image tag/digest and verify a GPU request. GitHub Actions does not automatically
+change the endpoint template. See the shared [deployment instructions](../../README.md#qwen-image-and-krea2-build-on-github-run-on-runpod).
 
 ## API
 

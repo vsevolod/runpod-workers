@@ -21,7 +21,49 @@ MiniMax H3 design/plan:
 
 ## Deploy
 
-Each worker has its own `Dockerfile`. On RunPod **Deploy with GitHub**, set:
+### Qwen Image and Krea2: build on GitHub, run on Runpod
+
+[Build Runpod workers](.github/workflows/build-workers.yml) builds both complete
+CUDA images on standard GitHub-hosted Ubuntu runners. A push to `master` that
+changes either worker, `workers/shared`, or the workflow builds and publishes
+both images to GitHub Container Registry. You can also run it manually:
+
+```bash
+gh workflow run build-workers.yml --ref master -f publish=true
+gh run list --workflow build-workers.yml
+```
+
+The image tag is the full commit SHA:
+
+```text
+ghcr.io/vsevolod/runpod-workers-qwen_image_21:<commit-sha>
+ghcr.io/vsevolod/runpod-workers-krea2:<commit-sha>
+```
+
+The workflow checks installed dependencies, downloader/bootstrap packaging,
+shared coordination tests and model runtime imports before publication. These
+checks do not load weights or prove GPU inference. Base weights remain outside
+the images and download at worker startup.
+
+Deploy a successfully published image through Runpod's **Import from Docker
+Registry** flow, or update an existing endpoint's template to the exact image
+tag/digest. Keep existing endpoint IDs when updating templates. Ensure the image
+is publicly pullable or configure a read-only registry credential on Runpod.
+Leave the Docker start command empty to use the image's `CMD`.
+
+Use an **80 GB container disk**, `MODEL_DIR=/models/qwen_image_21_turbo` for Qwen
+or `/models/krea2` for Krea, and `HF_HOME=/models/hf`. Preserve the attached LoRA
+volume, `LORA_DIR`, GPU selection, quantization and offload settings.
+
+During a migration, set `workersMin=0` and `workersMax=0` to stop GPU allocation
+and retain the previous template/settings for rollback. Restore the saved
+worker limits once the intended image is configured, then verify a real GPU
+request and startup logs. A published image is not automatically deployed by
+this workflow; update the endpoint explicitly for each release.
+
+### Other workers: Runpod GitHub integration
+
+Each worker has its own `Dockerfile`. On Runpod **Deploy with GitHub**, set:
 
 - **Dockerfile path** → e.g. `workers/krea2/Dockerfile`
 - **Build context** → repository root
