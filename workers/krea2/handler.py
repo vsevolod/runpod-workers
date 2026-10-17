@@ -18,6 +18,7 @@ from runpod.serverless.utils import rp_cleanup, rp_upload
 from runpod.serverless.utils.rp_validator import validate
 
 from krea2_infer import load_pipeline
+from krea2_infer.diagnostics import log_stage
 from krea2_infer.lora import LoRAError
 from krea2_infer.request import RequestError, normalize_job_input
 from schemas import INPUT_SCHEMA
@@ -108,6 +109,12 @@ def generate_image(job: dict):
     if seed is None:
         seed = int.from_bytes(os.urandom(4), "big")
 
+    logger.info(
+        "job id=%s type=%s width=%s height=%s steps=%s guidance=%s images_out=%s refs=%s grounding_px=%s ref_boost=%s fit_mode=%s",
+        job.get("id"), norm.type, norm.width, norm.height, norm.num_inference_steps,
+        norm.guidance_scale, norm.num_images, len(norm.images), norm.grounding_px,
+        norm.ref_boost, norm.fit_mode,
+    )
     try:
         loras = MODELS.pipe.loras.normalize(validated_input["loras"])
         if loras:
@@ -183,7 +190,8 @@ def generate_image(job: dict):
 
     job_id = job.get("id") or "local"
     try:
-        image_urls = _save_and_upload_images(images, str(job_id))
+        with log_stage("image_delivery", job_id=job_id):
+            image_urls = _save_and_upload_images(images, str(job_id))
     except Exception:
         logger.exception("Upload/save failed; falling back to in-memory base64")
         image_urls = _images_to_base64_data_urls(images)

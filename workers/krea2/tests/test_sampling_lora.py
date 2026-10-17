@@ -19,6 +19,7 @@ _MISSING_MODULE = object()
 def _load_contract_modules():
     # pipeline / lora_runtime pull int8 + dit_quant; edit_sampling is stubbed.
     real_short_names = (
+        "diagnostics",
         "dit_quant",
         "convrot",
         "int8_linear",

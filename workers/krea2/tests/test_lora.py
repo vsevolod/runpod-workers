@@ -2,6 +2,7 @@ import importlib.util
 import math
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -14,10 +15,16 @@ _CANONICAL_PACKAGE_BEFORE = sys.modules.get("krea2_infer", _MISSING_MODULE)
 _CANONICAL_LORA_BEFORE = sys.modules.get("krea2_infer.lora", _MISSING_MODULE)
 
 PACKAGE_ROOT = Path(__file__).parents[1] / "krea2_infer"
-_LORA_MODULE_NAME = "_krea2_lora_contract_tests"
+_LORA_MODULE_NAME = "_krea2_lora_contract_tests.lora"
 
 
 def _load_lora_module():
+    package_name = _LORA_MODULE_NAME.rpartition(".")[0]
+    names = (package_name, package_name + ".diagnostics", _LORA_MODULE_NAME)
+    previous = {name: sys.modules.get(name, _MISSING_MODULE) for name in names}
+    package = types.ModuleType(package_name)
+    package.__path__ = [str(PACKAGE_ROOT)]
+    sys.modules[package_name] = package
     spec = importlib.util.spec_from_file_location(
         _LORA_MODULE_NAME,
         PACKAGE_ROOT / "lora.py",
@@ -26,15 +33,15 @@ def _load_lora_module():
         raise RuntimeError("Could not load the LoRA contract module")
 
     module = importlib.util.module_from_spec(spec)
-    previous = sys.modules.get(_LORA_MODULE_NAME, _MISSING_MODULE)
     sys.modules[_LORA_MODULE_NAME] = module
     try:
         spec.loader.exec_module(module)
     finally:
-        if previous is _MISSING_MODULE:
-            sys.modules.pop(_LORA_MODULE_NAME, None)
-        else:
-            sys.modules[_LORA_MODULE_NAME] = previous
+        for name, old in previous.items():
+            if old is _MISSING_MODULE:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = old
     return module
 
 

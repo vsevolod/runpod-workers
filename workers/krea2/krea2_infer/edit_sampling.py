@@ -13,6 +13,7 @@ from einops import rearrange
 from PIL import Image
 
 from .edit_geometry import fit_source_pixels, target_size_from_source
+from .diagnostics import log_stage
 from .sampling import _text_encoding, roundup, timesteps
 
 logger = logging.getLogger(__name__)
@@ -124,7 +125,8 @@ def _encode_source_tokens(
     arr = np.asarray(src_img, dtype=np.float32) / 255.0  # H,W,3
     px = torch.from_numpy(arr).to(device=device, dtype=dtype)
     px = px.permute(2, 0, 1).unsqueeze(0) * 2 - 1  # (1,3,hs,ws)
-    src_lat = ae.encode(px)  # (1,16,hs/8,ws/8)
+    with log_stage("vae_encode_reference", width=px.shape[-1], height=px.shape[-2]):
+        src_lat = ae.encode(px)  # (1,16,hs/8,ws/8)
     src_tok = rearrange(
         src_lat, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch
     )
@@ -173,18 +175,20 @@ def sample_edit(
         max_megapixels=max_megapixels,
         align=align,
     )
+    logger.info("Edit canvas width=%d height=%d refs=%d steps=%d guidance=%s", width, height, n_src, steps, guidance)
 
     cfg = guidance > 0
     with _text_encoding(model, ae, encoder, device):
-        txt, txtmask = encoder.grounded_encode(
-            instruction, sources, grounding_px=grounding_px
-        )
-        # txt: (1, T, 12, C), txtmask: (1, T)
-        if cfg:
-            neg_text = negative_prompt if negative_prompt is not None else ""
-            untxt, untxtmask = encoder.grounded_encode(
-                neg_text, sources, grounding_px=grounding_px
+        with log_stage("grounded_encode", refs=n_src, cfg=cfg):
+            txt, txtmask = encoder.grounded_encode(
+                instruction, sources, grounding_px=grounding_px
             )
+            # txt: (1, T, 12, C), txtmask: (1, T)
+            if cfg:
+                neg_text = negative_prompt if negative_prompt is not None else ""
+                untxt, untxtmask = encoder.grounded_encode(
+                    neg_text, sources, grounding_px=grounding_px
+                )
 
     # --- source pixels → latent tokens (independent fit per ref) ---
     src_toks: list[torch.Tensor] = []
@@ -258,45 +262,46 @@ def sample_edit(
     img = combined
     activation_scope = nullcontext() if lora_activation is None else lora_activation
     with activation_scope:
-        for tcurr, tprev in zip(ts[:-1], ts[1:]):
-            t = torch.full((1,), tcurr, dtype=img.dtype, device=img.device)
-            cond = model(
-                img=img, context=txt, t=t, pos=pos, mask=mask, attn_bias=bias
-            )
-            # cond: (1, S+G, Cpack) — keep target only
-            cond = cond[:, -tgt_len:, :]
-            if cfg:
-                unpos = build_edit_position_ids(
-                    1,
-                    untxt.shape[1],
-                    src_grids,
-                    (th, tw),
-                    pos_mode=pos_mode,
-                    device=device,
+        for step, (tcurr, tprev) in enumerate(zip(ts[:-1], ts[1:]), 1):
+            with log_stage("denoise_step", step=step, total=steps):
+                t = torch.full((1,), tcurr, dtype=img.dtype, device=img.device)
+                cond = model(
+                    img=img, context=txt, t=t, pos=pos, mask=mask, attn_bias=bias
                 )
-                unmask = torch.cat([untxtmask.to(device), img_ones], dim=1)
-                unbias = build_ref_boost_bias(
-                    boosts,
-                    untxt.shape[1],
-                    src_lens,
-                    tgt_len,
-                    device=device,
-                    dtype=dtype,
-                )
-                uncond = model(
-                    img=img,
-                    context=untxt,
-                    t=t,
-                    pos=unpos,
-                    mask=unmask,
-                    attn_bias=unbias,
-                )[:, -tgt_len:, :]
-                v = cond + guidance * (cond - uncond)
-            else:
-                v = cond
-            # Euler only on target tokens; source tokens stay clean
-            tgt = img[:, -tgt_len:, :] + (tprev - tcurr) * v
-            img = torch.cat([img[:, :src_total, :], tgt], dim=1)
+                # cond: (1, S+G, Cpack) — keep target only
+                cond = cond[:, -tgt_len:, :]
+                if cfg:
+                    unpos = build_edit_position_ids(
+                        1,
+                        untxt.shape[1],
+                        src_grids,
+                        (th, tw),
+                        pos_mode=pos_mode,
+                        device=device,
+                    )
+                    unmask = torch.cat([untxtmask.to(device), img_ones], dim=1)
+                    unbias = build_ref_boost_bias(
+                        boosts,
+                        untxt.shape[1],
+                        src_lens,
+                        tgt_len,
+                        device=device,
+                        dtype=dtype,
+                    )
+                    uncond = model(
+                        img=img,
+                        context=untxt,
+                        t=t,
+                        pos=unpos,
+                        mask=unmask,
+                        attn_bias=unbias,
+                    )[:, -tgt_len:, :]
+                    v = cond + guidance * (cond - uncond)
+                else:
+                    v = cond
+                # Euler only on target tokens; source tokens stay clean
+                tgt = img[:, -tgt_len:, :] + (tprev - tcurr) * v
+                img = torch.cat([img[:, :src_total, :], tgt], dim=1)
 
     tgt = img[:, -tgt_len:, :]
     lat = rearrange(
@@ -307,7 +312,8 @@ def sample_edit(
         h=th,
         w=tw,
     )
-    pixels = ae.decode(lat.to(torch.bfloat16))
+    with log_stage("vae_decode"):
+        pixels = ae.decode(lat.to(torch.bfloat16))
     pixels = pixels.clamp(-1, 1) * 0.5 + 0.5
     pixels = rearrange(pixels * 255.0, "b c h w -> b h w c").cpu().byte().numpy()
     return [Image.fromarray(pixels[0])]

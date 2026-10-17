@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import sys
 import threading
 import types
@@ -25,7 +26,7 @@ _PACKAGE_NAME = "_krea2_lora_runtime_contract_tests"
 
 def _load_contract_modules():
     # lora_runtime depends on int8_linear → convrot for the INT8 Linear path.
-    short_names = ("convrot", "int8_linear", "lora", "lora_runtime")
+    short_names = ("diagnostics", "convrot", "int8_linear", "lora", "lora_runtime")
     module_names = (_PACKAGE_NAME, *(f"{_PACKAGE_NAME}.{n}" for n in short_names))
     previous = {
         name: sys.modules.get(name, _MISSING_MODULE) for name in module_names
@@ -111,6 +112,23 @@ class ModuleIsolationTest(unittest.TestCase):
 
 
 class RuntimeLinearRegistryTest(unittest.TestCase):
+    def test_profiling_failure_releases_activation_lock(self):
+        model = _TwoLinearModel()
+        registry = RuntimeLinearRegistry.patch(model, torch.float32)
+        error = RuntimeError("CUDA profiling failed")
+        with (
+            mock.patch.dict(os.environ, {"KREA_PROFILE_CUDA": "1"}),
+            mock.patch.object(torch.cuda, "is_initialized", return_value=True),
+            mock.patch.object(torch.cuda, "synchronize", side_effect=error),
+            self.assertRaisesRegex(RuntimeError, "CUDA profiling failed"),
+        ):
+            with registry.activate(()):
+                pass
+        acquired = registry._lock.acquire(blocking=False)
+        if acquired:
+            registry._lock.release()
+        self.assertTrue(acquired, "Profiling must not leave the adapter registry locked")
+
     def test_patch_preserves_base_output_and_weight(self):
         model = nn.Module()
         model.linear = nn.Linear(2, 2, bias=False)

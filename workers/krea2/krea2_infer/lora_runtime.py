@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .int8_linear import int8_linear_forward, is_int8_linear
+from .diagnostics import log_stage
 from .lora import (
     LoRACatalog,
     LoRAError,
@@ -175,10 +176,14 @@ class LoRAActivation:
 
         self._registry._lock.acquire()
         self._lock_acquired = True
-        grouped, error = self._prepare_active_layers()
-        if error is not None:
+        try:
+            with log_stage("lora_gpu_copy", adapters=len(self._prepared)):
+                grouped, error = self._prepare_active_layers()
+                if error is not None:
+                    raise error from None
+        except BaseException:
             self._clear()
-            raise error from None
+            raise
 
         try:
             for module, layers in grouped.items():
@@ -205,7 +210,8 @@ class LoRAActivation:
         active = None
         try:
             for adapter in self._prepared:
-                for layer in adapter.layers:
+                logger.info("LoRA GPU copy begin name=%s layers=%d", adapter.name, len(adapter.layers))
+                for index, layer in enumerate(adapter.layers, 1):
                     module = self._registry._modules.get(
                         layer.target,
                         _MISSING_TARGET,
@@ -245,6 +251,8 @@ class LoRAActivation:
                     up = None
                     delta = None
                     active = None
+                    if index % 64 == 0 or index == len(adapter.layers):
+                        logger.info("LoRA GPU copy progress name=%s layers=%d/%d", adapter.name, index, len(adapter.layers))
             return grouped, None
         except BaseException as error:
             grouped.clear()

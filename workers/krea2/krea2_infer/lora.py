@@ -14,6 +14,8 @@ import torch
 import torch.nn as nn
 from safetensors.torch import load_file
 
+from .diagnostics import log_stage
+
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +229,14 @@ class LoRALoader:
         }
 
     def load(self, selections: Sequence[LoRASelection]) -> tuple[PreparedLoRA, ...]:
-        return tuple(self._load_one(selection) for selection in selections)
+        prepared = []
+        for selection in selections:
+            with log_stage("lora_prepare", name=selection.name):
+                adapter = self._load_one(selection)
+            ranks = sorted({layer.down.shape[0] for layer in adapter.layers if isinstance(layer, LoRALayerWeights)})
+            logger.info("LoRA prepared name=%s layers=%d ranks=%s", selection.name, len(adapter.layers), ranks)
+            prepared.append(adapter)
+        return tuple(prepared)
 
     def _load_one(self, selection: LoRASelection) -> PreparedLoRA:
         try:

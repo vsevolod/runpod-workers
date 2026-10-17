@@ -15,6 +15,8 @@ import torch
 from einops import rearrange, repeat
 from PIL import Image
 
+from .diagnostics import log_stage
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,8 +36,9 @@ def _offload_encoder_to_cpu(encoder: torch.nn.Module) -> None:
     if device.type != "cuda":
         return
     logger.info("Offloading text encoder to CPU (free VRAM for DiT/VAE)")
-    encoder.to("cpu")
-    torch.cuda.empty_cache()
+    with log_stage("encoder_offload"):
+        encoder.to("cpu")
+        torch.cuda.empty_cache()
 
 
 @contextmanager
@@ -45,12 +48,14 @@ def _text_encoding(model, ae, encoder, device):
     try:
         if target.type == "cuda":
             logger.info("Offloading DiT/VAE to CPU before text encoding")
-            model.to("cpu")
-            ae.to("cpu")
-            torch.cuda.empty_cache()
+            with log_stage("dit_vae_offload"):
+                model.to("cpu")
+                ae.to("cpu")
+                torch.cuda.empty_cache()
             if _module_device(encoder) != target:
                 logger.info("Moving text encoder to %s for encode", target)
-                encoder.to(target)
+                with log_stage("encoder_to_gpu"):
+                    encoder.to(target)
         yield
     finally:
         # Also release the encoder on failed transfers/encoding. Do not reload
@@ -60,8 +65,10 @@ def _text_encoding(model, ae, encoder, device):
     if target.type == "cuda":
         logger.info("Restoring DiT/VAE to %s after text encoder offload", target)
         # Device-only transfers preserve FP8/INT8 weights and scale buffers.
-        model.to(target)
-        ae.to(target)
+        with log_stage("dit_to_gpu"):
+            model.to(target)
+        with log_stage("vae_to_gpu"):
+            ae.to(target)
 
 
 def roundup(value, multiple, name):
@@ -163,9 +170,10 @@ def sample(
     )
 
     with _text_encoding(model, ae, encoder, device):
-        txt, txtmask = encoder(prompts)
-        if cfg:
-            untxt, untxtmask = encoder(negative_prompts)
+        with log_stage("text_encode", batch=n, cfg=cfg):
+            txt, txtmask = encoder(prompts)
+            if cfg:
+                untxt, untxtmask = encoder(negative_prompts)
 
     # Conditioning tensors stay on GPU after the encoder leaves it.
     x, pos, mask = prepare(noise, txt.shape[1], patch, txtmask)
@@ -181,15 +189,16 @@ def sample(
     img = x
     activation_scope = nullcontext() if lora_activation is None else lora_activation
     with activation_scope:
-        for tcurr, tprev in zip(ts[:-1], ts[1:]):
-            t = torch.full((len(img),), tcurr, dtype=img.dtype, device=img.device)
-            cond = model(img=img, context=txt, t=t, pos=pos, mask=mask)
-            if cfg:
-                uncond = model(img=img, context=untxt, t=t, pos=unpos, mask=unmask)
-                v = cond + guidance * (cond - uncond)
-            else:
-                v = cond
-            img = img + (tprev - tcurr) * v
+        for step, (tcurr, tprev) in enumerate(zip(ts[:-1], ts[1:]), 1):
+            with log_stage("denoise_step", step=step, total=steps):
+                t = torch.full((len(img),), tcurr, dtype=img.dtype, device=img.device)
+                cond = model(img=img, context=txt, t=t, pos=pos, mask=mask)
+                if cfg:
+                    uncond = model(img=img, context=untxt, t=t, pos=unpos, mask=unmask)
+                    v = cond + guidance * (cond - uncond)
+                else:
+                    v = cond
+                img = img + (tprev - tcurr) * v
 
     # Unpatchify back to a latent and decode to pixels.
     img = rearrange(
@@ -200,7 +209,8 @@ def sample(
         h=height // (ae.compression * patch),
         w=width // (ae.compression * patch),
     )
-    img = ae.decode(img.to(torch.bfloat16))
+    with log_stage("vae_decode"):
+        img = ae.decode(img.to(torch.bfloat16))
     img = img.clamp(-1, 1) * 0.5 + 0.5
     img = rearrange(img * 255.0, "b c h w -> b h w c").cpu().byte().numpy()
     return [Image.fromarray(img[i]) for i in range(len(img))]

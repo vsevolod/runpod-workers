@@ -385,6 +385,7 @@ Generation needs a GPU and enough container disk for the startup downloads.
 
 ## Design notes
 
+- **Profiling:** stage logs cover adapter preparation/copy, encoder/model transfers, each denoise step and VAE work. Request logs include numeric settings and counts, without prompt/image contents. Set `KREA_PROFILE_CUDA=1` temporarily for synchronized GPU timings; the default `0` avoids synchronization overhead, so GPU stage timings can include queued work in later phases. Profiling does not change the endpoint execution timeout.
 - **VRAM (24 GB):** the text encoder starts on **CPU**. During text/grounded encoding, DiT and VAE move to CPU before the encoder moves to GPU. After positive/negative conditioning, the encoder returns to CPU, then DiT/VAE return to GPU for denoise/decode. Device transfers preserve quantized weight dtypes. This reduces peak VRAM at the cost of RAM use and CPU/GPU transfer time. If encoding fails, the encoder is offloaded and DiT/VAE stay on CPU while the handler reports the error.
 - **FP8 DiT (default):** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
 - **INT8 ConvRot DiT (`DIT_QUANT=int8_convrot`):** stock Comfy `int8_tensorwise` layout (`weight` int8 + `weight_scale` + `comfy_quant`); online Hadamard on activations when marker has `convrot`; CUDA uses `torch._int_mm` for larger token batches.

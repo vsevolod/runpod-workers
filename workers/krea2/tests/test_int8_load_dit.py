@@ -23,6 +23,7 @@ _PACKAGE_NAME = "_krea2_int8_load_dit_tests"
 def _load_pipeline_modules():
     """Load pipeline + deps under an isolated package (skip heavy TE/VAE)."""
     real = (
+        "diagnostics",
         "dit_quant",
         "convrot",
         "int8_linear",
