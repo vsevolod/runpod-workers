@@ -136,6 +136,7 @@ Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` fro
 
 ### DiT quant modes (`DIT_QUANT`)
 
+| `LORA_CACHE_DIR` | `$MODEL_DIR/lora_cache` | Local container-disk cache of requested adapters |
 | `DIT_QUANT` | DiT file (auto under `MODEL_DIR`) | Compute path |
 |-------------|-----------------------------------|--------------|
 | `fp8` (default / unset) | `krea2_turbo_fp8.safetensors` | FP8 storage, cast to bf16 on Linear forward (current production) |
@@ -150,7 +151,7 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `MODEL_DIR` | `/models/krea2` (Dockerfile) | DiT files downloaded before DiT loading |
-| `LORA_DIR` | `/runpod-volume/krea2/loras` | Directory of pre-placed LoRA `.safetensors` (scanned once at start) |
+| `LORA_DIR` | `/runpod-volume/krea2/loras` | Source directory of LoRA `.safetensors`; refreshed on requests with adapters |
 | `DIT_QUANT` | `fp8` | `fp8` or `int8_convrot` — selects DiT load + Linear runtime |
 | `DIT_PATH` | auto under `MODEL_DIR` | Override DiT safetensors path (must match `DIT_QUANT`) |
 | `VAE_PATH` | auto under `MODEL_DIR` | Override VAE safetensors path |
@@ -324,6 +325,17 @@ Optional `loras` (default `[]`, both modes):
 - Declared `type` must match file contents (no silent auto-detect). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
 - Identity edit expects the identity LoRA on the volume; running edit without it is allowed but quality will be poor.
 - Unknown names, type/content mismatch, or invalid shapes fail the job with a safe error (no `refresh_worker`).
+
+Each request copies only its nonzero-strength adapters from `LORA_DIR` to
+`LORA_CACHE_DIR` on container disk. Copying overlaps text/reference conditioning;
+loading and GPU activation wait for complete local files. A warm worker checks the
+cache again on every request, restores missing/incomplete files, and refreshes
+changed source files (size/mtime/ctime). Newly uploaded adapters are discovered
+without restarting. Copies publish atomically; a failed transfer is retryable and
+never falls back to network-backed mmap. No full-catalog download occurs.
+`stage=lora_download` logs show copies, local paths, and cache hits. Keep enough
+container disk for the base models plus the adapters used by this worker; the cache
+persists until the container is destroyed and has no automatic eviction.
 
 Example with a rank LoRA and a projector weight-diff bypass (file pre-placed on volume as `fedor_bypass.safetensors`):
 

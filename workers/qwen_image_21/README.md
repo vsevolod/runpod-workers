@@ -121,6 +121,7 @@ a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
 | `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot validated before model loading |
 | `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub repo downloaded at startup |
 | `LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` (Dockerfile) | Additional adapters on the attached volume; preserve your existing adapter path |
+| `LORA_CACHE_DIR` | `$MODEL_DIR/lora_cache` | Local container-disk cache of requested adapters |
 | `OFFLOAD` | `cpu` | `cpu` (model offload, 24 GB), `sequential` (tighter), `none` (resident on CUDA) |
 | `LOCAL_FILES_ONLY` | `1` (set by start.sh) | Inference loads only the completed local snapshot |
 | `HF_HOME` | `/models/hf` (Dockerfile) | Local HF cache; keep off the remote volume |
@@ -287,10 +288,19 @@ Both generation and edit accept the Krea 2 API format:
 ```
 
 Put compatible **Qwen-Image-2.1 transformer LoRAs** in `LORA_DIR` as
-`<name>.safetensors`. The catalog is scanned at worker startup; restart workers
-after adding files. Names are exact filename stems, without paths, URLs or
+`<name>.safetensors`. The catalog is refreshed on requests with adapters, so a living worker
+can discover newly uploaded files. Names are exact filename stems, without paths, URLs or
 the `.safetensors` suffix. Symlinks and obsolete Viggle accelerator files are excluded.
 No adapters are downloaded from request URLs.
+
+Each request stages only its selected nonzero-strength adapters to
+`LORA_CACHE_DIR` on container disk before Diffusers loads them. Warm requests
+reuse complete copies, restore missing/incomplete local files, and refresh changed
+source files (size/mtime/ctime). Transfers publish atomically and never use
+network-backed symlinks or hardlinks. `stage=lora_download` logs distinguish copies
+and cache hits. Qwen waits for adapter loading before entering its Diffusers
+pipeline. Allow container disk space for the adapters used over the worker's
+lifetime; the cache has no automatic eviction and disappears with the container.
 
 `loras` defaults to `[]`. Up to **four** unique additional adapters are allowed.
 `strength` defaults to `1.0`, must be finite and in `0..2`; zero skips the

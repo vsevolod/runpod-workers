@@ -8,6 +8,7 @@ RunPod worker pipeline. Licensed under Apache-2.0; see
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 import os
 import sys
 from dataclasses import dataclass
@@ -254,23 +255,23 @@ class Krea2Pipeline:
 
         if loras and self.loras is None:
             raise RuntimeError("LoRA manager is not configured")
-        lora_activation = self.loras.activation(loras) if loras else None
-        return sample(
-            self.dit,
-            self.ae,
-            self.encoder,
-            prompts,
-            negative_prompts=negatives,
-            device=str(self.device),
-            dtype=self.dtype,
-            width=width,
-            height=height,
-            steps=steps,
-            guidance=guidance,
-            seed=seed,
-            mu=mu,
-            lora_activation=lora_activation,
-        )
+        with self.loras.prefetch(loras) if loras else nullcontext(None) as lora_activation:
+            return sample(
+                self.dit,
+                self.ae,
+                self.encoder,
+                prompts,
+                negative_prompts=negatives,
+                device=str(self.device),
+                dtype=self.dtype,
+                width=width,
+                height=height,
+                steps=steps,
+                guidance=guidance,
+                seed=seed,
+                mu=mu,
+                lora_activation=lora_activation,
+            )
 
     @torch.inference_mode()
     def edit(
@@ -309,27 +310,27 @@ class Krea2Pipeline:
         # Edit never uses resolution-auto mu (would depend on wrong seq_len).
         if mu is None:
             mu = 1.15
-        lora_activation = self.loras.activation(loras) if loras else None
-        return sample_edit(
-            self.dit,
-            self.ae,
-            self.encoder,
-            prompt,
-            resolved,
-            negative_prompt=negative_prompt,
-            device=str(self.device),
-            dtype=self.dtype,
-            width=width,
-            height=height,
-            steps=steps,
-            guidance=guidance,
-            seed=seed,
-            mu=mu,
-            grounding_px=grounding_px,
-            ref_boost=ref_boost,
-            fit_mode=fit_mode,
-            lora_activation=lora_activation,
-        )
+        with self.loras.prefetch(loras) if loras else nullcontext(None) as lora_activation:
+            return sample_edit(
+                self.dit,
+                self.ae,
+                self.encoder,
+                prompt,
+                resolved,
+                negative_prompt=negative_prompt,
+                device=str(self.device),
+                dtype=self.dtype,
+                width=width,
+                height=height,
+                steps=steps,
+                guidance=guidance,
+                seed=seed,
+                mu=mu,
+                grounding_px=grounding_px,
+                ref_boost=ref_boost,
+                fit_mode=fit_mode,
+                lora_activation=lora_activation,
+            )
 
 
 def load_pipeline(

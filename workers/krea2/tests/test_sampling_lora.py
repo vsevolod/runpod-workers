@@ -1,7 +1,9 @@
+import contextlib
 import importlib.util
 import os
 import sys
 import tempfile
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -332,7 +334,7 @@ publisher.ready('all', root)
             result = pipe.generate("prompt")
 
         self.assertEqual(result, ["image"])
-        manager.activation.assert_not_called()
+        manager.prefetch.assert_not_called()
         self.assertIsNone(sampler.call_args.kwargs["lora_activation"])
 
     def test_legacy_positional_construction_preserves_dtype_and_base_generate(self):
@@ -392,7 +394,7 @@ publisher.ready('all', root)
     def test_generate_passes_requested_activation_to_sampler(self):
         manager = mock.Mock()
         activation = RecordingActivation([])
-        manager.activation.return_value = activation
+        manager.prefetch.return_value = contextlib.nullcontext(activation)
         pipe = self.make_pipeline(manager)
         selection = _lora.LoRASelection(
             name="adapter",
@@ -403,8 +405,42 @@ publisher.ready('all', root)
         with mock.patch.object(_pipeline, "sample", return_value=["image"]) as sampler:
             pipe.generate("prompt", loras=(selection,))
 
-        manager.activation.assert_called_once_with((selection,))
+        manager.prefetch.assert_called_once_with((selection,))
         self.assertIs(sampler.call_args.kwargs["lora_activation"], activation)
+
+    def test_generate_and_edit_overlap_selected_copy_with_conditioning(self):
+        from safetensors.torch import save_file
+        import shared.adapter_cache as cache_module
+        for method in ("generate", "edit"):
+            with self.subTest(method=method), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / "adapter.safetensors"
+                save_file({"linear.lora_down.weight": torch.ones(1, 2),
+                           "linear.lora_up.weight": torch.ones(2, 1)}, str(source))
+                model = nn.Module()
+                model.linear = nn.Linear(2, 2, bias=False)
+                model.linear.weight.data.zero_()
+                manager = _runtime.LoRAManager(model, _lora.LoRACatalog.scan(root), torch.float32, cache_dir=root / "local")
+                pipe = self.make_pipeline(manager)
+                entered, release = threading.Event(), threading.Event()
+                copyfile = cache_module.shutil.copyfile
+                def copy(source, destination):
+                    entered.set()
+                    if not release.wait(3):
+                        raise TimeoutError("conditioning did not overlap the copy")
+                    return copyfile(source, destination)
+                def sampler(*args, lora_activation, **kwargs):
+                    self.assertTrue(entered.wait(3))
+                    self.assertFalse(list((root / "local").rglob("*.safetensors")))
+                    release.set()
+                    with lora_activation:
+                        torch.testing.assert_close(model.linear(torch.ones(1, 2)), torch.full((1, 2), 2.0))
+                    return ["image"]
+                with mock.patch.object(cache_module.shutil, "copyfile", side_effect=copy), mock.patch.object(
+                    _pipeline, "sample" if method == "generate" else "sample_edit", side_effect=sampler
+                ):
+                    arguments = {"sources": [object()]} if method == "edit" else {}
+                    self.assertEqual(getattr(pipe, method)("prompt", loras=manager.normalize([{"name": "adapter"}]), **arguments), ["image"])
 
     def test_load_pipeline_scans_default_lora_directory_once(self):
         with tempfile.TemporaryDirectory() as directory:

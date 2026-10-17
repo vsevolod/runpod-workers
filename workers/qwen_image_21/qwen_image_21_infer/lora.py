@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import sys
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import RLock
 from types import MappingProxyType
+
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.adapter_cache import AdapterCache
 
 from .runtime_config import is_obsolete_accelerator_lora
 
@@ -41,15 +48,16 @@ def _safe_name(name) -> bool:
 
 
 class LoRACatalog:
-    def __init__(self, paths):
+    def __init__(self, paths, root=None):
         self._paths = MappingProxyType(dict(paths))
+        self.root = root
 
     @classmethod
     def scan(cls, directory: Path | str):
         root = Path(directory)
         if not root.exists():
             logger.warning("LoRA directory does not exist: %s", root)
-            return cls({})
+            return cls({}, root=root)
         if not root.is_dir():
             raise RuntimeError(f"LoRA path is not a directory: {root}")
         paths = {}
@@ -60,7 +68,7 @@ class LoRACatalog:
                 raise RuntimeError(f"Invalid LoRA ID: {path.stem!r}")
             paths[path.stem] = path
         logger.info("Discovered %d additional LoRA(s) in %s", len(paths), root)
-        return cls(paths)
+        return cls(paths, root=root)
 
     def normalize(self, raw) -> tuple[LoRASelection, ...]:
         if raw is None:
@@ -110,17 +118,37 @@ class LoRACatalog:
 class LoRAManager:
     """Serialize inference and remove additional adapters after every job."""
 
-    def __init__(self, pipe, catalog: LoRACatalog, *, offload: str | None = None):
+    def __init__(
+        self, pipe, catalog: LoRACatalog, *, offload: str | None = None,
+        cache_dir: Path | str | None = None,
+    ):
         self.pipe = pipe
         self.catalog = catalog
         self._lock = RLock()
         self._offload = offload
+        self._cache = AdapterCache(
+            cache_dir or os.environ.get("LORA_CACHE_DIR")
+            or Path(os.environ.get("MODEL_DIR", "/models/qwen_image_21_turbo")) / "lora_cache"
+        )
 
     def normalize(self, raw):
+        if raw and self.catalog.root is not None:
+            self.catalog = LoRACatalog.scan(self.catalog.root)
         return self.catalog.normalize(raw)
 
     @contextmanager
     def activate(self, selections):
+        for selection in selections:
+            if selection.path.is_symlink() or not selection.path.is_file():
+                raise LoRAError(f"LoRA file is unavailable: {selection.name}")
+        with self._cache.prefetch(item.path for item in selections) as pending:
+            paths = pending.result()
+            local = tuple(replace(item, path=path) for item, path in zip(selections, paths))
+            with self._activate_local(local):
+                yield
+
+    @contextmanager
+    def _activate_local(self, selections):
         with self._lock:
             names = []
             try:

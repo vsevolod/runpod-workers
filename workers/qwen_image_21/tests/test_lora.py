@@ -78,7 +78,25 @@ class LoRATests(unittest.TestCase):
             (self.root / f"{name}.safetensors").write_bytes(b"weights")
         self.catalog = LoRACatalog.scan(self.root)
         self.pipe = Pipeline()
-        self.manager = LoRAManager(self.pipe, self.catalog)
+        self.manager = LoRAManager(self.pipe, self.catalog, cache_dir=self.root / "local")
+
+    def test_warm_requests_stage_only_selected_adapters_and_restore_deleted_files(self):
+        for name in ("style", "character", "style"):
+            selected = self.manager.normalize([{"name": name}])
+            with self.manager.activate(selected):
+                source, options = self.pipe.reads[-1]
+                local = Path(source) / options["weight_name"]
+                self.assertTrue(local.is_relative_to(self.root / "local"))
+                self.assertEqual(local.read_bytes(), b"weights")
+                local.unlink()
+        self.assertFalse(list((self.root / "local").rglob("*viggle*.safetensors")))
+
+    def test_warm_worker_discovers_new_requested_adapter(self):
+        (self.root / "new.safetensors").write_bytes(b"new weights")
+        selected = self.manager.normalize([{"name": "new"}])
+        with self.manager.activate(selected):
+            source, options = self.pipe.reads[-1]
+            self.assertEqual((Path(source) / options["weight_name"]).read_bytes(), b"new weights")
 
     def test_krea_api_defaults_and_zero_strength(self):
         selected = self.catalog.normalize([{"name": "style"}])
@@ -177,7 +195,7 @@ class LoRATests(unittest.TestCase):
             with self.subTest(mode=mode):
                 restore = Mock()
                 setattr(self.pipe, method, restore)
-                manager = LoRAManager(self.pipe, self.catalog, offload=mode)
+                manager = LoRAManager(self.pipe, self.catalog, offload=mode, cache_dir=self.root / "local")
                 self.pipe.fail_load = True
                 with (
                     self.assertRaises(LoRAError),

@@ -73,7 +73,7 @@ class DiffusersLoRATests(unittest.TestCase):
                 },
                 transformer_lora_adapter_metadata=config.to_dict(),
             )
-        self.manager = LoRAManager(self.pipe, LoRACatalog.scan(self.tmp.name))
+        self.manager = LoRAManager(self.pipe, LoRACatalog.scan(self.tmp.name), cache_dir=Path(self.tmp.name) / "local")
         self.input = torch.ones(1, 8)
 
     def assert_output(self, value):
@@ -149,7 +149,7 @@ class DiffusersLoRATests(unittest.TestCase):
                         f"transformer.{key}": value for key, value in config.items()
                     })}
                 save_file(state, str(Path(self.tmp.name) / "fused.safetensors"), metadata=metadata)
-                manager = LoRAManager(pipe, LoRACatalog.scan(self.tmp.name))
+                manager = LoRAManager(pipe, LoRACatalog.scan(self.tmp.name), cache_dir=Path(self.tmp.name) / "local")
                 selected = manager.normalize([{"name": "fused", "strength": 0.6}])
                 # Independent fused SwiGLU calculation, including alpha/rank scaling.
                 gate = torch.nn.functional.linear(x, mlp.gate_layer.weight) + scale * (x @ a.T @ b_gate.T)

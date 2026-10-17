@@ -1,3 +1,4 @@
+import os
 import base64
 import importlib.util
 import sys
@@ -55,6 +56,9 @@ class LoRAAPITests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        cache_env = patch.dict(os.environ, {"LORA_CACHE_DIR": str(Path(self.tmp.name) / "local")})
+        cache_env.start()
+        self.addCleanup(cache_env.stop)
         (Path(self.tmp.name) / "style.safetensors").write_bytes(b"weights")
         self.pipe = InferencePipeline()
         runtime = QwenImage21Runtime(self.pipe, LoRACatalog.scan(self.tmp.name))

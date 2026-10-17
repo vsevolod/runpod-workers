@@ -2,6 +2,7 @@ import importlib.util
 import os
 import sys
 import threading
+import tempfile
 import types
 import unittest
 import weakref
@@ -739,38 +740,35 @@ class LoRAManagerTest(unittest.TestCase):
         self.assertIs(actual, expected)
         normalize.assert_called_once_with([{"name": "adapter"}], catalog)
 
-    def test_activation_loads_only_the_requested_selections_eagerly(self):
-        class FakeLoader:
-            def __init__(self, prepared):
-                self.calls = []
-                self.prepared = prepared
-
-            def load(self, selections):
-                self.calls.append(selections)
-                return self.prepared
-
-        model = nn.Module()
-        model.linear = nn.Linear(2, 2, bias=False)
-        catalog = LoRACatalog(root=Path("/unused"), _paths={})
-        manager = LoRAManager(model, catalog, torch.float32)
-        prepared = _prepared(
-            "adapter",
-            1.0,
-            _layer("linear", torch.ones(1, 2), torch.ones(2, 1)),
-        )
-        fake_loader = FakeLoader((prepared,))
-        manager._loader = fake_loader
-        selections = (
-            LoRASelection(
-                name="adapter", strength=1.0, path=Path("/unused/adapter")
-            ),
-        )
-
-        self.assertEqual(fake_loader.calls, [])
-        activation = manager.activation(selections)
-        self.assertEqual(fake_loader.calls, [selections])
-        with activation:
-            self.assertEqual(len(getattr(model.linear, _runtime._ACTIVE_ATTR)), 1)
+    def test_request_prefetch_local_files_and_warm_missing_file_recovery(self):
+        from safetensors.torch import save_file
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "network"
+            source.mkdir()
+            for name in ("a", "b", "unused"):
+                save_file({"linear.lora_down.weight": torch.ones(1, 2),
+                           "linear.lora_up.weight": torch.ones(2, 1)}, str(source / f"{name}.safetensors"))
+            model = nn.Module()
+            model.linear = nn.Linear(2, 2, bias=False)
+            model.linear.weight.data.zero_()
+            manager = LoRAManager(model, LoRACatalog.scan(source), torch.float32, cache_dir=root / "local")
+            for name in ("a", "b", "a"):
+                selections = manager.normalize([{"name": name}])
+                with manager.prefetch(selections) as activation:
+                    # The request can encode text while files are copied; weights
+                    # must remain inactive until denoising enters this scope.
+                    torch.testing.assert_close(model.linear(torch.ones(1, 2)), torch.zeros(1, 2))
+                    with activation:
+                        torch.testing.assert_close(model.linear(torch.ones(1, 2)), torch.full((1, 2), 2.0))
+                        local = list((root / "local").rglob(f"{name}.safetensors"))
+                        self.assertEqual(len(local), 1)
+                        self.assertNotEqual(local[0].stat().st_ino, (source / f"{name}.safetensors").stat().st_ino)
+                local[0].unlink()
+            self.assertFalse(list((root / "local").rglob("unused.safetensors")))
+            save_file({"linear.lora_down.weight": torch.ones(1, 2),
+                       "linear.lora_up.weight": torch.ones(2, 1)}, str(source / "new.safetensors"))
+            self.assertEqual(manager.normalize([{"name": "new"}])[0].name, "new")
 
 
 if __name__ == "__main__":

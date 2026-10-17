@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import threading
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Sequence
+
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.adapter_cache import AdapterCache
 
 import torch
 import torch.nn as nn
@@ -289,12 +298,20 @@ class LoRAManager:
         model: nn.Module,
         catalog: LoRACatalog,
         compute_dtype: torch.dtype,
+        *,
+        cache_dir: Path | str | None = None,
     ) -> None:
         self.catalog = catalog
+        self._cache = AdapterCache(
+            cache_dir or os.environ.get("LORA_CACHE_DIR")
+            or Path(os.environ.get("MODEL_DIR", "/models/krea2")) / "lora_cache"
+        )
         self._loader = LoRALoader(model)
         self._registry = RuntimeLinearRegistry.patch(model, compute_dtype)
 
     def normalize(self, raw: object) -> tuple[LoRASelection, ...]:
+        if raw and isinstance(self.catalog, LoRACatalog):
+            self.catalog = LoRACatalog.scan(self.catalog.root)
         return normalize_lora_requests(raw, self.catalog)
 
     def load_prepared(
@@ -311,6 +328,17 @@ class LoRAManager:
             )
         return prepared
 
-    def activation(self, selections: Sequence[LoRASelection]) -> LoRAActivation:
-        prepared = self.load_prepared(selections)
-        return self._registry.activate(prepared)
+    @contextmanager
+    def prefetch(self, selections: Sequence[LoRASelection]):
+        """Overlap selected adapter I/O with conditioning; join on every exit."""
+        with self._cache.prefetch(item.path for item in selections) as pending:
+            @contextmanager
+            def activate_local():
+                local = tuple(
+                    replace(item, path=path)
+                    for item, path in zip(selections, pending.result())
+                )
+                prepared = self.load_prepared(local)
+                with self._registry.activate(prepared) as activation:
+                    yield activation
+            yield activate_local()
