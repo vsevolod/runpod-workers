@@ -9,7 +9,7 @@ Diffusers `QwenImage21Pipeline`. No ComfyUI. Same handler shape as
 | **Model** | [Qwen/Qwen-Image-2.1-Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo), a full bf16 checkpoint with an embedded 8-step sampling schedule |
 | **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `da1d382` (PR [#14950](https://github.com/huggingface/diffusers/pull/14950)). Both `sample_sigmas` and the scheduler come from the checkpoint |
 | **Text encoder** | Qwen3-VL 8B, loaded with the snapshot |
-| **VAE** | 64-channel RGBA VAE shipped in the same repo. The Qwen-Image / Krea 2 VAE is not interchangeable |
+| **VAE** | [Texture-Fix VAE](https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1), a compatible 64-channel RGBA `AutoencoderKLQwenImage21`. Set `QWEN_VAE=original` to use the checkpoint's VAE. The Qwen-Image / Krea 2 VAE is not interchangeable |
 | **GPU** | **24 GB** with `OFFLOAD=cpu` at 1024. Native 2048 wants a larger GPU or `OFFLOAD=sequential` |
 | **License** | [Qwen Research License](https://github.com/QwenLM/Qwen-Image-2.1/blob/main/LICENSE). Research and evaluation only, unless you have a commercial agreement with Qwen |
 
@@ -34,8 +34,8 @@ Hub transfers, cache/token setup and timing use the shared
 `download_weights.py` keeps Qwen's model selection and Turbo snapshot validation.
 
 Use an **80 GB container disk**. On every fresh worker, `start.sh` starts the
-shared bootstrap and a separate CPU-only downloader. The official snapshot
-(about 32.5 GB) downloads directly from Hugging Face to
+shared bootstrap and a separate CPU-only downloader. The required official components
+and selected VAE (about 32.5 GB together) download directly from Hugging Face to
 `/models/qwen_image_21_turbo` while the handler imports Torch/Diffusers. The
 pipeline waits for the complete, validated Turbo snapshot after imports and
 CUDA probing, before inspecting model files. Its existing mmap/CPU-offload
@@ -45,6 +45,24 @@ Downloads use a fixed repo commit for the session and the HF cache stays local
 at `/models/hf`. `LOCAL_FILES_ONLY=1` prevents implicit runtime downloads.
 A failed download or model load aborts startup and reaps the downloader. An
 interrupted transfer can resume in the same container.
+
+By default, the downloader skips the unused stock `vae/` and downloads only
+the Diffusers config and weights of `madebyollin/texture-fix-vae-for-qwen-image-2.1`
+into `$MODEL_DIR/texture_fix_vae/`. It publishes the snapshot as ready after
+both downloads complete. The loader supplies this VAE to `from_pretrained`
+before CPU/GPU placement, preserving bf16, mmap and CPU offload. No runtime
+Hub access is needed with `LOCAL_FILES_ONLY=1`.
+
+Texture-Fix is an unofficial VAE finetune intended to improve fine textures
+and checkerboard artifacts. Its author reports improved perceptual quality
+with slightly lower reconstruction accuracy; improvement on our edits still
+needs a GPU comparison. It does not change the Turbo transformer, text encoder,
+LoRAs, guidance, or the checkpoint's eight-step `sample_sigmas`.
+
+For an A/B comparison, set `QWEN_VAE=original` and replace the worker. Startup
+will download the original VAE into `vae/`. Restore `QWEN_VAE=texture-fix` and
+replace the worker to switch back. Use the same prompt, references, seed,
+resolution and LoRAs in both runs. The choice is fixed for the worker lifetime.
 
 The handler memory-maps the **local** weights (`QWEN_DISABLE_MMAP=0`). Model
 download time and the final wait are logged as `model_download` and
@@ -76,7 +94,7 @@ downloads from the Hub rather than copying this snapshot.
   model_index.json
   transformer/
   text_encoder/
-  vae/
+  texture_fix_vae/    # default; vae/ when QWEN_VAE=original
   processor files…
   scheduler/
   loras/my_style.safetensors
@@ -97,10 +115,12 @@ python workers/qwen_image_21/download_weights.py \
 prefers that directory when `model_index.json` is present, otherwise it loads
 `MODEL_ID` from the Hub. The local snapshot and loaded pipeline must contain
 a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
+Manual downloads also honor `QWEN_VAE`; use `QWEN_VAE=original` when a complete
+unmodified Turbo snapshot is required.
 
 ## Migrating from the Viggle worker
 
-1. Download the **full Turbo snapshot** into `/runpod-volume/qwen_image_21_turbo`
+1. Download **Turbo and the selected VAE** into `/runpod-volume/qwen_image_21_turbo`
    with the command above. Keep the old snapshot in its existing directory for
    rollback; the downloader refuses to overwrite a base-model snapshot.
 2. Rebuild the image with the new pinned Diffusers dependency. In the RunPod
@@ -120,6 +140,7 @@ a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
 |----------|---------|---------|
 | `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot validated before model loading |
 | `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub repo downloaded at startup |
+| `QWEN_VAE` | `texture-fix` | Selected VAE: `texture-fix` or `original`; restart the worker to change it |
 | `LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` (Dockerfile) | Additional adapters on the attached volume; preserve your existing adapter path |
 | `LORA_CACHE_DIR` | `$MODEL_DIR/lora_cache` | Local container-disk cache of requested adapters |
 | `OFFLOAD` | `cpu` | `cpu` (model offload, 24 GB), `sequential` (tighter), `none` (resident on CUDA) |
@@ -168,7 +189,7 @@ Runtime logs include library versions, Torch CPU thread count, GPU name,
 compute capability and architectures compiled into Torch.
 
 Separate stages cover imports, source resolution, catalog scanning, base model
-loading, Turbo sampling-config validation, CUDA probing,
+loading (including `vae_load` for Texture-Fix), Turbo sampling-config validation, CUDA probing,
 and placement on GPU or CPU offload. Inference and image delivery also have
 timings. The last `begin` without a matching `done` identifies the unfinished
 stage. No prompts or image contents are logged by these diagnostics.

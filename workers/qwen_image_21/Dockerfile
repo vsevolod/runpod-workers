@@ -61,6 +61,7 @@ ENV MODEL_DIR=/models/qwen_image_21_turbo \
     HF_HOME=/models/hf \
     LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras \
     QWEN_DISABLE_MMAP=0 \
+    QWEN_VAE=texture-fix \
     OFFLOAD=cpu \
     PYTHONPATH=/app \
     TORCH_COMPILE_DISABLE=1 \

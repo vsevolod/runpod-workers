@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import sys
 import tempfile
 import types
@@ -28,6 +29,11 @@ def _load():
 
 
 class DownloadWeightsTests(unittest.TestCase):
+    def setUp(self):
+        env = patch.dict(os.environ, {"QWEN_VAE": "original"})
+        env.start()
+        self.addCleanup(env.stop)
+
     @classmethod
     def setUpClass(cls):
         cls.mod = _load()
@@ -108,6 +114,59 @@ class DownloadWeightsTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as ctx:
                 self.mod.main(["--help"])
         self.assertEqual(ctx.exception.code, 0)
+
+    def test_default_downloads_texture_fix_locally_before_publishing_ready(self):
+        calls = []
+        hub = types.ModuleType("huggingface_hub")
+        hub.HfApi = lambda **kwargs: types.SimpleNamespace(model_info=lambda repo: types.SimpleNamespace(sha="a" * 40))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            def snapshot(**kwargs):
+                self.assertFalse((state / "all.json").exists())
+                calls.append(kwargs)
+                path = Path(kwargs["local_dir"])
+                path.mkdir(parents=True, exist_ok=True)
+                if kwargs["repo_id"] == "Qwen/Qwen-Image-2.1-Turbo":
+                    (path / "model_index.json").write_text(json.dumps({
+                        "_class_name": "QwenImage21Pipeline",
+                        "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41],
+                    }))
+                return str(path)
+            hub.snapshot_download = snapshot
+            with patch.dict(os.environ, {}, clear=True), patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(self.mod.main(["--output", str(root / "model"), "--prefetch-state-dir", str(state)]), 0)
+            self.assertEqual(len(calls), 2)
+            # Skip the unused stock VAE and the alternative repo's ComfyUI/images files.
+            self.assertNotIn("vae/*", calls[0]["allow_patterns"])
+            self.assertIn("processor/*", calls[0]["allow_patterns"])
+            self.assertEqual(calls[1]["repo_id"], "madebyollin/texture-fix-vae-for-qwen-image-2.1")
+            self.assertEqual(calls[1]["local_dir"], str(root / "model" / "texture_fix_vae"))
+            self.assertEqual(calls[1]["allow_patterns"], ["config.json", "diffusion_pytorch_model.safetensors"])
+            self.assertTrue((state / "all.json").exists())
+
+    def test_texture_fix_download_failure_does_not_publish_ready(self):
+        hub = types.ModuleType("huggingface_hub")
+        hub.HfApi = lambda **kwargs: types.SimpleNamespace(model_info=lambda repo: types.SimpleNamespace(sha="a" * 40))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            def snapshot(**kwargs):
+                if kwargs["repo_id"] != "Qwen/Qwen-Image-2.1-Turbo":
+                    raise OSError("Download interrupted")
+                path = Path(kwargs["local_dir"])
+                path.mkdir(parents=True, exist_ok=True)
+                (path / "model_index.json").write_text(json.dumps({
+                    "_class_name": "QwenImage21Pipeline",
+                    "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41],
+                }))
+                return str(path)
+            hub.snapshot_download = snapshot
+            with patch.dict(os.environ, {"QWEN_VAE": "texture-fix"}), patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(self.mod.main(["--output", str(root / "model"), "--prefetch-state-dir", str(state)]), 1)
+            self.assertFalse((state / "all.json").exists())
 
 
 if __name__ == "__main__":

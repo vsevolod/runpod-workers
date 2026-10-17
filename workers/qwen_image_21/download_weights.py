@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download the official Qwen-Image-2.1-Turbo snapshot before inference starts.
+"""Download Qwen-Image-2.1-Turbo and the selected VAE before inference starts.
 
 The container entrypoint runs this on every fresh worker. For a manual download:
 
@@ -27,10 +27,14 @@ from shared.prefetch import ComponentPublisher
 MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
 
 try:
-    from qwen_image_21_infer.runtime_config import validate_turbo_snapshot
+    from qwen_image_21_infer.runtime_config import (
+        TEXTURE_FIX_VAE_DIR, TEXTURE_FIX_VAE_ID, resolve_vae_variant, validate_turbo_snapshot,
+    )
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from qwen_image_21_infer.runtime_config import validate_turbo_snapshot
+    from qwen_image_21_infer.runtime_config import (
+        TEXTURE_FIX_VAE_DIR, TEXTURE_FIX_VAE_ID, resolve_vae_variant, validate_turbo_snapshot,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Hugging Face repo id (default: {MODEL_ID})",
     )
     args = parser.parse_args(argv)
+
+    try:
+        vae_variant = resolve_vae_variant()
+    except ValueError as err:
+        parser.error(str(err))
 
     out = Path(args.output).expanduser().resolve()
     if (out / "model_index.json").exists():
@@ -55,8 +64,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with ModelDownloader(out, hf_home=args.hf_home, token=args.token,
                              pin_revisions=bool(args.prefetch_state_dir)) as downloads:
-            path = downloads.snapshot(args.model_id, local_dir=out)
+            # Supplying the alternative VAE to from_pretrained avoids loading
+            # the stock VAE. Do not download those unused weights either.
+            patterns = None if vae_variant == "original" else [
+                "model_index.json", "scheduler/*", "processor/*",
+                "text_encoder/*", "transformer/*",
+            ]
+            path = downloads.snapshot(args.model_id, local_dir=out, allow_patterns=patterns)
             validate_turbo_snapshot(path)
+            if vae_variant == "texture-fix":
+                downloads.snapshot(
+                    TEXTURE_FIX_VAE_ID, local_dir=out / TEXTURE_FIX_VAE_DIR,
+                    allow_patterns=["config.json", "diffusion_pytorch_model.safetensors"],
+                )
     except ValueError as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
@@ -74,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Endpoint env:")
     print(f"  MODEL_DIR={out}")
     print(f"  MODEL_ID={args.model_id}")
+    print(f"  QWEN_VAE={vae_variant}")
     print("  OFFLOAD=cpu")
     print("  LOCAL_FILES_ONLY=1")
     return 0

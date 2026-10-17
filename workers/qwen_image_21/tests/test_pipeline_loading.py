@@ -175,6 +175,45 @@ HAS_LOADING_DEPS = all(
 
 @unittest.skipUnless(HAS_LOADING_DEPS, "Install worker dependencies for loading integration tests")
 class RealPipelineLoadingTests(unittest.TestCase):
+    def test_alternative_vae_replaces_stock_weights_and_preserves_schedule(self):
+        import torch
+        from diffusers import AutoencoderKLQwenImage21, DiffusionPipeline, FlowMatchEulerDiscreteScheduler
+
+        class TinyPipeline(DiffusionPipeline):
+            def __init__(self, vae, scheduler, sample_sigmas=None):
+                super().__init__()
+                self.register_modules(vae=vae, scheduler=scheduler)
+                self.register_to_config(sample_sigmas=sample_sigmas)
+
+        def make_vae():
+            return AutoencoderKLQwenImage21(
+                base_dim=4, decoder_base_dim=4, dim_mult=[1, 1, 1, 1, 1],
+                num_res_blocks=1, z_dim=4, latents_mean=[0.] * 4,
+                latents_std=[1.] * 4, in_channels=4, out_channels=4,
+                is_residual=True, temperal_downsample=[False, True, True, True],
+            ).to(torch.bfloat16)
+
+        schedule = [1, .98, .95, .92, .89, .84, .70, .41]
+        original = TinyPipeline(make_vae(), FlowMatchEulerDiscreteScheduler(shift=3), schedule)
+        alternative = make_vae()
+        with torch.no_grad():
+            alternative.decoder.conv_out.bias.fill_(0.25)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp, "base")
+            vae = Path(tmp, "texture_fix_vae")
+            original.save_pretrained(base)
+            alternative.save_pretrained(vae)
+            # A fresh texture-fix deployment does not download the stock VAE.
+            import shutil
+            shutil.rmtree(base / "vae")
+            restored = pipeline._load_base_pipeline(
+                TinyPipeline, str(base), local_files_only=True,
+                disable_mmap=False, vae_source=str(vae),
+            )
+            torch.testing.assert_close(restored.vae.decoder.conv_out.bias, torch.full_like(restored.vae.decoder.conv_out.bias, 0.25))
+            self.assertEqual(restored.config.sample_sigmas, schedule)
+            self.assertEqual(restored.scheduler.config.shift, 3)
+
     def test_both_modes_preserve_real_qwen_weights_and_change_loading_backend(self):
         import torch
 

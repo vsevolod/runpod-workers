@@ -11,7 +11,8 @@ DEFAULT_MODEL_ID = "Qwen/Qwen-Image-2.1-Turbo"
 DEFAULT_MODEL_DIR = "/runpod-volume/qwen_image_21_turbo"
 LORA_DIR_NAME = "loras"
 TURBO_STEPS = 8
-
+TEXTURE_FIX_VAE_ID = "madebyollin/texture-fix-vae-for-qwen-image-2.1"
+TEXTURE_FIX_VAE_DIR = "texture_fix_vae"
 _OFFLOAD_ALIASES = {
     "cpu": "cpu",
     "model": "cpu",
@@ -20,6 +21,14 @@ _OFFLOAD_ALIASES = {
     "cuda": "none",
     "gpu": "none",
 }
+
+
+def resolve_vae_variant(value: str | None = None) -> str:
+    raw = value if value is not None else os.environ.get("QWEN_VAE", "texture-fix")
+    variant = raw.strip().lower()
+    if variant not in {"texture-fix", "original"}:
+        raise ValueError(f"QWEN_VAE must be texture-fix or original (got {variant!r})")
+    return variant
 
 
 def is_obsolete_accelerator_lora(filename: str) -> bool:

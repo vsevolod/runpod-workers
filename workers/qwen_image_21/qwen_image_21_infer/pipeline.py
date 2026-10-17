@@ -18,10 +18,13 @@ from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
     DEFAULT_MODEL_DIR,
     LORA_DIR_NAME,
+    TEXTURE_FIX_VAE_DIR,
+    TEXTURE_FIX_VAE_ID,
     parse_disable_mmap,
     parse_local_files_only,
     resolve_model_source,
     resolve_offload,
+    resolve_vae_variant,
     validate_turbo_config,
 )
 
@@ -72,9 +75,18 @@ def load_pipeline(
         local_files_only = parse_local_files_only()
         mode = resolve_offload(offload)
         disable_mmap = parse_disable_mmap()
+        vae_variant = resolve_vae_variant()
         directory = Path(
             model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
         )
+        vae_source = None
+        if vae_variant == "texture-fix":
+            vae_directory = directory / TEXTURE_FIX_VAE_DIR
+            vae_source = (
+                str(vae_directory)
+                if local_files_only or (vae_directory / "config.json").is_file()
+                else TEXTURE_FIX_VAE_ID
+            )
         lora_directory = Path(os.environ.get("LORA_DIR") or directory / LORA_DIR_NAME)
     with log_stage("lora_catalog"):
         lora_catalog = LoRACatalog.scan(lora_directory)
@@ -91,6 +103,7 @@ def load_pipeline(
             source,
             local_files_only=local_files_only,
             disable_mmap=disable_mmap,
+            vae_source=vae_source,
         )
     # Keep both the scheduler and sample_sigmas supplied by the checkpoint.
     # Older Diffusers drops sample_sigmas at load time, which must fail visibly.
@@ -109,16 +122,30 @@ def load_pipeline(
             pipe.to("cuda")
 
     logger.info(
-        "Qwen-Image-2.1-Turbo ready (offload=%s, steps=%s)",
-        mode, len(pipe.config["sample_sigmas"]),
+        "Qwen-Image-2.1-Turbo ready (offload=%s, steps=%s, vae=%s)",
+        mode, len(pipe.config["sample_sigmas"]), vae_variant,
     )
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
 
 
-def _load_base_pipeline(pipe_class, source: str, *, local_files_only: bool, disable_mmap: bool):
+def _load_base_pipeline(
+    pipe_class, source: str, *, local_files_only: bool, disable_mmap: bool,
+    vae_source: str | None = None,
+):
     import torch
 
     components = {}
+    if vae_source is not None:
+        from diffusers import AutoencoderKLQwenImage21
+
+        with log_stage("vae_load"):
+            logger.info("Loading texture-fix VAE from %s", vae_source)
+            components["vae"] = AutoencoderKLQwenImage21.from_pretrained(
+                vae_source,
+                torch_dtype=torch.bfloat16,
+                local_files_only=local_files_only,
+                disable_mmap=disable_mmap,
+            )
     if disable_mmap:
         from transformers import Qwen3VLForConditionalGeneration
 
