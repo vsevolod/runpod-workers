@@ -57,8 +57,9 @@ docker build -f workers/lora_downloader/Dockerfile -t runpod-lora-downloader .
   my_style.safetensors   # krea2 LoRA id = my_style
 ```
 
-After new files appear, **restart warm krea2 workers** so they re-scan the
-allowlist (krea2 catalogs stems only at process start).
+Krea2 and Qwen workers refresh their allowlists on requests with adapters. New
+files are discovered without restarting warm workers; only selected adapters are
+copied from this volume into each worker's local cache.
 
 ## Env
 

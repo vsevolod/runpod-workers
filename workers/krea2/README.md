@@ -104,9 +104,10 @@ a datacenter. The default startup downloads directly to container disk.
 Place Krea 2 adapter `.safetensors` files in `loras/` (or `$LORA_DIR`): standard
 rank LoRA and/or full `weight_diff` files (e.g. Fedor-style
 `diffusion_model.txtfusion.projector.diff`). The worker scans **only top-level**
-`*.safetensors` stems at process start into an allowlist; files are loaded only
-when selected for a job. Request `type` must match each file’s tensor layout.
-After adding or removing adapters, restart warm workers so they re-scan.
+`*.safetensors` stems into an allowlist at startup and refreshes it on requests
+with adapters; files are copied locally and loaded only when selected for a job.
+Request `type` must match each file’s tensor layout. Warm workers discover added
+or removed adapters without a restart.
 
 Bootstrap on a Pod with the volume attached:
 
