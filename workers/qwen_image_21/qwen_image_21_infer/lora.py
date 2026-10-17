@@ -185,6 +185,7 @@ class LoRAManager:
         except Exception:
             logger.exception("Could not read LoRA %s", selection.name)
             raise LoRAError(f"Could not load LoRA: {selection.name}") from None
+        state = _normalize_transformer_prefix(state, selection.name)
         state, metadata = _split_fused_mlp_lora(state, metadata, selection.name)
         self._validate(state, selection.name)
         attached = False
@@ -255,6 +256,21 @@ class LoRAManager:
                 or outputs != module.out_features
             ):
                 invalid("weight shape mismatch")
+
+
+def _normalize_transformer_prefix(state, name):
+    """Undo the extra prefix Diffusers adds to already-prefixed alpha adapters.
+
+    Retain the converter's A/B tensors and metadata without rescaling them,
+    including any alpha scaling it folded into external down/up weights.
+    """
+    converted = {}
+    for key, tensor in state.items():
+        target = key.removeprefix("transformer.") if key.startswith("transformer.transformer.") else key
+        if target in converted:
+            raise LoRAError(f"Invalid LoRA {name}: conflicting transformer prefixes")
+        converted[target] = tensor
+    return converted
 
 
 def _split_fused_mlp_lora(state, metadata, name):

@@ -261,6 +261,13 @@ class LoRATests(unittest.TestCase):
                     self.fail("invalid fused weights must not generate")
                 self.assertEqual(self.pipe.loaded, set())
 
+    def test_duplicate_prefix_cannot_silently_overwrite_canonical_weights(self):
+        self.pipe.state["transformer.transformer.linear.lora_A.weight"] = Tensor(2, 8)
+        with self.assertRaisesRegex(LoRAError, "conflicting transformer prefixes"):
+            with self.manager.activate(self.catalog.normalize([{"name": "style"}])):
+                self.fail("ambiguous weights must not generate")
+        self.assertEqual(self.pipe.loaded, set())
+
 
 if __name__ == "__main__":
     unittest.main()
