@@ -1,80 +1,11 @@
-"""RunPod input validation schema for Qwen-Image-2.1."""
+"""qwen_image_21 API schema, generated from the shared contract."""
 
+import sys
+from pathlib import Path
 
-def _canvas_side(value: int) -> bool:
-    return isinstance(value, int) and 256 <= value <= 2752 and value % 32 == 0
+workers_dir = Path(__file__).resolve().parents[1]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.api import QWEN_API
 
-
-def _optional_resolution(value) -> bool:
-    return value is None or _canvas_side(value)
-
-
-INPUT_SCHEMA = {
-    "loras": {
-        "type": list,
-        "required": False,
-        "default": [],
-    },
-    "type": {
-        "type": str,
-        "required": False,
-        "default": "image_generate",
-    },
-    "prompt": {
-        "type": str,
-        "required": True,
-    },
-    "negative_prompt": {
-        "type": str,
-        "required": False,
-        "default": None,
-    },
-    "width": {
-        "type": int,
-        "required": False,
-        "default": 1024,
-        "constraints": _canvas_side,
-    },
-    "height": {
-        "type": int,
-        "required": False,
-        "default": 1024,
-        "constraints": _canvas_side,
-    },
-    "seed": {
-        "type": int,
-        "required": False,
-        "default": None,
-    },
-    "num_inference_steps": {
-        "type": int,
-        "required": False,
-        "default": 8,
-        "constraints": lambda steps: type(steps) is int and steps == 8,
-    },
-    # Maps to Diffusers true_cfg_scale. Values <= 1 leave classifier-free guidance off.
-    "guidance_scale": {
-        "type": float,
-        "required": False,
-        "default": 1.0,
-    },
-    "num_images": {
-        "type": int,
-        "required": False,
-        "default": 1,
-        "constraints": lambda count: isinstance(count, int) and 1 <= count <= 4,
-    },
-    "images": {
-        "type": list,
-        "required": False,
-        "default": [],
-    },
-    # Output canvas area when edit width/height are omitted; references stay native.
-    # None follows the last reference's native size (rounded to multiples of 32).
-    "output_resolution": {
-        "type": int,
-        "required": False,
-        "default": None,
-        "constraints": _optional_resolution,
-    },
-}
+INPUT_SCHEMA = QWEN_API.input_schema()

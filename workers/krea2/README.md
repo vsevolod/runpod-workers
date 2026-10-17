@@ -210,6 +210,13 @@ change the endpoint template. See the shared [deployment instructions](../../REA
 
 ## API
 
+The worker uses [`shared/api`](../shared/api/README.md) together with Qwen.
+See that document for the complete contract, defaults, responses and errors.
+New clients put `mu`, `grounding_px`, `ref_boost` and `fit_mode` inside
+`model_options`; the flat examples below remain supported as compatibility aliases.
+The common `sampler` field accepts only `"euler"` on Krea. Both `"lora"` and
+`"weight_diff"` entries remain supported in the top-level `loras` list.
+
 ### `type` field
 
 | `type` | Meaning | `images` |

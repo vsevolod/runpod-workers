@@ -307,6 +307,10 @@ def _save_result(
         "fit_mode",
         "grounding_px",
         "loras",
+        "num_inference_steps",
+        "guidance_scale",
+        "sampler",
+        "model_options",
     ):
         if key in output:
             print(f"  {key}: {output[key]}")
@@ -405,11 +409,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"num_inference_steps (default: {DEFAULT_STEPS})",
     )
     parser.add_argument(
-        "--guidance-scale",
+        "--guidance-scale", "--cfg",
         type=float,
         default=0.0,
-        help="CFG (default: 0.0)",
+        help="Krea guidance offset (standard CFG minus 1; default: 0.0 / off)",
     )
+    parser.add_argument("--sampler", choices=("euler",), default="euler")
     parser.add_argument(
         "--mu",
         type=float,
@@ -488,10 +493,9 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         "images": [data_url],
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
-        "mu": args.mu,
-        "grounding_px": args.grounding_px,
-        "ref_boost": args.ref_boost,
-        "fit_mode": args.fit_mode,
+        "sampler": args.sampler,
+        "model_options": {"mu": args.mu, "grounding_px": args.grounding_px,
+                          "ref_boost": args.ref_boost, "fit_mode": args.fit_mode},
         "loras": loras,
     }
     if args.width is not None and args.height is not None:
@@ -557,7 +561,8 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         "height": height,
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
-        "mu": args.mu,
+        "sampler": args.sampler,
+        "model_options": {"mu": args.mu},
         "loras": loras,
     }
     if args.seed is not None:

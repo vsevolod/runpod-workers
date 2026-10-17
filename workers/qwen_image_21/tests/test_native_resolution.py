@@ -18,9 +18,16 @@ HAS_DIFFUSERS = all(importlib.util.find_spec(name) is not None for name in ("tor
 @unittest.skipUnless(HAS_DIFFUSERS, "Install worker dependencies for native-resolution integration tests")
 class NativeResolutionTests(unittest.TestCase):
     def test_native_refs_reach_text_encoder_vae_and_transformer_with_matching_grids(self):
+        self._native_reference_case("turbo")
+
+    def test_base_native_refs_reach_transformer_with_forty_unmodified_simple_sigmas(self):
+        self._native_reference_case("base")
+
+    def _native_reference_case(self, model_variant):
         import torch
         from diffusers import FlowMatchEulerDiscreteScheduler, QwenImage21Transformer2DModel
         from diffusers.pipelines.qwenimage21 import pipeline_qwenimage21
+        from qwen_image_21_infer.sampling import base_scheduler, comfy_simple_sigmas
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -63,8 +70,12 @@ class NativeResolutionTests(unittest.TestCase):
             pipe = module.QwenImage21Pipeline(
                 scheduler=FlowMatchEulerDiscreteScheduler(), vae=vae,
                 processor=Processor(), text_encoder=None, transformer=transformer,
-                sample_sigmas=[1., .978453, .954180, .926626, .895080, .845148, .704534, .414568],
+                sample_sigmas=[1., .978453, .954180, .926626, .895080, .845148, .704534, .414568] if model_variant == "turbo" else None,
             )
+            sampling = {}
+            if model_variant == "base":
+                pipe.scheduler = base_scheduler(pipe.scheduler)
+                sampling = dict(num_inference_steps=40, sigmas=comfy_simple_sigmas(40))
             pipe.set_progress_bar_config(disable=True)
             seen = {}
 
@@ -86,12 +97,15 @@ class NativeResolutionTests(unittest.TestCase):
                         prompt="combine", image=[Image.new("RGB", (96, 64)), Image.new("RGBA", (65, 127))],
                         width=64, height=64, output_resolution=1024,
                         reference_resolution=0, true_cfg_scale=1., output_type="latent",
+                        **sampling,
                     )
             self.assertEqual(seen["vl_sizes"], [(96, 64), (64, 128)])
             self.assertEqual(vae.seen, [(1, 4, 1, 64, 96), (1, 4, 1, 128, 64)])
             self.assertEqual(seen["img_shapes"], [[(1, 4, 6), (1, 8, 4), (1, 4, 4)]])
             self.assertEqual(seen["latent_shape"], (1, 72, 4))
-            self.assertEqual(pipe.num_timesteps, 8)
+            self.assertEqual(pipe.num_timesteps, 8 if model_variant == "turbo" else 40)
+            if model_variant == "base":
+                torch.testing.assert_close(pipe.scheduler.sigmas, torch.tensor(comfy_simple_sigmas(40) + [0.]))
 
 
 if __name__ == "__main__":

@@ -2,24 +2,29 @@
 
 from __future__ import annotations
 
-import base64
 import math
 from dataclasses import dataclass
-from io import BytesIO
+import sys
+from pathlib import Path
 
 from PIL import Image
 
-MAX_REFS = 10
+from qwen_image_21_infer.runtime_config import BASE_STEPS, TURBO_STEPS, resolve_model_variant
+from qwen_image_21_infer.sampling import comfy_simple_sigmas
+
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.api import CommonRequest, QWEN_API, RequestError, normalize_common_fields
+from shared.api.images import decode_image_string as _decode_image
+
 MIN_SIDE = 256
-MAX_SIDE = 2752
+MAX_SIDE = QWEN_API.max_side
 # Largest official preset is 4:3 (2400×1792). Anything bigger is rejected.
 MAX_AREA = 2400 * 1792
-MULTIPLE = 32
-DEFAULT_STEPS = 8
-DEFAULT_GUIDANCE = 1.0
-MAX_IMAGES = 4
-MAX_SOURCE_SIDE = 8192
-MAX_DECODED_BYTES = 25 * 1024 * 1024
+MULTIPLE = QWEN_API.size_multiple
+MAX_SOURCE_SIDE = QWEN_API.max_source_side
+MAX_DECODED_BYTES = QWEN_API.max_image_bytes
 
 # Sizes from the Qwen-Image-2.1 model card. All are multiples of 32.
 OFFICIAL_PRESETS: dict[str, tuple[int, int]] = {
@@ -33,65 +38,22 @@ OFFICIAL_PRESETS: dict[str, tuple[int, int]] = {
 }
 
 
-class RequestError(ValueError):
-    """Safe client-facing validation error."""
-
-
 @dataclass(frozen=True)
-class NormalizedRequest:
-    type: str  # "image_generate" | "image_edit"
-    prompt: str
-    negative_prompt: str | None
-    width: int | None  # Effective canvas, including native source-sized edits
-    height: int | None
+class NormalizedRequest(CommonRequest):
+    model_variant: str
+    width: int
+    height: int
     size_from_source: bool
-    seed: int | None
-    num_inference_steps: int
-    guidance_scale: float  # passed through as true_cfg_scale; <= 1 disables CFG
-    num_images: int
-    images: tuple[Image.Image, ...]  # 0 for generate; 1..10 for edit
     output_resolution: int
+    requested_output_resolution: int | None
+
+    @property
+    def scheduler(self) -> str:
+        return "checkpoint" if self.model_variant == "turbo" and self.num_inference_steps == TURBO_STEPS else "simple"
 
 
 def decode_image_string(value: str) -> Image.Image:
-    """Accept a data URL or raw base64. Keep an alpha channel when the file has one."""
-    if not isinstance(value, str) or not value.strip():
-        raise RequestError("each images[] entry must be a non-empty base64 string")
-    payload = value.strip()
-    if payload.startswith("data:"):
-        try:
-            header, payload = payload.split(",", 1)
-        except ValueError as err:
-            raise RequestError("invalid data URL in images[]") from err
-        if ";base64" not in header:
-            raise RequestError("images[] data URL must be base64")
-    try:
-        raw = base64.b64decode(payload, validate=False)
-    except Exception as err:
-        raise RequestError("images[] is not valid base64") from err
-    if not raw:
-        raise RequestError("images[] decoded to empty bytes")
-    if len(raw) > MAX_DECODED_BYTES:
-        raise RequestError(
-            f"images[] entry is {len(raw)} bytes; limit is {MAX_DECODED_BYTES}"
-        )
-    try:
-        image = Image.open(BytesIO(raw))
-        image.load()
-    except Exception as err:
-        raise RequestError("images[] could not be decoded as an image") from err
-    width, height = image.size
-    if width > MAX_SOURCE_SIDE or height > MAX_SOURCE_SIDE:
-        raise RequestError(
-            f"images[] side must be <= {MAX_SOURCE_SIDE}px (got {width}x{height})"
-        )
-    if image.mode == "RGBA":
-        return image
-    if image.mode in ("LA", "PA") or (
-        image.mode == "P" and "transparency" in image.info
-    ):
-        return image.convert("RGBA")
-    return image.convert("RGB")
+    return _decode_image(value, preserve_alpha=True, max_bytes=MAX_DECODED_BYTES, max_side=MAX_SOURCE_SIDE)
 
 
 def _check_canvas(width: int, height: int) -> None:
@@ -109,15 +71,6 @@ def _check_canvas(width: int, height: int) -> None:
             "Official presets fit, including 2048x2048, 2400x1792, 2528x1696, "
             "2752x1536 and their swaps."
         )
-
-
-def _optional_text(value: object, field: str) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise RequestError(f"{field} must be a string")
-    text = value.strip()
-    return text or None
 
 
 def _derived_output_resolution(width: int, height: int) -> int:
@@ -142,48 +95,22 @@ def normalize_job_input(
     *,
     raw_keys: set[str] | None = None,
 ) -> NormalizedRequest:
-    """Turn a schema-validated job input into a pipeline request.
+    """Apply Qwen canvas/reference geometry to a parsed shared API request.
 
-    ``raw_keys`` is ``set(job['input'].keys())`` before RunPod fills defaults.
+    ``raw_keys`` contains explicit keys before the shared parser fills defaults,
+    including the legacy equivalents of explicitly nested model options.
     Edit uses it so an omitted width/height follows the last reference instead
     of the schema default canvas. Reference images keep their native sizes.
     """
     raw_keys = set(raw_keys or ())
 
-    req_type = validated.get("type") or "image_generate"
-    if req_type not in ("image_generate", "image_edit"):
-        raise RequestError(f"unsupported type: {req_type!r}")
-
-    prompt = validated.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise RequestError("prompt must be a non-empty string")
-
-    images_raw = validated.get("images") or []
-    if not isinstance(images_raw, list):
-        raise RequestError("images must be a list")
-
-    steps = validated.get("num_inference_steps", DEFAULT_STEPS)
-    if type(steps) is not int or steps != DEFAULT_STEPS:
-        raise RequestError(
-            "num_inference_steps must be 8 for Qwen-Image-2.1-Turbo; "
-            "the checkpoint supplies its own fixed sampling schedule"
-        )
-
-    guidance_raw = validated.get("guidance_scale")
-    guidance = DEFAULT_GUIDANCE if guidance_raw is None else float(guidance_raw)
-    if not math.isfinite(guidance) or guidance < 0:
-        raise RequestError("guidance_scale must be a finite number >= 0")
-
-    negative = _optional_text(validated.get("negative_prompt"), "negative_prompt")
-    if guidance > 1 and negative is None:
-        raise RequestError(
-            "guidance_scale > 1 requires a non-empty negative_prompt "
-            "(true CFG is off at guidance_scale <= 1)"
-        )
-
-    num_images = int(validated.get("num_images") or 1)
-    if not 1 <= num_images <= MAX_IMAGES:
-        raise RequestError(f"num_images must be in 1..{MAX_IMAGES}")
+    try:
+        variant = resolve_model_variant(validated.get("model_variant", "turbo"))
+    except (ValueError, TypeError) as err:
+        raise RequestError("model_variant must be 'base' or 'turbo'") from err
+    default_steps = TURBO_STEPS if variant == "turbo" else BASE_STEPS
+    common = normalize_common_fields(validated, QWEN_API, raw_keys=raw_keys, default_steps=default_steps)
+    images = common.images
 
     output_resolution = validated.get("output_resolution")
     if output_resolution is not None:
@@ -194,10 +121,7 @@ def normalize_job_input(
                 f"(got {output_resolution})"
             )
 
-    if req_type == "image_generate":
-        if images_raw:
-            raise RequestError("images must be empty for image_generate")
-        images: tuple[Image.Image, ...] = ()
+    if common.type == "image_generate":
         size_from_source = False
         width = int(validated["width"])
         height = int(validated["height"])
@@ -205,14 +129,6 @@ def normalize_job_input(
         if output_resolution is None:
             output_resolution = _derived_output_resolution(width, height)
     else:
-        count = len(images_raw)
-        if count < 1 or count > MAX_REFS:
-            raise RequestError(
-                f"image_edit requires 1 to {MAX_REFS} entries in images[]"
-            )
-        if num_images != 1:
-            raise RequestError("image_edit requires num_images == 1")
-        images = tuple(decode_image_string(item) for item in images_raw)
         for index, image in enumerate(images, 1):
             native_w, native_h = _native_size(image)
             if native_w > MAX_SIDE or native_h > MAX_SIDE or native_w * native_h > MAX_AREA:
@@ -243,23 +159,11 @@ def normalize_job_input(
             if output_resolution is None:
                 output_resolution = _derived_output_resolution(width, height)
 
-    seed = validated.get("seed")
-    if seed is not None:
-        seed = int(seed)
-
     return NormalizedRequest(
-        type=req_type,
-        prompt=str(prompt).strip(),
-        negative_prompt=negative,
-        width=width,
-        height=height,
-        size_from_source=size_from_source,
-        seed=seed,
-        num_inference_steps=steps,
-        guidance_scale=guidance,
-        num_images=num_images,
-        images=images,
+        **vars(common), model_variant=variant,
+        width=width, height=height, size_from_source=size_from_source,
         output_resolution=output_resolution,
+        requested_output_resolution=validated.get("output_resolution"),
     )
 
 
@@ -278,8 +182,10 @@ def build_pipe_kwargs(norm: NormalizedRequest) -> dict:
         "output_resolution": norm.output_resolution,
         "use_kv_cache": True,
     }
-    # Do not pass sigmas: the official checkpoint owns the sampling grid.
-    if norm.negative_prompt:
+    if norm.scheduler == "simple":
+        kwargs["sigmas"] = comfy_simple_sigmas(norm.num_inference_steps)
+    # Eight-step Turbo keeps its saved grid; explicit other counts override it.
+    if norm.negative_prompt is not None:
         kwargs["negative_prompt"] = norm.negative_prompt
     if norm.width is not None and norm.height is not None:
         kwargs["width"] = norm.width

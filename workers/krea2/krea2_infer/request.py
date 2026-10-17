@@ -2,62 +2,27 @@
 
 from __future__ import annotations
 
-import base64
 import math
 from dataclasses import dataclass
-from io import BytesIO
+import sys
+from pathlib import Path
 
-from PIL import Image
-
-
-class RequestError(ValueError):
-    """Safe client-facing validation error."""
+workers_dir = Path(__file__).resolve().parents[2]
+if (workers_dir / "shared").is_dir():
+    sys.path.insert(0, str(workers_dir))
+from shared.api import CommonRequest, KREA_API, RequestError, normalize_common_fields
+from shared.api.images import decode_image_string
 
 
 @dataclass(frozen=True)
-class NormalizedRequest:
-    type: str  # "image_generate" | "image_edit"
-    prompt: str
-    negative_prompt: str | None
-    width: int | None  # None when size_from_source
+class NormalizedRequest(CommonRequest):
+    width: int | None
     height: int | None
     size_from_source: bool
-    seed: int | None
-    num_inference_steps: int
-    guidance_scale: float
     mu: float | None
-    num_images: int
-    images: tuple[Image.Image, ...]  # 0 for generate; 1..2 for edit
     grounding_px: int
     ref_boost: float
-    fit_mode: str  # "fit" | "crop"
-    # loras left to handler / LoRAManager
-
-
-def decode_image_string(s: str) -> Image.Image:
-    """Accept data:image/...;base64,... or raw base64; return RGB PIL.Image."""
-    if not isinstance(s, str) or not s.strip():
-        raise RequestError("each images[] entry must be a non-empty base64 string")
-    payload = s.strip()
-    if payload.startswith("data:"):
-        # data:image/png;base64,<payload>
-        try:
-            header, b64 = payload.split(",", 1)
-        except ValueError as err:
-            raise RequestError("invalid data URL in images[]") from err
-        if ";base64" not in header:
-            raise RequestError("images[] data URL must be base64")
-        payload = b64
-    try:
-        raw = base64.b64decode(payload, validate=False)
-    except Exception as err:
-        raise RequestError("images[] is not valid base64") from err
-    try:
-        img = Image.open(BytesIO(raw))
-        img.load()
-    except Exception as err:
-        raise RequestError("images[] could not be decoded as an image") from err
-    return img.convert("RGB")
+    fit_mode: str
 
 
 def normalize_job_input(
@@ -66,27 +31,14 @@ def normalize_job_input(
     raw_keys: set[str] | None = None,
 ) -> NormalizedRequest:
     """
-    validated: output of runpod validate() (defaults applied).
-    raw_keys: set(job['input'].keys()) BEFORE validate — used only for edit size.
+    validated: parsed shared API fields with defaults and compatibility aliases.
+    raw_keys: explicit client fields before defaults — used for edit size.
     """
     raw_keys = set(raw_keys or ())
 
-    req_type = validated.get("type") or "image_generate"
-    if req_type not in ("image_generate", "image_edit"):
-        raise RequestError(f"unsupported type: {req_type!r}")
+    common = normalize_common_fields(validated, KREA_API, raw_keys=raw_keys)
 
-    prompt = validated.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise RequestError("prompt must be a non-empty string")
-
-    images_raw = validated.get("images") or []
-    if not isinstance(images_raw, list):
-        raise RequestError("images must be a list")
-
-    if req_type == "image_generate":
-        if images_raw:
-            raise RequestError("images must be empty for image_generate")
-        images: tuple[Image.Image, ...] = ()
+    if common.type == "image_generate":
         size_from_source = False
         width = int(validated["width"])
         height = int(validated["height"])
@@ -95,13 +47,6 @@ def normalize_job_input(
                 f"width and height must be multiples of 16 (got {width}x{height})"
             )
     else:
-        n_raw = len(images_raw)
-        if n_raw < 1 or n_raw > 2:
-            raise RequestError("image_edit requires 1 or 2 entries in images[]")
-        images = tuple(decode_image_string(s) for s in images_raw)
-        num_images = int(validated.get("num_images") or 1)
-        if num_images != 1:
-            raise RequestError("image_edit requires num_images == 1")
         size_from_source = ("width" not in raw_keys) and ("height" not in raw_keys)
         if size_from_source:
             # Canvas primary is images[0]; both None (handler/pipeline invariant).
@@ -131,19 +76,7 @@ def normalize_job_input(
         raise RequestError("ref_boost must be a finite number >= 0")
 
     return NormalizedRequest(
-        type=req_type,
-        prompt=str(prompt).strip(),
-        negative_prompt=validated.get("negative_prompt"),
-        width=width,
-        height=height,
-        size_from_source=size_from_source,
-        seed=validated.get("seed"),
-        num_inference_steps=int(validated.get("num_inference_steps") or 8),
-        guidance_scale=float(validated.get("guidance_scale") or 0.0),
-        mu=validated.get("mu"),
-        num_images=int(validated.get("num_images") or 1),
-        images=images,
-        grounding_px=grounding_px,
-        ref_boost=ref_boost,
-        fit_mode=fit_mode,
+        **vars(common), width=width, height=height, size_from_source=size_from_source,
+        mu=validated.get("mu"), grounding_px=grounding_px,
+        ref_boost=ref_boost, fit_mode=fit_mode,
     )

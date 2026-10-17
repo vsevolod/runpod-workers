@@ -64,9 +64,25 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertFalse(self.mod.parse_local_files_only(""))
         self.assertFalse(self.mod.parse_local_files_only("0"))
 
-    def test_turbo_defaults_use_a_separate_volume_directory(self):
+    def test_turbo_defaults_use_a_separate_local_directory(self):
         self.assertEqual(self.mod.DEFAULT_MODEL_ID, "Qwen/Qwen-Image-2.1-Turbo")
-        self.assertEqual(self.mod.DEFAULT_MODEL_DIR, "/runpod-volume/qwen_image_21_turbo")
+        self.assertEqual(self.mod.DEFAULT_MODEL_DIR, "/models/qwen_image_21_turbo")
+
+    def test_base_snapshot_and_paths_cannot_be_mistaken_for_turbo(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(str(self.mod.resolve_model_directory("base")), "/models/qwen_image_21_base")
+            root = Path(tmp)
+            (root / "model_index.json").write_text(json.dumps({"_class_name": "QwenImage21Pipeline"}))
+            self.assertEqual(self.mod.resolve_model_source(tmp, model_variant="base"), tmp)
+            with self.assertRaisesRegex(ValueError, "Turbo"):
+                self.mod.resolve_model_source(tmp, model_variant="turbo")
+            (root / "model_index.json").write_text(json.dumps({"_class_name": "QwenImage21Pipeline", "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41]}))
+            with self.assertRaisesRegex(ValueError, "Base"):
+                self.mod.resolve_model_source(tmp, model_variant="base")
+            with patch.dict(os.environ, {"MODEL_DIR": tmp, "BASE_MODEL_DIR": tmp}):
+                with self.assertRaisesRegex(ValueError, "different directories"):
+                    self.mod.resolve_model_directory("base")
 
     def test_old_or_invalid_local_snapshot_is_rejected(self):
         configs = [

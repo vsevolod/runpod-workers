@@ -1,0 +1,259 @@
+# Image worker API: Krea 2 and Qwen Image 2.1
+
+Both workers use this shared request parser, common request fields, seed selection,
+image decoding/delivery, response builder and error handling. Their model adapters
+own inference, model selection, reference geometry and LoRA compatibility.
+`profiles.py` declares defaults, limits and supported model options.
+
+Select the model through its existing RunPod endpoint. Qwen Base and Turbo share
+one Qwen endpoint; `model_options.variant` selects the checkpoint for that request.
+Krea remains a separate endpoint. This library does not route between endpoints.
+
+## Request
+
+Submit `POST https://api.runpod.ai/v2/{ENDPOINT_ID}/run` with an
+`Authorization: Bearer <RUNPOD_API_KEY>` header and the following JSON envelope.
+The returned request ID is polled at `/status/{REQUEST_ID}` by the bundled clients.
+
+```json
+{
+  "input": {
+    "type": "image_generate",
+    "prompt": "A photograph of a red fox in soft evening light",
+    "negative_prompt": "blur, artifacts",
+    "width": 1024,
+    "height": 1024,
+    "seed": 123,
+    "num_inference_steps": 40,
+    "guidance_scale": 3.5,
+    "sampler": "euler",
+    "num_images": 1,
+    "images": [],
+    "loras": [],
+    "model_options": {"variant": "base"}
+  }
+}
+```
+
+This example targets the Qwen endpoint. `prompt` is required; all other fields
+are optional. Unknown root fields and unknown model options are errors.
+
+| Common field | Type | Krea 2 | Qwen Image 2.1 |
+|---|---|---|---|
+| `type` | string | `image_generate` (default), `image_edit` | Same |
+| `prompt` | string | Nonblank, required | Same |
+| `negative_prompt` | string or null | Optional; used when guidance > 0 | Optional; empty unconditional prompt supplied when CFG > 1 and text omitted/blank |
+| `width`, `height` | integer | Explicit values: 256..2048, multiples of 16 | Explicit values: 256..2752, multiples of 32; area <= 4,300,800 pixels |
+| `seed` | integer or null | Omitted/null: random 32-bit seed; explicit seed, including 0, preserved | Same |
+| `num_inference_steps` | integer | 1..64, default 8 | 1..200, default Turbo 8 / Base 40 |
+| `guidance_scale` | number | Finite Krea guidance offset, default 0; <= 0 disables CFG | Finite value >= 0, default 1; <= 1 disables CFG |
+| `sampler` | string | `euler` only, default `euler` | `euler` (default), `heun`, `er_sde` |
+| `num_images` | integer | Generate: 1..4 (default 1); edit: exactly 1 | Same |
+| `images` | array of strings | Generate: absent/empty; edit: 1..2 references | Generate: absent/empty; edit: 1..10 references |
+| `loras` | array of objects or null | Up to 4 adapters; default [] | Same count; supported adapter types differ below |
+| `model_options` | object | Krea-specific options below; default {} | Qwen-specific options below; default {} |
+
+Seed integers follow Torch's accepted range: `-9223372036854775808` through
+`18446744073709551615`. Use a nonnegative 32-bit seed for portable clients.
+Numbers cannot be booleans; floating-point NaN/infinity are rejected.
+
+Each reference is raw base64 or a `data:image/...;base64,...` URL, never a remote
+image URL. Input order is preserved. Krea converts references to RGB. Qwen keeps
+alpha when present, limits each decoded file to 25 MiB and each source side to
+8192 pixels, then checks the native inference dimensions described below.
+
+### Guidance semantics and sampling
+
+Existing guidance behavior is preserved:
+
+- Qwen: `uncond + guidance_scale * (cond - uncond)` when guidance > 1.
+- Krea: `cond + guidance_scale * (cond - uncond)` when guidance > 0.
+
+Thus Krea guidance 2.5 corresponds to standard CFG 3.5. Moving to the shared
+contract does not silently change existing Krea guidance values. In both models,
+an empty negative prompt is usable; CFG does not require explicit negative text.
+
+Krea uses its existing Euler flow sampler. Requesting `heun`/`er_sde` on Krea is
+a validation error. API extraction does not add those solvers to Krea.
+
+Qwen Base uses the ComfyUI QwenImage21 `simple` sigma grid. Turbo at exactly
+8 steps uses the official checkpoint's saved sigma grid and transforms. Other
+Turbo step counts explicitly use a simple grid of the requested length; that
+override is experimental and does not guarantee improved quality.
+Euler and ER-SDE use one denoiser evaluation per step; Heun uses `2 * steps - 1`.
+Enabled CFG doubles the number of model passes. Qwen ER-SDE additional noise uses
+the request's seeded generator. Changing sampling options does not reload weights.
+
+### Qwen `model_options`
+
+| Key | Type | Default | Behavior |
+|---|---|---|---|
+| `variant` | string | `turbo` | `turbo` or `base`; one resident pipeline, unloaded before switching variants |
+| `output_resolution` | integer or null | null | 256..2752, multiple of 32. Sets edit canvas area when width/height are omitted; preserves the last reference's aspect ratio |
+
+Generate defaults to 1024x1024. For edit, omit both width and height to follow the
+**last** reference's native size, rounded to the nearest multiple of 32. Pass both
+dimensions for an explicit canvas; passing only one is an error. References keep
+their individual native dimensions, rounded to multiples of 32, independently of
+the canvas. Each reference and the final canvas must fit 2752px per side and
+4,300,800 pixels. Oversized references are rejected before model loading.
+
+When explicit dimensions are present, they determine the output canvas.
+In response `model_options`, `output_resolution: null` preserves the automatic
+mode so the options can be reused for another edit. The legacy top-level
+`output_resolution` also reports the derived control value. VAE choice, offload
+and mmap remain worker configuration, not request fields.
+
+```json
+{
+  "input": {
+    "type": "image_edit",
+    "prompt": "Keep the subject and change the background to a sunset beach",
+    "images": ["data:image/png;base64,..."],
+    "num_inference_steps": 40,
+    "guidance_scale": 3.5,
+    "sampler": "er_sde",
+    "seed": 123,
+    "loras": [{"name": "portrait_style", "strength": 0.8}],
+    "model_options": {"variant": "base"}
+  }
+}
+```
+
+### Krea `model_options`
+
+| Key | Type | Default | Behavior |
+|---|---|---|---|
+| `mu` | number or null | 1.15 | Finite time-shift parameter. null requests resolution-dependent shift for generate; edit resolves null to 1.15 |
+| `grounding_px` | integer | 768 | Vision text-encoder long-side cap per reference; 0 preserves native size; otherwise 256..2048 |
+| `ref_boost` | number | 1.0 | Finite value >= 0; attention boost toward reference tokens |
+| `fit_mode` | string | `fit` | `fit` preserves aspect while fitting each source; `crop` uses center crop to target aspect |
+
+Generate defaults to 1024x1024. Edit with neither dimension uses the **first**
+reference's aspect ratio, capped to approximately 1.5 megapixels and aligned to
+16. This preserves Krea's existing geometry. Explicit dimensions define the
+target canvas. For legacy compatibility, passing only one dimension still uses
+the schema default 1024 for the other; new clients should pass both or neither.
+The other edit options have no effect on text-to-image generation.
+
+```json
+{
+  "input": {
+    "type": "image_edit",
+    "prompt": "Place both people together in a garden",
+    "images": ["data:image/png;base64,...", "data:image/png;base64,..."],
+    "num_inference_steps": 8,
+    "guidance_scale": 0.0,
+    "sampler": "euler",
+    "seed": 123,
+    "loras": [
+      {"name": "krea2_identity_edit_v1_2", "type": "lora", "strength": 1.0},
+      {"name": "identity_delta", "type": "weight_diff", "strength": 4.0}
+    ],
+    "model_options": {"mu": 1.15, "grounding_px": 768, "ref_boost": 4.0, "fit_mode": "fit"}
+  }
+}
+```
+
+Identity editing normally requires a compatible Krea edit adapter; the worker
+does not silently insert it when `loras` is empty.
+
+### LoRA entries
+
+```json
+{"name": "adapter_id", "type": "lora", "strength": 1.0}
+```
+
+| Key | Rules |
+|---|---|
+| `name` | Required catalog ID; filename stem without `.safetensors`; paths and duplicate names rejected |
+| `type` | Default `lora`. Krea accepts `lora` and `weight_diff`; Qwen accepts only `lora` |
+| `strength` | Default 1.0; finite number. `lora`: 0..2; Krea `weight_diff`: 0..5 |
+
+Unknown LoRA keys are errors. Adapters must exist in the worker's configured
+LoRA directory and be compatible with that model. A zero-strength adapter is
+validated but not applied. Selected files are copied/repaired locally as needed,
+including on a warm worker; unrelated adapters are not copied for the request.
+Adapters are removed after inference, including after failures.
+
+## Response
+
+RunPod wraps the worker result in `output`. Both workers return:
+
+```json
+{
+  "images": ["data:image/png;base64,..."],
+  "seed": 123,
+  "width": 1024,
+  "height": 1024,
+  "type": "image_edit",
+  "num_inference_steps": 40,
+  "guidance_scale": 3.5,
+  "sampler": "euler",
+  "loras": [],
+  "model_options": {"variant": "base", "output_resolution": null},
+  "num_refs": 1
+}
+```
+
+- `images`: generated PNG data URLs, or storage URLs when `BUCKET_ENDPOINT_URL`
+  is configured. Upload failures fall back to PNG data URLs.
+- `seed`: actual seed used; `width`/`height`: actual first output image dimensions.
+- `num_inference_steps`, `guidance_scale`, `sampler`: resolved request settings.
+- `loras`: applied selection with explicit `name`, `strength`, `type`.
+- `model_options`: normalized model-specific controls, including defaults. Qwen
+  keeps null for automatic `output_resolution`; Krea includes all four options
+  and resolves edit null mu.
+- `num_refs`: edit only, number of reference images.
+
+For compatibility, Qwen also returns `model_variant`, `model_id`, `scheduler`
+(`simple` or `checkpoint`), and `output_resolution` at the top level.
+Krea edit also retains top-level `grounding_px`, `ref_boost`, and `fit_mode`.
+
+## Errors and compatibility
+
+Invalid inputs return `{"error": "..."}` without invoking inference or requesting
+a restart. This covers malformed job envelopes, unknown fields/options,
+unsupported samplers, type/range errors, invalid references and LoRA errors.
+Missing files return an error without automatic restart. CUDA OOM and unexpected
+inference exceptions retain `refresh_worker: true`; unexpected exceptions also
+include a traceback. These are worker `output` values inside RunPod's envelope.
+
+Old flat model-specific keys remain supported:
+
+| Old top-level key | Canonical nested key |
+|---|---|
+| Qwen `model_variant` | `model_options.variant` |
+| Qwen `output_resolution` | `model_options.output_resolution` |
+| Krea `mu`, `grounding_px`, `ref_boost`, `fit_mode` | Same names inside `model_options` |
+
+Aliases are compared **before** defaults are inserted. Both forms may appear
+together when their values agree. Different values are a validation error;
+neither form silently overrides the other. Omitted fields retain model defaults
+and existing CFG/geometry behavior. Declared field limits are now checked in the
+shared parser instead of relying on the RunPod SDK validator's default handling.
+
+The CLI flags remain compatible. Both clients now send model-specific fields
+under `model_options`; both expose `--steps`, `--guidance-scale`/`--cfg`, and
+`--sampler` with their worker's supported choices.
+Canonical nested requests require the updated worker images; old images accept
+the legacy flat form. Existing clients using the flat form work with new images.
+
+## Implementation and verification
+
+- `contract.py`: schemas, aliases, field validation and common normalized request.
+- `profiles.py`: Krea/Qwen capabilities and model-specific option schemas.
+- `images.py`: decoding, alpha policy and PNG delivery.
+- `handler.py`: seed selection, inference/delivery lifecycle, response and errors.
+- Worker handlers: model adapters; model request modules: geometry policy.
+
+Shared API tests need Pillow and the standard library, without Torch, GPU or
+downloaded checkpoints:
+
+```bash
+python -m unittest discover -s workers/shared/tests -p 'test_*.py'
+python -m unittest discover -s workers/krea2/tests -p 'test_api*.py'
+```
+
+Worker suites additionally exercise model-specific contracts and, when installed,
+the actual Torch/Diffusers CPU runtime. CPU checks do not prove GPU output quality.

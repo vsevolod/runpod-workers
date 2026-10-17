@@ -175,6 +175,33 @@ HAS_LOADING_DEPS = all(
 
 @unittest.skipUnless(HAS_LOADING_DEPS, "Install worker dependencies for loading integration tests")
 class RealPipelineLoadingTests(unittest.TestCase):
+    def test_runtime_close_releases_transformer_and_lora_owner_but_keeps_shared_vae(self):
+        import gc
+        import torch
+        import weakref
+        from diffusers import DiffusionPipeline
+        from qwen_image_21_infer.lora import LoRACatalog
+
+        class TinyPipeline(DiffusionPipeline):
+            def __init__(self, transformer, vae):
+                super().__init__()
+                self.register_modules(transformer=transformer, vae=vae)
+
+        shared_vae = torch.nn.Linear(2, 2)
+        pipe = TinyPipeline(torch.nn.Linear(2, 2), shared_vae)
+        weights = weakref.ref(pipe.transformer)
+        old_pipeline = weakref.ref(pipe)
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"LORA_CACHE_DIR": tmp}):
+            runtime = pipeline.QwenImage21Runtime(pipe, LoRACatalog({}))
+            del pipe
+            runtime.close()
+        gc.collect()
+        self.assertIsNone(weights())
+        self.assertIsNone(old_pipeline())
+        self.assertIsNone(runtime.pipe)
+        self.assertIsNone(runtime.loras)
+        self.assertIsNotNone(shared_vae.weight)
+
     def test_alternative_vae_replaces_stock_weights_and_preserves_schedule(self):
         import torch
         from diffusers import AutoencoderKLQwenImage21, DiffusionPipeline, FlowMatchEulerDiscreteScheduler
@@ -213,6 +240,12 @@ class RealPipelineLoadingTests(unittest.TestCase):
             torch.testing.assert_close(restored.vae.decoder.conv_out.bias, torch.full_like(restored.vae.decoder.conv_out.bias, 0.25))
             self.assertEqual(restored.config.sample_sigmas, schedule)
             self.assertEqual(restored.scheduler.config.shift, 3)
+            with patch.object(AutoencoderKLQwenImage21, "from_pretrained", side_effect=AssertionError("Shared VAE must not be loaded twice")):
+                second = pipeline._load_base_pipeline(
+                    TinyPipeline, str(base), local_files_only=True, disable_mmap=False,
+                    vae_source="unused", vae=restored.vae,
+                )
+            self.assertIs(second.vae, restored.vae)
 
     def test_both_modes_preserve_real_qwen_weights_and_change_loading_backend(self):
         import torch

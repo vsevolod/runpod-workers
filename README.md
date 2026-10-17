@@ -21,6 +21,11 @@ MiniMax H3 design/plan:
 
 ## Deploy
 
+The [shared image API](workers/shared/api/README.md) is the complete request and
+response contract for Krea 2 and Qwen Image 2.1. Common fields use the same names;
+model-specific controls live under `model_options`, with existing flat keys
+preserved as aliases.
+
 ### Qwen Image and Krea2: build on GitHub, run on Runpod
 
 [Build Runpod workers](.github/workflows/build-workers.yml) builds both complete
@@ -51,8 +56,9 @@ tag/digest. Keep existing endpoint IDs when updating templates. Ensure the image
 is publicly pullable or configure a read-only registry credential on Runpod.
 Leave the Docker start command empty to use the image's `CMD`.
 
-Use an **80 GB container disk**, `MODEL_DIR=/models/qwen_image_21_turbo` for Qwen
-or `/models/krea2` for Krea, and `HF_HOME=/models/hf`. Preserve the attached LoRA
+Use a **120 GB container disk** for both Qwen variants or **80 GB** for Krea,
+`MODEL_DIR=/models/qwen_image_21_turbo` for Qwen or `/models/krea2` for Krea,
+and `HF_HOME=/models/hf`. Preserve the attached LoRA
 volume, `LORA_DIR`, GPU selection, quantization and offload settings.
 
 During a migration, set `workersMin=0` and `workersMax=0` to stop GPU allocation

@@ -9,5 +9,6 @@ export HUGGINGFACE_HUB_CACHE="$HF_HUB_CACHE"
 
 SHARED_DIR="$APP_DIR/shared"
 if [ ! -d "$SHARED_DIR" ]; then SHARED_DIR="$APP_DIR/../shared"; fi
-# Imports overlap downloads; the pipeline waits for the validated snapshot.
-exec python -u "$SHARED_DIR/bootstrap.py" --app-dir "$APP_DIR"
+# The first request selects Base/Turbo before any checkpoint is downloaded.
+# Keep bootstrap's SIGTERM cleanup for the request-scoped prefetch process.
+exec python -u "$SHARED_DIR/bootstrap.py" --app-dir "$APP_DIR" --defer-download

@@ -1,4 +1,4 @@
-# Qwen-Image-2.1-Turbo — thin RunPod serverless worker (Diffusers).
+# Qwen-Image-2.1 Base/Turbo — one request-selected RunPod worker (Diffusers).
 # Weights download to container disk at worker startup, not into this image.
 #
 # RunPod GitHub Integration:
@@ -61,10 +61,13 @@ COPY workers/qwen_image_21/schemas.py \
      workers/qwen_image_21/test_input.json \
      /app/
 COPY workers/qwen_image_21/qwen_image_21_infer /app/qwen_image_21_infer
+COPY workers/qwen_image_21/LICENSES /app/LICENSES
 COPY workers/shared /app/shared
 
 ENV MODEL_DIR=/models/qwen_image_21_turbo \
     MODEL_ID=Qwen/Qwen-Image-2.1-Turbo \
+    BASE_MODEL_DIR=/models/qwen_image_21_base \
+    QWEN_VAE_DIR=/models/qwen_image_21_shared/texture_fix_vae \
     HF_HOME=/models/hf \
     LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras \
     QWEN_DISABLE_MMAP=0 \

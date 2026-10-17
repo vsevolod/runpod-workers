@@ -41,6 +41,20 @@ class DownloadWeightsTests(unittest.TestCase):
     def test_model_id(self):
         self.assertEqual(self.mod.MODEL_ID, "Qwen/Qwen-Image-2.1-Turbo")
 
+    def test_base_download_is_separate_and_does_not_require_turbo_sigmas(self):
+        calls = []
+        def snapshot(**kwargs):
+            calls.append(kwargs["repo_id"])
+            root = Path(kwargs["local_dir"])
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "model_index.json").write_text(json.dumps({"_class_name": "QwenImage21Pipeline"}))
+            return str(root)
+        hub = types.SimpleNamespace(snapshot_download=snapshot)
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()):
+            code = self.mod.main(["--model-variant", "base", "--output", tmp])
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["Qwen/Qwen-Image-2.1"])
+
     def test_prefetch_only_releases_a_validated_snapshot(self):
         for valid in [True, False]:
             with self.subTest(valid=valid), tempfile.TemporaryDirectory() as tmp:
@@ -115,6 +129,36 @@ class DownloadWeightsTests(unittest.TestCase):
                 self.mod.main(["--help"])
         self.assertEqual(ctx.exception.code, 0)
 
+    def test_switching_variants_reuses_shared_vae_and_repairs_a_truncated_model_file(self):
+        calls = []
+        hub = types.ModuleType("huggingface_hub")
+        def snapshot(**kwargs):
+            repo = kwargs["repo_id"]
+            calls.append(repo)
+            root = Path(kwargs["local_dir"])
+            root.mkdir(parents=True, exist_ok=True)
+            config = {"_class_name": "QwenImage21Pipeline"}
+            if repo.endswith("Turbo"):
+                config["sample_sigmas"] = [1, .98, .95, .92, .89, .84, .70, .41]
+            (root / "model_index.json").write_text(json.dumps(config))
+            (root / "weights.safetensors").write_bytes(b"complete model")
+            return str(root)
+        hub.snapshot_download = snapshot
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"QWEN_VAE": "texture-fix"}), patch.dict(
+            sys.modules, {"huggingface_hub": hub}
+        ), contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            for variant in ("turbo", "base", "turbo", "base"):
+                self.assertEqual(self.mod.main(["--model-variant", variant, "--output", str(root / variant),
+                                                "--vae-dir", str(root / "vae")]), 0)
+            self.assertEqual(calls, ["Qwen/Qwen-Image-2.1-Turbo", "madebyollin/texture-fix-vae-for-qwen-image-2.1", "Qwen/Qwen-Image-2.1"])
+            (root / "base/weights.safetensors").write_bytes(b"partial")
+            self.assertEqual(self.mod.main(["--model-variant", "base", "--output", str(root / "base"),
+                                            "--vae-dir", str(root / "vae")]), 0)
+            self.assertEqual(calls[-1], "Qwen/Qwen-Image-2.1")
+            self.assertEqual(len(calls), 4)
+            self.assertEqual((root / "base/weights.safetensors").read_bytes(), b"complete model")
+
     def test_default_downloads_texture_fix_locally_before_publishing_ready(self):
         calls = []
         hub = types.ModuleType("huggingface_hub")
@@ -133,6 +177,9 @@ class DownloadWeightsTests(unittest.TestCase):
                         "_class_name": "QwenImage21Pipeline",
                         "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41],
                     }))
+                else:
+                    (path / "config.json").write_text("{}")
+                    (path / "diffusion_pytorch_model.safetensors").write_bytes(b"vae weights")
                 return str(path)
             hub.snapshot_download = snapshot
             with patch.dict(os.environ, {}, clear=True), patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()):

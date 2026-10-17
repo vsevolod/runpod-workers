@@ -1,13 +1,14 @@
-# RunPod worker — Qwen-Image-2.1-Turbo
+# Runpod worker — Qwen-Image-2.1 Base / Turbo
 
 Thin serverless worker: text-to-image and multi-reference edit through
 Diffusers `QwenImage21Pipeline`. No ComfyUI. Same handler shape as
-[`workers/krea2`](../krea2/) (load once, base64 or S3, FlashBoot).
+[`workers/krea2`](../krea2/) (base64 or S3, FlashBoot). One endpoint selects
+Base or Turbo per request and keeps one pipeline resident at a time.
 
 | | |
 |--|--|
-| **Model** | [Qwen/Qwen-Image-2.1-Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo), a full bf16 checkpoint with an embedded 8-step sampling schedule |
-| **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `da1d382` (PR [#14950](https://github.com/huggingface/diffusers/pull/14950)). Both `sample_sigmas` and the scheduler come from the checkpoint |
+| **Models** | [Base](https://huggingface.co/Qwen/Qwen-Image-2.1): default 40 steps, Euler/simple; [Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo): default 8 checkpoint-configured steps |
+| **Pipeline** | `QwenImage21Pipeline` from Diffusers, pinned to commit `da1d382` (PR [#14950](https://github.com/huggingface/diffusers/pull/14950)), with the native-reference-size patch |
 | **Text encoder** | Qwen3-VL 8B, loaded with the snapshot |
 | **VAE** | [Texture-Fix VAE](https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1), a compatible 64-channel RGBA `AutoencoderKLQwenImage21`. Set `QWEN_VAE=original` to use the checkpoint's VAE. The Qwen-Image / Krea 2 VAE is not interchangeable |
 | **GPU** | **24 GB** with `OFFLOAD=cpu` at 1024. Native 2048 wants a larger GPU or `OFFLOAD=sequential` |
@@ -31,24 +32,41 @@ workers/qwen_image_21/
 
 Hub transfers, cache/token setup and timing use the shared
 [`model_download` module](../shared/model_download.py), copied into the image.
-`download_weights.py` keeps Qwen's model selection and Turbo snapshot validation.
+`download_weights.py` keeps Qwen's model selection and variant-specific validation.
 
-Use an **80 GB container disk**. On every fresh worker, `start.sh` starts the
-shared bootstrap and a separate CPU-only downloader. The required official components
-and selected VAE (about 32.5 GB together) download directly from Hugging Face to
-`/models/qwen_image_21_turbo` while the handler imports Torch/Diffusers. The
-pipeline waits for the complete, validated Turbo snapshot after imports and
-CUDA probing, before inspecting model files. Its existing mmap/CPU-offload
-behavior is preserved; Qwen does not eagerly move all components into VRAM.
+Use a **120 GB container disk** to keep both snapshots, shared VAE, image/runtime
+and requested LoRAs. The model weights use about 65 GB with separate text-encoder
+copies and one shared Texture-Fix VAE. Each variant alone uses about 33 GB.
+
+Startup imports the handler without preselecting a model. The first request's
+`model_variant` chooses the checkpoint before a separate CPU-only downloader
+starts. Imports/probing overlap its transfers. Only that variant is downloaded;
+a first Base request never preloads Turbo. Files go to
+`/models/qwen_image_21_turbo` or `/models/qwen_image_21_base`.
+
+On a warm request, complete local manifests are checked without Hub access.
+Missing/truncated files trigger repair before inference, including on the already
+selected model. The manifest records relative file names and byte sizes; it is
+published after a successful download. Each selected snapshot is validated before
+loading. Existing mmap and CPU-offload behavior is preserved.
+
+Generation and model changes share one lock. Repeated requests for the selected
+variant reuse its pipeline. Switching variants removes offload hooks, releases
+the old transformer/text encoder and adapter manager, collects Python references,
+and empties unused CUDA allocations before loading the replacement from disk.
+The shared Texture-Fix VAE is reused in memory while its local files are complete.
+Text encoders remain variant-specific; identical file sizes do not establish
+identical weights. A failed switch does not fall back to the previous variant.
 
 Downloads use a fixed repo commit for the session and the HF cache stays local
 at `/models/hf`. `LOCAL_FILES_ONLY=1` prevents implicit runtime downloads.
-A failed download or model load aborts startup and reaps the downloader. An
+A failed download or model load fails the request and reaps the downloader. An
 interrupted transfer can resume in the same container.
 
 By default, the downloader skips the unused stock `vae/` and downloads only
 the Diffusers config and weights of `madebyollin/texture-fix-vae-for-qwen-image-2.1`
-into `$MODEL_DIR/texture_fix_vae/`. It publishes the snapshot as ready after
+into `QWEN_VAE_DIR` (default `/models/qwen_image_21_shared/texture_fix_vae`).
+It publishes the selected model as ready after
 both downloads complete. The loader supplies this VAE to `from_pretrained`
 before CPU/GPU placement, preserving bf16, mmap and CPU offload. No runtime
 Hub access is needed with `LOCAL_FILES_ONLY=1`.
@@ -57,10 +75,11 @@ Texture-Fix is an unofficial VAE finetune intended to improve fine textures
 and checkerboard artifacts. Its author reports improved perceptual quality
 with slightly lower reconstruction accuracy; improvement on our edits still
 needs a GPU comparison. It does not change the Turbo transformer, text encoder,
-LoRAs, guidance, or the checkpoint's eight-step `sample_sigmas`.
+LoRAs or guidance. At eight steps, Turbo keeps its checkpoint's `sample_sigmas`.
 
-For an A/B comparison, set `QWEN_VAE=original` and replace the worker. Startup
-will download the original VAE into `vae/`. Restore `QWEN_VAE=texture-fix` and
+For an A/B comparison, set `QWEN_VAE=original` and replace the worker. Its first
+request will download the selected checkpoint's original VAE into `vae/`.
+Original VAEs stay variant-specific. Restore `QWEN_VAE=texture-fix` and
 replace the worker to switch back. Use the same prompt, references, seed,
 resolution and LoRAs in both runs. The choice is fixed for the worker lifetime.
 
@@ -74,6 +93,8 @@ Existing endpoint env overrides must be updated explicitly:
 
 ```text
 MODEL_DIR=/models/qwen_image_21_turbo
+BASE_MODEL_DIR=/models/qwen_image_21_base
+QWEN_VAE_DIR=/models/qwen_image_21_shared/texture_fix_vae
 HF_HOME=/models/hf
 QWEN_DISABLE_MMAP=0
 LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras
@@ -82,55 +103,44 @@ LORA_DIR=/runpod-volume/qwen_image_21_turbo/loras
 Keep the attached volume for additional LoRAs. If your adapters are in a
 different directory, preserve that path in `LORA_DIR`.
 
-### Optional volume snapshot
+### Manual prefetch on container disk
 
-A persistent snapshot can still be downloaded manually for other deployments.
-Regional network volumes must be in the same datacenter as the endpoint;
-Global Volumes are not tied to a datacenter. The default container startup
-downloads from the Hub rather than copying this snapshot.
-
-```text
-/runpod-volume/qwen_image_21_turbo/
-  model_index.json
-  transformer/
-  text_encoder/
-  texture_fix_vae/    # default; vae/ when QWEN_VAE=original
-  processor files…
-  scheduler/
-  loras/my_style.safetensors
-  loras/my_character.safetensors
-```
-
-Give the Turbo snapshot volume **≥ 40 GB**. Additional LoRAs need extra space.
+The same downloader can prepare either variant without running inference.
+Pass the shared VAE path for both commands so it is downloaded once:
 
 ```bash
 pip install huggingface-hub hf_transfer
 export HF_TOKEN=hf_...    # accept the model license on the Hub first
 python workers/qwen_image_21/download_weights.py \
-  --model-id Qwen/Qwen-Image-2.1-Turbo \
-  --output /runpod-volume/qwen_image_21_turbo
+  --model-variant turbo --output /models/qwen_image_21_turbo \
+  --vae-dir /models/qwen_image_21_shared/texture_fix_vae
+python workers/qwen_image_21/download_weights.py \
+  --model-variant base --output /models/qwen_image_21_base \
+  --vae-dir /models/qwen_image_21_shared/texture_fix_vae
 ```
 
-`download_weights.py` writes a Diffusers snapshot into `MODEL_DIR`. The worker
-prefers that directory when `model_index.json` is present, otherwise it loads
-`MODEL_ID` from the Hub. The local snapshot and loaded pipeline must contain
-a valid 8-step `sample_sigmas` grid; the old base-model snapshot is rejected.
-Manual downloads also honor `QWEN_VAE`; use `QWEN_VAE=original` when a complete
-unmodified Turbo snapshot is required.
+Snapshots use separate directories. Turbo requires its valid saved eight-step
+grid; Base rejects a saved Turbo grid. The downloader refuses to overwrite a
+directory containing the other variant. Complete snapshots are reused, and
+missing or truncated manifest-listed files are downloaded again.
+
+Container disk is temporary: manual prefetch survives only while that container
+exists. The attached Global Volume remains the source for LoRAs. The default
+model downloader uses Hugging Face; it does not implicitly load an old snapshot
+from the attached volume.
 
 ## Migrating from the Viggle worker
 
-1. Download **Turbo and the selected VAE** into `/runpod-volume/qwen_image_21_turbo`
-   with the command above. Keep the old snapshot in its existing directory for
-   rollback; the downloader refuses to overwrite a base-model snapshot.
-2. Rebuild the image with the new pinned Diffusers dependency. In the RunPod
-   endpoint settings, explicitly change `MODEL_DIR` to the new directory and
-   `MODEL_ID` to `Qwen/Qwen-Image-2.1-Turbo`. Existing endpoint environment
-   overrides take precedence over the Dockerfile defaults.
-3. If reusing your existing style/character adapters, set `LORA_DIR` to
+1. Rebuild the image with the pinned Diffusers dependency. Keep `MODEL_DIR`,
+   `BASE_MODEL_DIR`, `QWEN_VAE_DIR` and `HF_HOME` on local container disk, and
+   allow 120 GB for both variants. Existing environment overrides take precedence
+   over Dockerfile defaults.
+2. If reusing your existing style/character adapters, set `LORA_DIR` to
    `/runpod-volume/qwen_image_21/loras`. Obsolete Viggle accelerators are ignored.
    Layer compatibility is validated; visual quality with Turbo needs a GPU check.
-4. Update clients that explicitly send 4–7 steps to send **8** (or omit the field).
+3. Default steps are **8 for Turbo / 40 for Base**; overrides accept 1..200.
+   Add `model_variant` to
+   select Base. Existing clients without that field keep Turbo behavior.
    Check generation, multi-reference edits, RGBA output and a request with then
    without an additional LoRA on the deployed GPU worker.
 
@@ -139,7 +149,10 @@ unmodified Turbo snapshot is required.
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `MODEL_DIR` | `/models/qwen_image_21_turbo` (Dockerfile) | Snapshot validated before model loading |
-| `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Hub repo downloaded at startup |
+| `MODEL_ID` | `Qwen/Qwen-Image-2.1-Turbo` | Turbo Hub repo, fetched only when requested |
+| `BASE_MODEL_DIR` | sibling `qwen_image_21_base` beside `MODEL_DIR` | Separate local Base snapshot |
+| `BASE_MODEL_ID` | `Qwen/Qwen-Image-2.1` | Base Hub repo, fetched only when requested |
+| `QWEN_VAE_DIR` | `/models/qwen_image_21_shared/texture_fix_vae` | Shared local Texture-Fix config and weights |
 | `QWEN_VAE` | `texture-fix` | Selected VAE: `texture-fix` or `original`; restart the worker to change it |
 | `LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` (Dockerfile) | Additional adapters on the attached volume; preserve your existing adapter path |
 | `LORA_CACHE_DIR` | `$MODEL_DIR/lora_cache` | Local container-disk cache of requested adapters |
@@ -189,7 +202,7 @@ Runtime logs include library versions, Torch CPU thread count, GPU name,
 compute capability and architectures compiled into Torch.
 
 Separate stages cover imports, source resolution, catalog scanning, base model
-loading (including `vae_load` for Texture-Fix), Turbo sampling-config validation, CUDA probing,
+loading (including `vae_load` for Texture-Fix), sampling-config validation, CUDA probing,
 and placement on GPU or CPU offload. Inference and image delivery also have
 timings. The last `begin` without a matching `done` identifies the unfinished
 stage. No prompts or image contents are logged by these diagnostics.
@@ -209,7 +222,7 @@ RunPod's container exit reason as well.
 | **Build context** | `.` (repo root) |
 | **GPU** | 24 GB class with `OFFLOAD=cpu`; 48 GB+ if you set `OFFLOAD=none` and generate at 2048 |
 | **Volume** | Optional for additional LoRAs; base weights download to container disk |
-| **Container disk** | 80 GB |
+| **Container disk** | 120 GB for both variants and LoRAs |
 
 Push worker changes to `master` and wait for the **Build Runpod workers** GitHub
 Actions workflow to publish `ghcr.io/vsevolod/runpod-workers-qwen_image_21:<commit-sha>`.
@@ -223,16 +236,59 @@ While the old image is active, use the compatible command documented in
 
 ## API
 
-`guidance_scale` is Diffusers `true_cfg_scale`. The turbo student is sampled
-**without** classifier-free guidance, so the default is `1.0` (off). A value
-above 1 requires `negative_prompt` and doubles each step.
+The worker uses [`shared/api`](../shared/api/README.md) together with Krea.
+That document is the complete contract, including common fields, model-specific
+options, responses, errors and compatibility aliases. New clients should send
+Qwen-specific controls under `"model_options": {"variant": "base"}` and optional
+`output_resolution` inside that object. Existing flat examples below remain
+supported as compatibility aliases.
 
-`num_inference_steps` defaults to **8** and only **8** is accepted. The official
-checkpoint stores `sample_sigmas` in `model_index.json`; Diffusers uses that
-schedule automatically. The worker does not pass custom `sigmas` or replace
-the checkpoint scheduler. Old Viggle counts (4–7) return validation errors.
-Changing only `num_inference_steps` would not change the checkpoint schedule,
-so unsupported values are rejected rather than silently reported as effective.
+The following fields work for both `image_generate` and `image_edit`, with
+either model variant. Effective values are returned in the response and logged.
+
+| Field | Default | Overrides |
+|-------|---------|-----------|
+| `num_inference_steps` | Turbo: `8`; Base: `40` | Integer in `1..200` |
+| `guidance_scale` | `1.0` | Finite number `>= 0`; maps to Diffusers `true_cfg_scale` |
+| `sampler` | `"euler"` | `"euler"`, `"heun"`, `"er_sde"` |
+
+`guidance_scale <= 1` disables classifier-free guidance. Values above 1 execute
+both conditional and unconditional passes at each evaluation. `negative_prompt`
+is optional: if omitted or blank, CFG uses an empty unconditional prompt. Explicit
+negative text is preserved. Turbo defaults to CFG off.
+
+`model_variant` accepts `"turbo"` (default) or `"base"` for both generation and edit.
+Omitted `num_inference_steps` resolves to **8 for Turbo** or **40 for Base**.
+Explicit step counts override these defaults.
+Existing clients without `model_variant` retain Turbo behavior.
+
+At **8 steps**, Turbo retains its checkpoint's saved `sample_sigmas` and grid
+transforms (`scheduler: "checkpoint"`). For **other Turbo counts**, the request
+explicitly supplies a `simple` grid of the requested length. This is an
+experimental override of the model's trained eight-step schedule, with no
+guarantee of improved quality. Base always uses `scheduler: "simple"`.
+
+The simple grid selects the requested number of sigmas using ComfyUI's
+`simple_scheduler` from `ModelSamplingFlux`'s
+10000-point table with QwenImage21's default shift **0.69**. Its scheduler is
+flow matching with dynamic shifting and terminal stretching disabled because
+the supplied grid is already shifted. Diffusers appends terminal zero. These
+parameters match the default ComfyUI QwenImage21 Euler/simple combination; custom
+Comfy model-sampling patches and bit-identical cross-framework images are outside
+this contract. Sampling parity is checked numerically on CPU.
+
+Euler makes one denoiser evaluation per step. Heun makes **2 × steps − 1**
+evaluations (predictor/corrector, ending with Euler at zero). ER-SDE uses ComfyUI's
+ER-SDE-Solver-3 defaults: `max_stage=3`, `s_noise=1`, and the default noise scaler.
+It makes one evaluation per step, with additional stochastic noise drawn from the
+request's seeded generator. CFG above 1 doubles these denoiser pass counts.
+
+Schedulers are created per request and discarded afterward, including on errors.
+Changing Steps/CFG/Sampler does not reload model weights. ER-SDE is adapted from
+[ComfyUI ce1e922](https://github.com/Comfy-Org/ComfyUI/blob/ce1e922d8623bb507180e32a0c01a7d0e29edef7/comfy/k_diffusion/sampling.py)
+under [GPL-3.0](LICENSES/COMFYUI-GPL-3.0.txt). The Heun adapter supplies the selected
+sigma grid to Diffusers' flow-matching Heun solver; these are not the ordinary
+SD/SDXL discrete schedulers.
 
 Width and height must be multiples of **32**, each side in 256..2752, and the
 area must fit the largest official preset (`2400×1792`). Recommended sizes:
@@ -367,6 +423,10 @@ CUDA OOM retains the existing worker restart behavior.
 
 ```json
 {
+  "model_variant": "turbo",
+  "model_id": "Qwen/Qwen-Image-2.1-Turbo",
+  "sampler": "euler",
+  "scheduler": "checkpoint",
   "images": ["data:image/png;base64,..."],
   "seed": 42,
   "width": 1024,
@@ -383,7 +443,7 @@ Images are returned only in the `images` array; there is no `image_url` alias.
 Edits also return `num_refs`. With `BUCKET_ENDPOINT_URL` set, `images` are
 URLs instead of data URLs.
 `loras` reports effective additional adapters (zero-strength entries are omitted).
-Jobs without requested LoRAs run directly on the official Turbo checkpoint.
+Jobs without requested LoRAs run directly on their selected official checkpoint.
 
 ## Local client
 
@@ -395,6 +455,23 @@ python scripts/qwen_image_21.py --prompt "a red fox" \
   --lora 'my_style@0.8,my_character@0.5' -o styled.png
 python scripts/qwen_image_21.py -i a.png -i b.png \
   --prompt "put both subjects in one photo" -o edit.png
+python scripts/qwen_image_21.py --model-variant base -i a.png \
+  --prompt "change the background to a sunset beach" -o base-edit.png
+python scripts/qwen_image_21.py --model-variant base --steps 40 --cfg 3.5 \
+  --sampler er_sde -i a.png --prompt "make it sunset" -o custom-edit.png
+```
+
+The CLI uses the same `ENDPOINT_ID` for both variants. `--steps` may be omitted
+or overridden; `--cfg` aliases `--guidance-scale`. A Base API edit can omit steps:
+
+```json
+{"input":{"type":"image_edit","model_variant":"base","prompt":"make it sunset","images":["data:image/png;base64,..."]}}
+```
+
+Or override sampling explicitly:
+
+```json
+{"input":{"type":"image_edit","model_variant":"base","prompt":"make it sunset","images":["data:image/png;base64,..."],"num_inference_steps":40,"guidance_scale":3.5,"sampler":"er_sde"}}
 ```
 
 ## Tests
@@ -412,3 +489,6 @@ The native-resolution integration test applies the Docker patch in a temporary
 directory and checks reference dimensions through the actual pipeline's text,
 VAE and transformer inputs, without loading model weights.
 Those integration tests are skipped when these dependencies are absent.
+The CPU sampling tests compare ER-SDE step by step with a pinned ComfyUI
+reference, check Heun's numerical behavior, and execute the actual Qwen denoising
+loop with tiny components to verify step overrides, CFG, seeded noise and reuse.

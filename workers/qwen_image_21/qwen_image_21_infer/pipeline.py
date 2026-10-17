@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import gc
 import os
 import sys
 from pathlib import Path
@@ -16,17 +17,18 @@ from .diagnostics import log_cuda_info, log_runtime_info, log_stage
 from .lora import LoRACatalog, LoRAManager
 from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
-    DEFAULT_MODEL_DIR,
     LORA_DIR_NAME,
-    TEXTURE_FIX_VAE_DIR,
     TEXTURE_FIX_VAE_ID,
     parse_disable_mmap,
     parse_local_files_only,
     resolve_model_source,
     resolve_offload,
     resolve_vae_variant,
-    validate_turbo_config,
+    resolve_model_directory,
+    resolve_vae_directory,
+    validate_model_config,
 )
+from .sampling import base_scheduler, make_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -45,20 +47,41 @@ class QwenImage21Runtime:
         generator = torch.Generator(device=device).manual_seed(int(seed))
         kwargs = build_pipe_kwargs(norm)
         kwargs["generator"] = generator
-        with self.loras.activate(loras):
-            result = self.pipe(**kwargs)
+        original_scheduler = self.pipe.scheduler
+        self.pipe.scheduler = make_scheduler(original_scheduler, norm.sampler, norm.scheduler, generator=generator)
+        try:
+            with self.loras.activate(loras):
+                result = self.pipe(**kwargs)
+        finally:
+            # Drop histories, RNG and latent references even after a failed request.
+            self.pipe.scheduler = original_scheduler
         images = list(result.images)
         if not images:
             raise RuntimeError("Qwen-Image-2.1 pipeline returned no images")
         return images
+
+    def close(self):
+        """Remove offload hooks and break both owners' references to the old model."""
+        import torch
+
+        pipe, self.pipe = self.pipe, None
+        self.loras = None
+        if pipe is not None:
+            pipe.remove_all_hooks()
+            del pipe
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def load_pipeline(
     model_dir: str | None = None,
     model_id: str | None = None,
     offload: str | None = None,
+    model_variant: str = "turbo",
+    vae=None,
 ) -> QwenImage21Runtime:
-    """Load ``Qwen/Qwen-Image-2.1-Turbo`` in bf16 and place it according to ``OFFLOAD``."""
+    """Load the selected Qwen variant in bf16 and place it according to OFFLOAD."""
     with log_stage("runtime_imports"):
         import torch
         from diffusers import QwenImage21Pipeline
@@ -71,27 +94,28 @@ def load_pipeline(
     # Preserve mmap and CPU offload; do not inspect a partial model directory.
     wait_for_component("all")
     with log_stage("model_source"):
-        source = resolve_model_source(model_dir, model_id)
+        source = resolve_model_source(model_dir, model_id, model_variant)
         local_files_only = parse_local_files_only()
         mode = resolve_offload(offload)
         disable_mmap = parse_disable_mmap()
         vae_variant = resolve_vae_variant()
         directory = Path(
-            model_dir if model_dir is not None else os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR)
+            model_dir if model_dir is not None else resolve_model_directory(model_variant)
         )
         vae_source = None
         if vae_variant == "texture-fix":
-            vae_directory = directory / TEXTURE_FIX_VAE_DIR
+            vae_directory = resolve_vae_directory()
             vae_source = (
                 str(vae_directory)
                 if local_files_only or (vae_directory / "config.json").is_file()
                 else TEXTURE_FIX_VAE_ID
             )
-        lora_directory = Path(os.environ.get("LORA_DIR") or directory / LORA_DIR_NAME)
+        lora_directory = Path(os.environ.get("LORA_DIR") or resolve_model_directory("turbo") / LORA_DIR_NAME)
     with log_stage("lora_catalog"):
         lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(
-        "Loading Qwen-Image-2.1-Turbo from %s (offload=%s, local_files_only=%s, disable_mmap=%s)",
+        "Loading Qwen-Image-2.1 %s from %s (offload=%s, local_files_only=%s, disable_mmap=%s)",
+        model_variant,
         source,
         mode,
         local_files_only,
@@ -104,11 +128,14 @@ def load_pipeline(
             local_files_only=local_files_only,
             disable_mmap=disable_mmap,
             vae_source=vae_source,
+            vae=vae,
         )
     # Keep both the scheduler and sample_sigmas supplied by the checkpoint.
     # Older Diffusers drops sample_sigmas at load time, which must fail visibly.
-    with log_stage("turbo_config"):
-        validate_turbo_config(pipe.config, source)
+    with log_stage("sampling_config"):
+        validate_model_config(pipe.config, source, model_variant)
+        if model_variant == "base":
+            pipe.scheduler = base_scheduler(pipe.scheduler)
     pipe.set_progress_bar_config(disable=True)
 
     with log_stage(f"placement_{mode}"):
@@ -122,8 +149,8 @@ def load_pipeline(
             pipe.to("cuda")
 
     logger.info(
-        "Qwen-Image-2.1-Turbo ready (offload=%s, steps=%s, vae=%s)",
-        mode, len(pipe.config["sample_sigmas"]), vae_variant,
+        "Qwen-Image-2.1 ready (model_variant=%s, offload=%s, steps=%s, vae=%s)",
+        model_variant, mode, 8 if model_variant == "turbo" else 40, vae_variant,
     )
     return QwenImage21Runtime(pipe, lora_catalog, offload=mode)
 
@@ -131,11 +158,14 @@ def load_pipeline(
 def _load_base_pipeline(
     pipe_class, source: str, *, local_files_only: bool, disable_mmap: bool,
     vae_source: str | None = None,
+    vae=None,
 ):
     import torch
 
     components = {}
-    if vae_source is not None:
+    if vae is not None:
+        components["vae"] = vae
+    elif vae_source is not None:
         from diffusers import AutoencoderKLQwenImage21
 
         with log_stage("vae_load"):

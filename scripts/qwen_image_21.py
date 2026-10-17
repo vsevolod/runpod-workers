@@ -38,7 +38,8 @@ POLL_INTERVAL_S = 5.0
 DEFAULT_OUTPUT = "output.png"
 DEFAULT_EDIT_OUTPUT = "edit_output.png"
 DEFAULT_STEPS = 8
-ALLOWED_STEPS = (8,)
+MAX_STEPS = 200
+SAMPLERS = ("euler", "heun", "er_sde")
 DEFAULT_GUIDANCE = 1.0
 DEFAULT_GEN_SIZE = 1024
 MAX_REFS = 10
@@ -237,6 +238,11 @@ def _save_result(result: dict[str, Any], dest: Path) -> int:
         "output_resolution",
         "num_refs",
         "loras",
+        "model_variant",
+        "model_id",
+        "sampler",
+        "scheduler",
+        "model_options",
     ):
         if key in output:
             print(f"  {key}: {output[key]}")
@@ -264,6 +270,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Reference image. Repeat for a multi-ref edit (max {MAX_REFS}).",
     )
     parser.add_argument("--prompt", default=None, help="Prompt. Asked interactively if omitted.")
+    parser.add_argument("--model-variant", "--variant", choices=("turbo", "base"), default="turbo")
     parser.add_argument("--width", type=int, default=None)
     parser.add_argument("--height", type=int, default=None)
     parser.add_argument(
@@ -279,17 +286,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--steps",
-        type=int,
-        default=DEFAULT_STEPS,
-        choices=ALLOWED_STEPS,
-        help="Official Qwen-Image-2.1-Turbo checkpoint schedule (8 steps).",
+        type=_step_count,
+        default=None,
+        help="1..200. Default: 8 for Turbo, 40 for Base. Other Turbo counts use simple sigmas.",
     )
     parser.add_argument(
-        "--guidance-scale",
+        "--guidance-scale", "--cfg",
         type=float,
         default=DEFAULT_GUIDANCE,
         help="true CFG scale. <= 1 disables guidance (default 1).",
     )
+    parser.add_argument("--sampler", choices=SAMPLERS, default="euler")
     parser.add_argument("--negative-prompt", default=None)
     parser.add_argument(
         "--num-images",
@@ -312,6 +319,26 @@ def _run_fetch(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> i
     return _save_result(result, Path(args.output or DEFAULT_OUTPUT))
 
 
+def _request_steps(args: argparse.Namespace) -> int:
+    if args.steps is not None:
+        return args.steps
+    return DEFAULT_STEPS if args.model_variant == "turbo" else 40
+
+
+def _step_count(raw: str) -> int:
+    value = int(raw)
+    if not 1 <= value <= MAX_STEPS:
+        raise argparse.ArgumentTypeError(f"steps must be in 1..{MAX_STEPS}")
+    return value
+
+
+def _model_options(args: argparse.Namespace) -> dict:
+    options = {"variant": args.model_variant}
+    if args.output_resolution is not None:
+        options["output_resolution"] = args.output_resolution
+    return options
+
+
 def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> int:
     paths = [Path(item).expanduser() for item in args.images or []]
     if not paths or len(paths) > MAX_REFS:
@@ -323,31 +350,25 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
             file=sys.stderr,
         )
         return 1
-    if args.guidance_scale > 1 and not (args.negative_prompt or "").strip():
-        print(
-            "error: --guidance-scale > 1 requires --negative-prompt",
-            file=sys.stderr,
-        )
-        return 1
     prompt = args.prompt if args.prompt is not None else _prompt_line("prompt")
     if not prompt:
         print("error: prompt is required", file=sys.stderr)
         return 1
 
     job_input: dict[str, Any] = {
+        "model_options": _model_options(args),
         "type": "image_edit",
         "prompt": prompt,
         "images": [_image_to_data_url(path) for path in paths],
-        "num_inference_steps": args.steps,
+        "num_inference_steps": _request_steps(args),
         "guidance_scale": args.guidance_scale,
+        "sampler": args.sampler,
         "num_images": 1,
         "loras": _parse_lora(args.lora),
     }
     if args.width is not None:
         job_input["width"] = args.width
         job_input["height"] = args.height
-    if args.output_resolution is not None:
-        job_input["output_resolution"] = args.output_resolution
     if args.seed is not None:
         job_input["seed"] = args.seed
     if args.negative_prompt:
@@ -364,12 +385,6 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
 
 
 def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> int:
-    if args.guidance_scale > 1 and not (args.negative_prompt or "").strip():
-        print(
-            "error: --guidance-scale > 1 requires --negative-prompt",
-            file=sys.stderr,
-        )
-        return 1
     width = args.width if args.width is not None else DEFAULT_GEN_SIZE
     height = args.height if args.height is not None else DEFAULT_GEN_SIZE
     prompt = args.prompt if args.prompt is not None else _prompt_line("prompt")
@@ -377,17 +392,17 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         print("error: prompt is required", file=sys.stderr)
         return 1
     job_input: dict[str, Any] = {
+        "model_options": _model_options(args),
         "type": "image_generate",
         "prompt": prompt,
         "width": width,
         "height": height,
-        "num_inference_steps": args.steps,
+        "num_inference_steps": _request_steps(args),
         "guidance_scale": args.guidance_scale,
+        "sampler": args.sampler,
         "num_images": args.num_images,
         "loras": _parse_lora(args.lora),
     }
-    if args.output_resolution is not None:
-        job_input["output_resolution"] = args.output_resolution
     if args.seed is not None:
         job_input["seed"] = args.seed
     if args.negative_prompt:
@@ -396,7 +411,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
     print(f"mode:     generate")
     print(f"endpoint: {endpoint_id}")
     print(f"prompt:   {prompt}")
-    print(f"size:     {width}x{height}  steps={args.steps}")
+    print(f"size:     {width}x{height}  variant={args.model_variant}  steps={_request_steps(args)}")
     job_id = _submit_job(endpoint_id, api_key, job_input)
     result = _poll_job(
         endpoint_id, api_key, job_id, interval=max(0.5, args.poll_interval)

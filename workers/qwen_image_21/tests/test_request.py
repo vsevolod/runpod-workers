@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PIL import Image
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
+
 _MISSING = object()
 _REQUEST_PATH = Path(__file__).parents[1] / "qwen_image_21_infer" / "request.py"
 _SCHEMA_PATH = Path(__file__).parents[1] / "schemas.py"
@@ -65,6 +67,31 @@ def _generate(**overrides):
 
 
 class NormalizeJobInputTests(unittest.TestCase):
+    def test_base_defaults_to_forty_steps_even_with_schema_defaults(self):
+        payload = {"prompt": "fox", "model_variant": "base", "width": 1024, "height": 1024,
+                   "num_inference_steps": 8}
+        out = normalize_job_input(payload, raw_keys={"prompt", "model_variant"})
+        self.assertEqual(out.model_variant, "base")
+        self.assertEqual(out.num_inference_steps, 40)
+
+    def test_explicit_steps_override_both_variant_defaults(self):
+        for variant, steps in [("base", 25), ("turbo", 12)]:
+            with self.subTest(variant=variant):
+                out = _generate(model_variant=variant, num_inference_steps=steps)
+                self.assertEqual(out.model_variant, variant)
+                self.assertEqual(out.num_inference_steps, steps)
+                self.assertEqual(len(build_pipe_kwargs(out)["sigmas"]), steps)
+                self.assertEqual(out.scheduler, "simple")
+        with self.assertRaisesRegex(RequestError, "model_variant"):
+            _generate(model_variant="other")
+
+    def test_base_passes_comfy_simple_sigmas_and_turbo_uses_checkpoint_schedule(self):
+        base = build_pipe_kwargs(_generate(model_variant="base", num_inference_steps=40))
+        self.assertEqual(len(base["sigmas"]), 40)
+        self.assertEqual(base["sigmas"][0], 1.0)
+        self.assertGreater(base["sigmas"][-1], 0)
+        self.assertNotIn("sigmas", build_pipe_kwargs(_generate()))
+
     def test_default_type_is_generate(self):
         out = _generate()
         self.assertEqual(out.type, "image_generate")
@@ -97,12 +124,30 @@ class NormalizeJobInputTests(unittest.TestCase):
             self.assertTrue(INPUT_SCHEMA["width"]["constraints"](width), name)
             self.assertTrue(INPUT_SCHEMA["height"]["constraints"](height), name)
 
-    def test_guidance_above_one_requires_negative_prompt(self):
-        with self.assertRaisesRegex(RequestError, "negative_prompt"):
-            _generate(guidance_scale=4.0, negative_prompt=None)
+    def test_guidance_above_one_uses_empty_unconditional_prompt_when_omitted(self):
+        for negative in (None, "", "   "):
+            out = _generate(guidance_scale=4.0, negative_prompt=negative)
+            self.assertEqual(out.negative_prompt, "")
+            self.assertEqual(build_pipe_kwargs(out)["negative_prompt"], "")
+            self.assertEqual(build_pipe_kwargs(out)["true_cfg_scale"], 4.0)
         out = _generate(guidance_scale=3.5, negative_prompt="blurry")
         self.assertEqual(out.guidance_scale, 3.5)
         self.assertEqual(out.negative_prompt, "blurry")
+
+    def test_samplers_are_validated_before_inference_and_default_to_euler(self):
+        self.assertEqual(_generate().sampler, "euler")
+        self.assertEqual(_generate().scheduler, "checkpoint")
+        for sampler in ("euler", "heun", "er_sde"):
+            self.assertEqual(_generate(sampler=sampler).sampler, sampler)
+            self.assertTrue(INPUT_SCHEMA["sampler"]["constraints"](sampler))
+        for sampler in ("unknown", None, [], "Euler"):
+            with self.assertRaisesRegex(RequestError, "sampler"):
+                _generate(sampler=sampler)
+
+    def test_invalid_guidance_is_a_client_error(self):
+        for guidance in (float("nan"), float("inf"), -1, "bad", True, []):
+            with self.subTest(guidance=guidance), self.assertRaisesRegex(RequestError, "guidance_scale"):
+                _generate(guidance_scale=guidance)
 
     def test_blank_negative_prompt_is_dropped(self):
         out = _generate(negative_prompt="   ")
@@ -310,8 +355,8 @@ class BuildPipeKwargsTests(unittest.TestCase):
         self.assertTrue(INPUT_SCHEMA["output_resolution"]["constraints"](None))
         self.assertFalse(INPUT_SCHEMA["width"]["constraints"](1000))
         self.assertFalse(steps["constraints"](0))
-        self.assertFalse(steps["constraints"](40))
-        self.assertFalse(steps["constraints"](6))
+        self.assertTrue(steps["constraints"](40))
+        self.assertTrue(steps["constraints"](6))
         self.assertTrue(steps["constraints"](8))
         self.assertFalse(INPUT_SCHEMA["num_images"]["constraints"](5))
 
@@ -321,12 +366,15 @@ class BuildPipeKwargsTests(unittest.TestCase):
         self.assertEqual(out.num_inference_steps, 8)
         self.assertNotIn("sigmas", build_pipe_kwargs(out))
 
-    def test_other_step_counts_are_rejected_in_schema_and_normalizer(self):
-        for steps in (0, 4, 5, 6, 7, 9, 40, True, 8.5, "8"):
+    def test_step_count_bounds_are_enforced_in_schema_and_normalizer(self):
+        for steps in (0, -1, 201, True, 8.5, "8", None):
             with self.subTest(steps=steps):
                 self.assertFalse(INPUT_SCHEMA["num_inference_steps"]["constraints"](steps))
-                with self.assertRaisesRegex(RequestError, "8"):
+                with self.assertRaisesRegex(RequestError, "num_inference_steps"):
                     _generate(num_inference_steps=steps)
+        for steps in (1, 6, 25, 40, 100, 200):
+            self.assertTrue(INPUT_SCHEMA["num_inference_steps"]["constraints"](steps))
+            self.assertEqual(_generate(num_inference_steps=steps).num_inference_steps, steps)
 
 
 if __name__ == "__main__":
