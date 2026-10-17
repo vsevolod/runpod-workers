@@ -40,7 +40,7 @@ OFFICIAL_PRESETS = _request.OFFICIAL_PRESETS
 INPUT_SCHEMA = _schemas.INPUT_SCHEMA
 
 
-def _png_b64(w=32, h=32, color=(255, 0, 0), mode="RGB") -> str:
+def _png_b64(w=256, h=256, color=(255, 0, 0), mode="RGB") -> str:
     buf = BytesIO()
     Image.new(mode, (w, h), color).save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("ascii")
@@ -147,9 +147,8 @@ class NormalizeJobInputTests(unittest.TestCase):
             raw_keys={"type", "prompt", "images"},
         )
         self.assertTrue(out.size_from_source)
-        self.assertIsNone(out.width)
-        self.assertIsNone(out.height)
-        self.assertEqual(out.output_resolution, 1024)
+        self.assertEqual((out.width, out.height), (256, 256))
+        self.assertEqual(out.output_resolution, 256)
         self.assertEqual(out.images[0].mode, "RGB")
         self.assertEqual(out.images[1].mode, "RGBA")
         self.assertEqual(out.images[1].getpixel((0, 0))[3], 40)
@@ -197,6 +196,38 @@ class NormalizeJobInputTests(unittest.TestCase):
         )
         self.assertTrue(out.size_from_source)
         self.assertEqual(out.output_resolution, 2048)
+
+    def test_edit_uses_last_reference_native_canvas_and_keeps_distinct_ref_sizes(self):
+        payload = {
+            "type": "image_edit", "prompt": "combine",
+            "images": [_png_b64(1536, 1024), _png_b64(801, 1191, mode="RGBA")],
+        }
+        out = normalize_job_input(payload, raw_keys=set(payload))
+        self.assertEqual((out.width, out.height), (800, 1184))
+        self.assertEqual([image.size for image in out.images], [(1536, 1024), (801, 1191)])
+        kwargs = build_pipe_kwargs(out)
+        self.assertEqual(kwargs["reference_resolution"], 0)
+        self.assertEqual((kwargs["width"], kwargs["height"]), (800, 1184))
+
+    def test_edit_explicit_canvas_does_not_resize_references(self):
+        payload = {
+            "type": "image_edit", "prompt": "combine", "width": 1024, "height": 1024,
+            "output_resolution": 1024,
+            "images": [_png_b64(1536, 1024), _png_b64(768, 512)],
+        }
+        out = normalize_job_input(payload, raw_keys=set(payload))
+        kwargs = build_pipe_kwargs(out)
+        self.assertEqual(kwargs["reference_resolution"], 0)
+        self.assertEqual([image.size for image in kwargs["image"]], [(1536, 1024), (768, 512)])
+        self.assertEqual((kwargs["width"], kwargs["height"]), (1024, 1024))
+
+    def test_native_reference_outside_supported_size_is_rejected_before_inference(self):
+        payload = {
+            "type": "image_edit", "prompt": "combine", "width": 1024, "height": 1024,
+            "images": [_png_b64(2816, 1024)],
+        }
+        with self.assertRaisesRegex(RequestError, "reference"):
+            normalize_job_input(payload, raw_keys=set(payload))
 
     def test_edit_rejects_num_images_above_one(self):
         with self.assertRaisesRegex(RequestError, "num_images"):
@@ -263,12 +294,12 @@ class BuildPipeKwargsTests(unittest.TestCase):
             raw_keys={"type", "prompt", "images"},
         )
         kwargs = build_pipe_kwargs(out)
-        self.assertNotIn("width", kwargs)
-        self.assertNotIn("height", kwargs)
+        self.assertEqual((kwargs["width"], kwargs["height"]), (256, 256))
         self.assertEqual(len(kwargs["image"]), 2)
         self.assertEqual(kwargs["negative_prompt"], "blur")
         self.assertEqual(kwargs["true_cfg_scale"], 2.5)
-        self.assertEqual(kwargs["output_resolution"], 1024)
+        self.assertEqual(kwargs["reference_resolution"], 0)
+        self.assertEqual(kwargs["output_resolution"], 256)
 
     def test_schema_defaults_match_the_contract(self):
         steps = INPUT_SCHEMA["num_inference_steps"]

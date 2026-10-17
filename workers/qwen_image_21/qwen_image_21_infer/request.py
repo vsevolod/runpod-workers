@@ -15,7 +15,6 @@ MAX_SIDE = 2752
 # Largest official preset is 4:3 (2400×1792). Anything bigger is rejected.
 MAX_AREA = 2400 * 1792
 MULTIPLE = 32
-DEFAULT_OUTPUT_RESOLUTION = 1024
 DEFAULT_STEPS = 8
 DEFAULT_GUIDANCE = 1.0
 MAX_IMAGES = 4
@@ -43,7 +42,7 @@ class NormalizedRequest:
     type: str  # "image_generate" | "image_edit"
     prompt: str
     negative_prompt: str | None
-    width: int | None  # None when the edit canvas follows the last reference
+    width: int | None  # Effective canvas, including native source-sized edits
     height: int | None
     size_from_source: bool
     seed: int | None
@@ -126,6 +125,18 @@ def _derived_output_resolution(width: int, height: int) -> int:
     return max(MIN_SIDE, min(MAX_SIDE, side))
 
 
+def _native_size(image: Image.Image) -> tuple[int, int]:
+    return tuple(max(MULTIPLE, round(side / MULTIPLE) * MULTIPLE) for side in image.size)
+
+
+def _canvas_at_resolution(image: Image.Image, resolution: int) -> tuple[int, int]:
+    ratio = image.width / image.height
+    return (
+        round(math.sqrt(resolution * resolution * ratio) / MULTIPLE) * MULTIPLE,
+        round(math.sqrt(resolution * resolution / ratio) / MULTIPLE) * MULTIPLE,
+    )
+
+
 def normalize_job_input(
     validated: dict,
     *,
@@ -135,7 +146,7 @@ def normalize_job_input(
 
     ``raw_keys`` is ``set(job['input'].keys())`` before RunPod fills defaults.
     Edit uses it so an omitted width/height follows the last reference instead
-    of the schema default canvas.
+    of the schema default canvas. Reference images keep their native sizes.
     """
     raw_keys = set(raw_keys or ())
 
@@ -202,6 +213,14 @@ def normalize_job_input(
         if num_images != 1:
             raise RequestError("image_edit requires num_images == 1")
         images = tuple(decode_image_string(item) for item in images_raw)
+        for index, image in enumerate(images, 1):
+            native_w, native_h = _native_size(image)
+            if native_w > MAX_SIDE or native_h > MAX_SIDE or native_w * native_h > MAX_AREA:
+                raise RequestError(
+                    f"reference {index} native size {native_w}x{native_h} exceeds "
+                    f"the supported limit ({MAX_SIDE}px per side, {MAX_AREA} pixels); "
+                    "resize the reference before submitting"
+                )
         has_width = "width" in raw_keys
         has_height = "height" in raw_keys
         if has_width ^ has_height:
@@ -211,9 +230,12 @@ def normalize_job_input(
             )
         size_from_source = not has_width and not has_height
         if size_from_source:
-            width, height = None, None
             if output_resolution is None:
-                output_resolution = DEFAULT_OUTPUT_RESOLUTION
+                width, height = _native_size(images[-1])
+                output_resolution = _derived_output_resolution(width, height)
+            else:
+                width, height = _canvas_at_resolution(images[-1], output_resolution)
+            _check_canvas(width, height)
         else:
             width = int(validated["width"])
             height = int(validated["height"])
@@ -264,4 +286,5 @@ def build_pipe_kwargs(norm: NormalizedRequest) -> dict:
         kwargs["height"] = norm.height
     if norm.images:
         kwargs["image"] = list(norm.images)
+        kwargs["reference_resolution"] = 0
     return kwargs

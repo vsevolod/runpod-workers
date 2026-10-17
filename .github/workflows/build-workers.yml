@@ -59,10 +59,11 @@ jobs:
         shell: bash
         run: |
           docker run --rm --env WORKER --entrypoint python "$IMAGE" -c '
-          import importlib, os, torch
+          import importlib, inspect, os, torch
           importlib.import_module(os.environ["WORKER"] + "_infer.pipeline")
           if os.environ["WORKER"] == "qwen_image_21":
               from diffusers import QwenImage21Pipeline
+              assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
           else:
               from diffusers import AutoencoderKLQwenImage
               from transformers import Qwen3VLForConditionalGeneration

@@ -281,10 +281,28 @@ without an immediate OOM. Pass an official size when the GPU has room.
 }
 ```
 
-Omit both `width` and `height` and the canvas follows the **last** reference
-at `output_resolution` (default 1024, meaning about a 1024×1024 area). Pass
-both dimensions to force a canvas. References keep their alpha; the vision
-encoder composites RGBA over white, and the VAE still reads the alpha channel.
+Each reference keeps its own native inference size, rounded to the nearest
+multiple of 32. References are no longer resized to the output canvas area.
+Omit `width`, `height` and `output_resolution` to use the **last** reference's
+native size for the result too. Pass both dimensions to choose a canvas, or
+`output_resolution` to choose its approximate square-root area while keeping
+the last reference's aspect ratio. These overrides affect the result only.
+
+Native references must fit the existing supported bounds: at most 2752px per
+side and 4,300,800 pixels after alignment. Larger references return a validation
+error before inference; resize them before submitting. Output dimensions still
+must be at least 256px per side. References keep their alpha; the vision encoder
+composites RGBA over white, and the VAE still reads the alpha channel.
+
+Docker applies `patches/diffusers-native-references.patch` to the pinned
+Diffusers pipeline at build time. It adds independent reference sizing; the
+build fails if the patch no longer applies. When running inference outside
+Docker, apply the same patch from the environment's `site-packages` directory.
+
+For both generation and editing, omit `seed` (or pass `null`) for a fresh random
+32-bit seed on every request. Explicit seeds, including `0`, are preserved, and
+the response reports the seed actually used. When editing a generated image,
+omit its generation seed to avoid replaying the same initial noise.
 
 There is no separate mask field. Paint the region on a reference (circle,
 annotation, or mask image) and include that picture in `images`.
@@ -390,4 +408,7 @@ python -m unittest discover -s workers/qwen_image_21/tests -p 'test_*.py' -v
 
 With Torch, Diffusers, PEFT and safetensors installed, the suite also checks
 actual adapter composition, alpha metadata and cleanup on a tiny CPU model.
+The native-resolution integration test applies the Docker patch in a temporary
+directory and checks reference dimensions through the actual pipeline's text,
+VAE and transformer inputs, without loading model weights.
 Those integration tests are skipped when these dependencies are absent.

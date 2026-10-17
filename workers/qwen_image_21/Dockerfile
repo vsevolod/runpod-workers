@@ -47,6 +47,13 @@ WORKDIR /app
 COPY workers/qwen_image_21/requirements.txt /app/requirements.txt
 RUN uv pip install --no-cache -r /app/requirements.txt
 
+# The pinned upstream pipeline couples reference sizes to the output canvas.
+# Fail the build if this narrow patch no longer applies after a dependency update.
+COPY workers/qwen_image_21/patches /app/patches
+RUN cd /.venv/lib/python3.12/site-packages && \
+    git apply --check /app/patches/diffusers-native-references.patch && \
+    git apply /app/patches/diffusers-native-references.patch
+
 COPY workers/qwen_image_21/schemas.py \
      workers/qwen_image_21/handler.py \
      workers/qwen_image_21/download_weights.py \

@@ -270,7 +270,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output-resolution",
         type=int,
         default=None,
-        help="Condition-image area. Edit default when size is omitted: 1024.",
+        help="Edit canvas area when size is omitted. Default: native last-reference size; references keep their own sizes.",
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(

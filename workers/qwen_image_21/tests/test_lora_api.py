@@ -7,7 +7,7 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from PIL import Image
 
@@ -94,7 +94,7 @@ class LoRAAPITests(unittest.TestCase):
 
     def test_generation_and_edit_forward_loras_and_report_effective_selection(self):
         buffer = BytesIO()
-        Image.new("RGB", (32, 32)).save(buffer, format="PNG")
+        Image.new("RGB", (256, 256)).save(buffer, format="PNG")
         image = base64.b64encode(buffer.getvalue()).decode()
         for mode in ["image_generate", "image_edit"]:
             payload = {
@@ -113,11 +113,37 @@ class LoRAAPITests(unittest.TestCase):
             kwargs, adapters = self.pipe.calls[-1]
             self.assertNotIn("loras", kwargs)
             self.assertEqual(kwargs["generator"].seed, 42)
+            self.assertEqual(output["seed"], 42)
             self.assertEqual(adapters, [("request_lora_0", 0.8)])
             self.assertEqual(output["num_inference_steps"], 8)
             self.assertNotIn("sigmas", kwargs)
             self.assertEqual(self.pipe.loaded, set())
         self.assertIn("image", self.pipe.calls[-1][0])
+
+    def test_omitted_and_null_seed_generate_new_seeds_and_report_them(self):
+        buffer = BytesIO()
+        Image.new("RGB", (256, 256)).save(buffer, format="PNG")
+        image = base64.b64encode(buffer.getvalue()).decode()
+        for mode in ["image_generate", "image_edit"]:
+            with self.subTest(mode=mode):
+                payload = {"prompt": "fox", "type": mode}
+                if mode == "image_edit":
+                    payload["images"] = [image]
+                with patch.object(self.handler.os, "urandom", side_effect=[b"\x00\x00\x00\x07", b"\x00\x00\x00\x09"]) as entropy:
+                    for expected_seed in [7, 9]:
+                        output = self.handler.generate_image({"input": payload})
+                        self.assertNotIn("error", output)
+                        self.assertEqual(output["seed"], expected_seed)
+                        self.assertEqual(self.pipe.calls[-1][0]["generator"].seed, expected_seed)
+                        payload["seed"] = None
+                    self.assertEqual(entropy.call_args_list, [call(4), call(4)])
+
+    def test_explicit_zero_seed_does_not_request_randomness(self):
+        with patch.object(self.handler.os, "urandom") as entropy:
+            output = self.handler.generate_image({"input": {"prompt": "fox", "seed": 0}})
+        entropy.assert_not_called()
+        self.assertEqual(output["seed"], 0)
+        self.assertEqual(self.pipe.calls[-1][0]["generator"].seed, 0)
 
     def test_omitted_loras_preserve_existing_api(self):
         output = self.handler.generate_image({"input": {"prompt": "fox"}})

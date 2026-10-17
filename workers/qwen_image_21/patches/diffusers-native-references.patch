@@ -1,0 +1,38 @@
+--- a/diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py
++++ b/diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py
+@@ -532,6 +532,7 @@
+         callback_on_step_end_tensor_inputs: list[str] = ["latents"],
+         output_resolution: int = 1024,
+         use_kv_cache: bool = True,
++        reference_resolution: int | None = None,
+     ) -> QwenImagePipelineOutput | tuple:
+         r"""
+         Function invoked when calling the pipeline for generation.
+@@ -585,6 +586,9 @@
+             callback_on_step_end_tensor_inputs (`list[str]`, *optional*, defaults to `["latents"]`):
+                 Tensors from the denoising loop to hand to `callback_on_step_end`. They must be listed in the
+                 pipeline's `_callback_tensor_inputs`.
++            reference_resolution (`int`, *optional*):
++                Reference image area, independently of the output canvas. Zero preserves each reference size,
++                rounded to a multiple of 32. None retains the output_resolution-based upstream behavior.
+             output_resolution (`int`, *optional*, defaults to 1024):
+                 Target side length used to derive `height`/`width` and to resize condition images.
+             use_kv_cache (`bool`, *optional*, defaults to `True`):
+@@ -662,9 +666,14 @@
+                 if hasattr(img, "mode") and img.mode != "RGBA":
+                     img = img.convert("RGBA")
+                 image_width, image_height = img.size
+-                input_width, input_height, _ = calculate_dimensions(
+-                    output_resolution * output_resolution, image_width / image_height
+-                )
++                if reference_resolution == 0:
++                    input_width = max(32, round(image_width / 32) * 32)
++                    input_height = max(32, round(image_height / 32) * 32)
++                else:
++                    ref_resolution = output_resolution if reference_resolution is None else reference_resolution
++                    input_width, input_height, _ = calculate_dimensions(
++                        ref_resolution * ref_resolution, image_width / image_height
++                    )
+                 input_image_sizes.append((input_width, input_height))
+                 input_images.append(self.image_processor.resize(img, width=input_width, height=input_height))
+                 vae_images.append(

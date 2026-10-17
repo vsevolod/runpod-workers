@@ -69,8 +69,8 @@ INPUT_SCHEMA = {
         "required": False,
         "default": [],
     },
-    # Condition-image area, and the edit canvas when width/height are omitted.
-    # None lets the handler derive it from the canvas (or 1024 for source-sized edits).
+    # Output canvas area when edit width/height are omitted; references stay native.
+    # None follows the last reference's native size (rounded to multiples of 32).
     "output_resolution": {
         "type": int,
         "required": False,
