@@ -1,7 +1,7 @@
 """Functional flow-matching sampler for the K2 MMDiT (no Scheduler class).
 
-Adapted from krea-ai/krea-2 and modified to offload the text encoder to CPU
-after prompt encoding so DiT sampling and VAE decode fit on 24 GB GPUs.
+Adapted from krea-ai/krea-2 and modified to alternate GPU residency between
+the text encoder and DiT/VAE so both phases fit on 24 GB GPUs.
 Licensed under Apache-2.0; see ../LICENSES/KREA-2-APACHE-2.0.txt.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 
 import torch
 from einops import rearrange, repeat
@@ -36,6 +36,32 @@ def _offload_encoder_to_cpu(encoder: torch.nn.Module) -> None:
     logger.info("Offloading text encoder to CPU (free VRAM for DiT/VAE)")
     encoder.to("cpu")
     torch.cuda.empty_cache()
+
+
+@contextmanager
+def _text_encoding(model, ae, encoder, device):
+    """Keep DiT/VAE off GPU until all text conditioning has finished."""
+    target = torch.device(device)
+    try:
+        if target.type == "cuda":
+            logger.info("Offloading DiT/VAE to CPU before text encoding")
+            model.to("cpu")
+            ae.to("cpu")
+            torch.cuda.empty_cache()
+            if _module_device(encoder) != target:
+                logger.info("Moving text encoder to %s for encode", target)
+                encoder.to(target)
+        yield
+    finally:
+        # Also release the encoder on failed transfers/encoding. Do not reload
+        # DiT/VAE after an error: the original OOM must reach the handler.
+        _offload_encoder_to_cpu(encoder)
+
+    if target.type == "cuda":
+        logger.info("Restoring DiT/VAE to %s after text encoder offload", target)
+        # Device-only transfers preserve FP8/INT8 weights and scale buffers.
+        model.to(target)
+        ae.to(target)
 
 
 def roundup(value, multiple, name):
@@ -136,28 +162,15 @@ def sample(
         dim=0,
     )
 
-    # TE is left on CPU after the previous job; move on only for encode.
-    # Conditioning tensors stay on GPU after offload.
-    target = torch.device(device)
-    if target.type == "cuda" and _module_device(encoder).type != "cuda":
-        logger.info("Moving text encoder to %s for encode", target)
-        encoder.to(target)
+    with _text_encoding(model, ae, encoder, device):
+        txt, txtmask = encoder(prompts)
+        if cfg:
+            untxt, untxtmask = encoder(negative_prompts)
 
-    # Positive (conditional) text conditioning.
-    txt, txtmask = encoder(prompts)
+    # Conditioning tensors stay on GPU after the encoder leaves it.
     x, pos, mask = prepare(noise, txt.shape[1], patch, txtmask)
-
-    # The unconditional branch is only used for CFG; skip encoding/prep entirely
-    # when guidance is disabled.
     if cfg:
-        untxt, untxtmask = encoder(negative_prompts)
         _, unpos, unmask = prepare(noise, untxt.shape[1], patch, untxtmask)
-
-    # TE (~8 GB bf16) is not needed after conditioning tensors are built.
-    # Offload so DiT sample + VAE decode fit on 24 GB cards (all-resident OOMs).
-    # Stay on CPU until the next request (do not reload here — wastes VRAM/time,
-    # especially after OOM).
-    _offload_encoder_to_cpu(encoder)
 
     # min_res/max_res define the (x1,y1)-(x2,y2) interpolation endpoints for `mu`.
     x1 = (minres // (ae.compression * patch)) ** 2

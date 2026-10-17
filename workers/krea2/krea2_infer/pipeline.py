@@ -344,7 +344,7 @@ def load_pipeline(
     lora_dir: str | Path | None = None,
     quant_mode: str | None = None,
 ) -> Krea2Pipeline:
-    """Load TE + DiT + VAE once (TE is offloaded to CPU after each encode).
+    """Load DiT + VAE on the target device and TE on CPU between encodes.
 
     DiT quant path is selected by ``quant_mode`` or env ``DIT_QUANT``
     (``fp8`` default, ``int8_convrot`` for INT8 ConvRot).
@@ -402,7 +402,7 @@ def load_pipeline(
     with loading_component("text_encoder"):
         encoder = load_text_encoder(
             str(encoder_source) if encoder_source is not None else text_encoder_id,
-            device=device,
+            device=torch.device("cpu"),
             dtype=dtype,
             local_files_only=local_files_only,
         )

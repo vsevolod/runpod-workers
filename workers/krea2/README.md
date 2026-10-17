@@ -9,7 +9,7 @@ conditioning. No ComfyUI.
 | **Model (optional)** | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) `krea2_turbo_int8_convrot.safetensors` via `DIT_QUANT=int8_convrot` |
 | **Text encoder** | [Qwen/Qwen3-VL-4B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct) (HF, bf16) |
 | **VAE** | Clean Diffusers VAE from [Qwen/Qwen-Image](https://huggingface.co/Qwen/Qwen-Image) (`vae/`); local Comfy single-file is tried first and **ignored** if keys do not match |
-| **GPU** | **24 GB** class (TE offload after encode; all-resident OOMs at VAE decode). INT8 path is preferred on **RTX 30xx (Ampere)** |
+| **GPU** | **24 GB** class (DiT/VAE offloaded during text encoding; TE offloaded during denoise/decode). INT8 path is preferred on **RTX 30xx (Ampere)** |
 | **Template patterns** | [worker-sdxl](https://github.com/runpod-workers/worker-sdxl) |
 
 ## Layout
@@ -385,7 +385,7 @@ Generation needs a GPU and enough container disk for the startup downloads.
 
 ## Design notes
 
-- **VRAM (24 GB):** TE + DiT + VAE load on GPU; after prompt encode the text encoder is offloaded to **CPU** and stays there until the next encode so DiT sampling and VAE decode fit (all-resident OOMs at decode with ~2–3 GiB free).
+- **VRAM (24 GB):** the text encoder starts on **CPU**. During text/grounded encoding, DiT and VAE move to CPU before the encoder moves to GPU. After positive/negative conditioning, the encoder returns to CPU, then DiT/VAE return to GPU for denoise/decode. Device transfers preserve quantized weight dtypes. This reduces peak VRAM at the cost of RAM use and CPU/GPU transfer time. If encoding fails, the encoder is offloaded and DiT/VAE stay on CPU while the handler reports the error.
 - **FP8 DiT (default):** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
 - **INT8 ConvRot DiT (`DIT_QUANT=int8_convrot`):** stock Comfy `int8_tensorwise` layout (`weight` int8 + `weight_scale` + `comfy_quant`); online Hadamard on activations when marker has `convrot`; CUDA uses `torch._int_mm` for larger token batches.
 - **VAE:** prefer clean HF Diffusers weights; do not overlay incompatible Comfy key names with `strict=False`.

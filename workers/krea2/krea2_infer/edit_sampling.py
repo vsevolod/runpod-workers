@@ -13,7 +13,7 @@ from einops import rearrange
 from PIL import Image
 
 from .edit_geometry import fit_source_pixels, target_size_from_source
-from .sampling import _module_device, _offload_encoder_to_cpu, roundup, timesteps
+from .sampling import _text_encoding, roundup, timesteps
 
 logger = logging.getLogger(__name__)
 
@@ -174,22 +174,17 @@ def sample_edit(
         align=align,
     )
 
-    # --- TE on GPU ---
-    if _module_device(encoder).type != "cuda" and str(device).startswith("cuda"):
-        encoder.to(device)
-
-    txt, txtmask = encoder.grounded_encode(
-        instruction, sources, grounding_px=grounding_px
-    )
-    # txt: (1, T, 12, C), txtmask: (1, T)
     cfg = guidance > 0
-    if cfg:
-        neg_text = negative_prompt if negative_prompt is not None else ""
-        untxt, untxtmask = encoder.grounded_encode(
-            neg_text, sources, grounding_px=grounding_px
+    with _text_encoding(model, ae, encoder, device):
+        txt, txtmask = encoder.grounded_encode(
+            instruction, sources, grounding_px=grounding_px
         )
-
-    _offload_encoder_to_cpu(encoder)
+        # txt: (1, T, 12, C), txtmask: (1, T)
+        if cfg:
+            neg_text = negative_prompt if negative_prompt is not None else ""
+            untxt, untxtmask = encoder.grounded_encode(
+                neg_text, sources, grounding_px=grounding_px
+            )
 
     # --- source pixels → latent tokens (independent fit per ref) ---
     src_toks: list[torch.Tensor] = []

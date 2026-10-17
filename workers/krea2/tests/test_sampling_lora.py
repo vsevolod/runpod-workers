@@ -233,6 +233,27 @@ class SamplingLoRALifecycleTest(unittest.TestCase):
 
 
 class PipelineLoRAWiringTest(unittest.TestCase):
+    def test_cuda_pipeline_keeps_encoder_on_cpu_until_the_first_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            model_dir = Path(directory)
+            (model_dir / _pipeline.DIT_CANDIDATES[0]).touch()
+            (model_dir / _pipeline.VAE_CANDIDATES[0]).touch()
+            with (
+                mock.patch.dict(os.environ, {"LORA_DIR": ""}),
+                mock.patch.object(torch.cuda, "is_available", return_value=True),
+                mock.patch.object(torch.cuda, "mem_get_info", return_value=(10 * 1024**3, 24 * 1024**3)),
+                mock.patch.object(_pipeline, "load_dit", return_value=nn.Module()) as dit,
+                mock.patch.object(_pipeline, "load_autoencoder", return_value=mock.sentinel.ae) as vae,
+                mock.patch.object(_pipeline, "load_text_encoder", return_value=mock.sentinel.encoder) as encoder,
+                mock.patch.object(_pipeline, "LoRAManager"),
+            ):
+                pipe = _pipeline.load_pipeline(model_dir, device="cuda:0", local_files_only=True)
+
+        self.assertEqual(pipe.device, torch.device("cuda:0"))
+        self.assertEqual(dit.call_args.kwargs["device"], torch.device("cuda:0"))
+        self.assertEqual(vae.call_args.kwargs["device"], torch.device("cuda:0"))
+        self.assertEqual(encoder.call_args.kwargs["device"], torch.device("cpu"))
+
     def test_prefetch_loads_dit_while_later_components_are_still_downloading(self):
         workers = Path(__file__).parents[2]
         sys.path.insert(0, str(workers))
