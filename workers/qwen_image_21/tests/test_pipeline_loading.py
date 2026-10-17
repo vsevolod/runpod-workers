@@ -1,6 +1,7 @@
 """The mmap experiment must reach both loading libraries, not just the pipeline."""
 
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -175,6 +176,46 @@ HAS_LOADING_DEPS = all(
 
 @unittest.skipUnless(HAS_LOADING_DEPS, "Install worker dependencies for loading integration tests")
 class RealPipelineLoadingTests(unittest.TestCase):
+    def test_real_runtime_config_without_serialized_class_name_loads_both_variants(self):
+        from diffusers import QwenImage21Pipeline, FlowMatchEulerDiscreteScheduler
+
+        class VAE:
+            config = SimpleNamespace(z_dim=4)
+
+        class Processor:
+            def apply_chat_template(self, *args, **kwargs):
+                return [[1]]
+
+            def encode(self, *args, **kwargs):
+                return [2]
+
+            @property
+            def tokenizer(self):
+                return self
+
+        for variant in ("turbo", "base"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
+                real_pipe = QwenImage21Pipeline(
+                    scheduler=FlowMatchEulerDiscreteScheduler(), vae=VAE(),
+                    processor=Processor(), text_encoder=None, transformer=None,
+                    sample_sigmas=[1, .98, .95, .92, .89, .84, .70, .41]
+                    if variant == "turbo" else None,
+                )
+                Path(tmp, "model_index.json").write_text(json.dumps({
+                    "_class_name": "QwenImage21Pipeline",
+                    "sample_sigmas": [1, .98, .95, .92, .89, .84, .70, .41]
+                    if variant == "turbo" else None,
+                }))
+                with patch.object(pipeline, "_load_base_pipeline", return_value=real_pipe), patch.object(
+                    real_pipe, "enable_model_cpu_offload", return_value=None
+                ), patch.dict(os.environ, {"QWEN_VAE": "original", "MODEL_DIR": tmp,
+                                          "LORA_DIR": tmp, "LORA_CACHE_DIR": tmp}, clear=True):
+                    runtime = pipeline.load_pipeline(tmp, offload="cpu", model_variant=variant)
+                self.assertIs(runtime.pipe, real_pipe)
+                self.assertEqual(runtime.pipe.config.sample_sigmas,
+                                 [1, .98, .95, .92, .89, .84, .70, .41]
+                                 if variant == "turbo" else None)
+
     def test_runtime_close_releases_transformer_and_lora_owner_but_keeps_shared_vae(self):
         import gc
         import torch

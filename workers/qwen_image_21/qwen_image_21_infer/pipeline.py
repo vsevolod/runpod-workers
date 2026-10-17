@@ -26,7 +26,7 @@ from .runtime_config import (
     resolve_vae_variant,
     resolve_model_directory,
     resolve_vae_directory,
-    validate_model_config,
+    validate_sampling_config,
 )
 from .sampling import base_scheduler, make_scheduler
 
@@ -133,7 +133,7 @@ def load_pipeline(
     # Keep both the scheduler and sample_sigmas supplied by the checkpoint.
     # Older Diffusers drops sample_sigmas at load time, which must fail visibly.
     with log_stage("sampling_config"):
-        validate_model_config(pipe.config, source, model_variant)
+        validate_sampling_config(pipe.config, source, model_variant)
         if model_variant == "base":
             pipe.scheduler = base_scheduler(pipe.scheduler)
     pipe.set_progress_bar_config(disable=True)

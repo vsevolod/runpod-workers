@@ -122,9 +122,16 @@ def validate_turbo_snapshot(directory: Path | str) -> None:
 
 
 def validate_model_config(config, source: str, model_variant: str = "turbo") -> None:
+    """Validate the serialized model_index.json, including its pipeline class."""
     variant = resolve_model_variant(model_variant)
     if not isinstance(config, dict) or config.get("_class_name") != "QwenImage21Pipeline":
         raise ValueError(f"Expected Qwen-Image-2.1-{variant.title()} QwenImage21Pipeline in {source}")
+    validate_sampling_config(config, source, variant)
+
+
+def validate_sampling_config(config, source: str, model_variant: str = "turbo") -> None:
+    """Check runtime sampling settings; Diffusers omits serialized class metadata."""
+    variant = resolve_model_variant(model_variant)
     if variant == "turbo":
         validate_turbo_config(config, source)
     elif config.get("sample_sigmas") is not None:
