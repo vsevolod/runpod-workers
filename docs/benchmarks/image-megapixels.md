@@ -116,6 +116,12 @@ benchmark service. The event log retains an early **startup error** caused by
 an incompatible Torch/CUDA wheel; it occurred before inference and is distinct
 from the 36 successful `phase: "case"` records.
 
+The subsequent [Torch 2.8 / CUDA 12.8 image upgrade](torch28-cu128-upgrade.md)
+was checked inside the actual published worker images on 24 GB Ampere and Ada
+GPUs: 16 successful first/warm edit requests with the same LoRA baselines at
+`max` resolving to 1 MP. These checks validate that runtime upgrade; they do
+not extend the 24 GB table entry beyond 1 MP.
+
 ## Procedure for a new image model or GPU
 
 1. **Define one baseline.** Record model/checkpoint revision, quantization,
@@ -134,6 +140,11 @@ from the 36 successful `phase: "case"` records.
    and required patches. Pin Torch/CUDA wheels compatible with the driver;
    dependency installation must not silently replace them. Save source/patch,
    `nvidia-smi -q`, package freezes, input hashes and protocol before running.
+   Prefer running the exact candidate worker image by digest. A separately
+   prepared venv can validate a different stack from the Dockerfile; the initial
+   L40S run used Torch 2.8 while the then-existing images still installed 2.6.
+   Assert installed Torch, torchvision and CUDA build versions after all
+   dependencies are installed, and carry constraints into subsequent installs.
    The historical `setup.sh` shows the two-venv layout; do not blindly execute
    its old checkout pin for a different model. `UV_CACHE_DIR=/opt/cache/uv` and
    `UV_LINK_MODE=copy` avoid Global mount permission/hardlink failures.

@@ -1,0 +1,56 @@
+{
+  "image_commit": "938a3238e186a6b8038f3fddaffc94b3ca4c3f76",
+  "ci_url": "https://github.com/vsevolod/runpod-workers/actions/runs/39162351332",
+  "images": {
+    "krea2": "sha256:96d5b11d4595d4305e26dd1ff3b42bacb521668987fa8b160ffee57490b998ff",
+    "qwen_image_21": "sha256:2f7b4b7eb5c25ef95a8b017c68ecc84737e9affad510d23c0669bd257e01573e"
+  },
+  "hardware": {
+    "ada-krea": {
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "total_vram_bytes": 25250627584,
+      "compute_capability": [
+        8,
+        9
+      ],
+      "cuda_build": "12.8",
+      "python": "3.12.15"
+    },
+    "ada-qwen": {
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "total_vram_bytes": 25252724736,
+      "compute_capability": [
+        8,
+        9
+      ],
+      "cuda_build": "12.8",
+      "python": "3.12.15"
+    },
+    "ampere-krea": {
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "total_vram_bytes": 25296044032,
+      "compute_capability": [
+        8,
+        6
+      ],
+      "cuda_build": "12.8",
+      "python": "3.12.15"
+    },
+    "ampere-qwen": {
+      "gpu": "NVIDIA RTX A5000",
+      "total_vram_bytes": 25283526656,
+      "compute_capability": [
+        8,
+        6
+      ],
+      "cuda_build": "12.8",
+      "python": "3.12.15"
+    }
+  },
+  "successful_requests": 16,
+  "requested_budget": "max",
+  "resolved_budget_mp": 1,
+  "scope": "Actual published worker images; square edits with fixed LoRA; first request plus warm repeat per profile/GPU; no production deployment or larger-MP calibration",
+  "storage": "/workspace/benchmarks/2026-10-18-torch28-cu128 on Global volume cmv1ht9mt000007lb00es0w9n",
+  "timing_limit": "RTX 3090 Community host limited to 150 W and observed 210 MHz under load; timing is not representative of unrestricted hardware or a version-to-version speed comparison"
+}

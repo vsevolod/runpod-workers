@@ -1,0 +1,2 @@
+name, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W], power.limit [W], temperature.gpu
+NVIDIA GeForce RTX 3090, 100 %, 315 MHz, 149.81 W, 150.00 W, 61

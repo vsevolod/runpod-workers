@@ -1,0 +1,41 @@
+{
+  "checked_at_utc": "2026-10-18T21:08:56.944565+00:00",
+  "pods": [
+    {
+      "id": "sa5xrpywdibc1u",
+      "name": "torch28-smoke-ada-krea-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    },
+    {
+      "id": "uu33eim873cc84",
+      "name": "torch28-smoke-ada-qwen-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    },
+    {
+      "id": "jcge51hw6345p2",
+      "name": "torch28-smoke-ampere-krea-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    },
+    {
+      "id": "9kc0oqpvg1y2l7",
+      "name": "torch28-smoke-ampere-krea-local-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    },
+    {
+      "id": "bierunxna2emru",
+      "name": "torch28-smoke-ampere-qwen-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    },
+    {
+      "id": "u8mukx1c04fw47",
+      "name": "mp-benchmark-48gb-20261018",
+      "status": "EXITED",
+      "runtime_present": false
+    }
+  ]
+}

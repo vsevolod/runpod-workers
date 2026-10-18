@@ -1,0 +1,17 @@
+label,gpu,profile,repeat,steps,refs,lora,budget_requested,resolved_mp,width,height,peak_device_gib,inference_seconds
+ada-krea,NVIDIA GeForce RTX 4090,krea2.int8_convrot,0,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.48748779296875,71.52991513116285
+ada-krea,NVIDIA GeForce RTX 4090,krea2.int8_convrot,1,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.48748779296875,69.5489384480752
+ada-krea,NVIDIA GeForce RTX 4090,krea2.fp8,0,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.20819091796875,54.534315661061555
+ada-krea,NVIDIA GeForce RTX 4090,krea2.fp8,1,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.20819091796875,55.209454853087664
+ada-qwen,NVIDIA GeForce RTX 4090,qwen_image_21.turbo,0,8,3,lenovo_qwen21,max,1.0,992,992,18.4307861328125,38.17739461082965
+ada-qwen,NVIDIA GeForce RTX 4090,qwen_image_21.turbo,1,8,3,lenovo_qwen21,max,1.0,992,992,18.6866455078125,28.783264140132815
+ada-qwen,NVIDIA GeForce RTX 4090,qwen_image_21.base,0,40,3,lenovo_qwen21,max,1.0,992,992,18.4307861328125,55.35134905716404
+ada-qwen,NVIDIA GeForce RTX 4090,qwen_image_21.base,1,40,3,lenovo_qwen21,max,1.0,992,992,18.6866455078125,46.95801697392017
+ampere-krea,NVIDIA GeForce RTX 3090,krea2.int8_convrot,0,8,2,krea2_identity_edit_v2,max,1.0,992,992,20.57659912109375,345.45986962200186
+ampere-krea,NVIDIA GeForce RTX 3090,krea2.int8_convrot,1,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.3428955078125,347.8047652280002
+ampere-krea,NVIDIA GeForce RTX 3090,krea2.fp8,0,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.0616455078125,227.99231247699936
+ampere-krea,NVIDIA GeForce RTX 3090,krea2.fp8,1,8,2,krea2_identity_edit_v2,max,1.0,992,992,18.0635986328125,221.46603453299758
+ampere-qwen,NVIDIA RTX A5000,qwen_image_21.turbo,0,8,3,lenovo_qwen21,max,1.0,992,992,18.22747802734375,59.9865859830752
+ampere-qwen,NVIDIA RTX A5000,qwen_image_21.turbo,1,8,3,lenovo_qwen21,max,1.0,992,992,18.48138427734375,40.35301103349775
+ampere-qwen,NVIDIA RTX A5000,qwen_image_21.base,0,40,3,lenovo_qwen21,max,1.0,992,992,18.22747802734375,80.99686391372234
+ampere-qwen,NVIDIA RTX A5000,qwen_image_21.base,1,40,3,lenovo_qwen21,max,1.0,992,992,18.68560791015625,77.1123703988269
