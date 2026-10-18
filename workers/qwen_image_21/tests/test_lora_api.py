@@ -214,17 +214,17 @@ class LoRAAPITests(unittest.TestCase):
         buffer = BytesIO()
         Image.new("RGBA", (2048, 2048), (10, 20, 30, 80)).save(buffer, format="PNG")
         payload = {"type": "image_edit", "prompt": "fox", "width": 1024, "height": 1024,
-                   "images": [base64.b64encode(buffer.getvalue()).decode()],
+                   "images": [base64.b64encode(buffer.getvalue()).decode()] * 2,
                    "model_options": {"variant": "base", "reference_megapixels": .5}}
         output = self.handler.generate_image({"input": payload})
         self.assertNotIn("error", output)
         self.assertEqual(output["model_options"]["reference_megapixels"], .5)
         kwargs = self.pipe.calls[-1][0]
-        self.assertEqual(kwargs["image"][0].size, (704, 704))
+        self.assertEqual([image.size for image in kwargs["image"]], [(480, 480)] * 2)
         self.assertEqual((kwargs["width"], kwargs["height"]), (1024, 1024))
         repeated = self.handler.generate_image({"input": {**payload, "model_options": output["model_options"]}})
         self.assertNotIn("error", repeated)
-        self.assertEqual(self.pipe.calls[-1][0]["image"][0].size, (704, 704))
+        self.assertEqual([image.size for image in self.pipe.calls[-1][0]["image"]], [(480, 480)] * 2)
 
     def test_invalid_variant_or_step_count_does_not_prepare_or_load_a_model(self):
         with patch.object(self.handler.MODELS, "_loader") as load, patch.object(self.handler.MODELS, "_prepare") as prepare:

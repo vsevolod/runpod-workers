@@ -249,7 +249,7 @@ class NormalizeJobInputTests(unittest.TestCase):
         }
         out = normalize_job_input(payload, raw_keys=set(payload))
         self.assertEqual((out.width, out.height), (800, 1216))
-        self.assertEqual([image.size for image in out.images], [(1216, 800), (800, 1184)])
+        self.assertEqual([image.size for image in out.images], [(864, 576), (576, 832)])
         kwargs = build_pipe_kwargs(out)
         self.assertEqual(kwargs["reference_resolution"], 0)
         self.assertEqual((kwargs["width"], kwargs["height"]), (800, 1216))
@@ -263,7 +263,7 @@ class NormalizeJobInputTests(unittest.TestCase):
         out = normalize_job_input(payload, raw_keys=set(payload))
         kwargs = build_pipe_kwargs(out)
         self.assertEqual(kwargs["reference_resolution"], 0)
-        self.assertEqual([image.size for image in kwargs["image"]], [(1216, 800), (768, 512)])
+        self.assertEqual([image.size for image in kwargs["image"]], [(864, 576), (768, 512)])
         self.assertEqual((kwargs["width"], kwargs["height"]), (1024, 1024))
 
     def test_reference_outside_source_decode_limit_is_rejected_before_inference(self):

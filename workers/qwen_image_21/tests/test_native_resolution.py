@@ -187,10 +187,10 @@ class NativeResolutionTests(unittest.TestCase):
                 with self.assertRaises(Captured):
                     pipe(**inputs, output_type="latent")
             if capped:
-                self.assertEqual(seen["vl_sizes"], [(992, 992)] * 5)
-                self.assertEqual(vae.seen, [(1, 4, 1, 992, 992)] * 5)
-                self.assertEqual(seen["img_shapes"], [[(1, 62, 62)] * 5 + [(1, 16, 16)]])
-                self.assertEqual(seen["latent_shape"], (1, 19476, 4))
+                self.assertEqual(seen["vl_sizes"], [(416, 416)] * 5)
+                self.assertEqual(vae.seen, [(1, 4, 1, 416, 416)] * 5)
+                self.assertEqual(seen["img_shapes"], [[(1, 26, 26)] * 5 + [(1, 16, 16)]])
+                self.assertEqual(seen["latent_shape"], (1, 3636, 4))
                 return
             self.assertEqual(seen["vl_sizes"], [(96, 64), (64, 128)])
             self.assertEqual(vae.seen, [(1, 4, 1, 64, 96), (1, 4, 1, 128, 64)])

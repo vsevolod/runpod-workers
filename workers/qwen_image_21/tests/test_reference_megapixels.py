@@ -27,6 +27,37 @@ def request(images, **fields):
 
 
 class ReferenceMegapixelsTests(unittest.TestCase):
+    def test_budget_is_shared_equally_while_output_keeps_the_full_area(self):
+        source = image_data(2048, 2048)
+        for variant in ("base", "turbo"):
+            for count, expected_side, per_reference_pixels in (
+                (1, 992, 1_000_000), (2, 704, 500_000),
+                (3, 576, 333_333), (5, 416, 200_000), (10, 288, 100_000),
+            ):
+                with self.subTest(variant=variant, count=count):
+                    norm = request([source] * count, model_options={"variant": variant})
+                    self.assertEqual([img.size for img in norm.images], [(expected_side, expected_side)] * count)
+                    self.assertTrue(all(img.width * img.height <= per_reference_pixels for img in norm.images))
+                    self.assertLessEqual(sum(img.width * img.height for img in norm.images), 1_000_000)
+                    self.assertEqual((norm.width, norm.height), (992, 992))
+                    self.assertEqual(norm.reference_megapixels, 1.)
+
+    def test_custom_total_budget_is_divided_without_reducing_output_area(self):
+        norm = request([image_data(2048, 2048)] * 2, model_options={"reference_megapixels": 2.})
+        self.assertEqual([img.size for img in norm.images], [(992, 992)] * 2)
+        self.assertEqual((norm.width, norm.height), (1408, 1408))
+        self.assertEqual(norm.reference_megapixels, 2.)
+
+    def test_budget_below_the_combined_minimum_reference_area_is_rejected(self):
+        source = image_data(32, 32)
+        with self.assertRaises(RequestError):
+            request([source] * 2, width=256, height=256,
+                    model_options={"reference_megapixels": .001024})
+        norm = request([source] * 2, width=256, height=256,
+                       model_options={"reference_megapixels": .002048})
+        self.assertEqual([img.size for img in norm.images], [(32, 32)] * 2)
+        self.assertEqual(sum(img.width * img.height for img in norm.images), 2048)
+
     def test_small_reference_still_produces_a_megapixel_canvas_with_original_aspect(self):
         for variant in ("base", "turbo"):
             for source, target in (((100, 30), (1824, 544)), ((30, 100), (544, 1824)),
@@ -50,21 +81,22 @@ class ReferenceMegapixelsTests(unittest.TestCase):
                        model_options={"reference_megapixels": .5, "output_resolution": 1024})
         self.assertEqual((norm.width, norm.height), (1856, 576))
 
-    def test_default_caps_each_of_five_references_before_pipeline_without_upscaling(self):
+    def test_shared_budget_caps_five_mixed_references_without_redistributing_unused_area(self):
         norm = request([image_data(w, h) for w, h in (
-            (2048, 2048), (2048, 1024), (512, 512), (1001, 1001), (1024, 2048),
+            (2048, 2048), (2048, 1024), (320, 320), (1001, 1001), (1024, 2048),
         )], width=1024, height=1024)
         kwargs = build_pipe_kwargs(norm)
         self.assertEqual([img.size for img in kwargs["image"]], [
-            (992, 992), (1408, 704), (512, 512), (992, 992), (704, 1408),
+            (416, 416), (608, 288), (320, 320), (416, 416), (288, 608),
         ])
-        self.assertTrue(all(img.width * img.height <= 1_000_000 for img in kwargs["image"]))
+        self.assertTrue(all(img.width * img.height <= 200_000 for img in kwargs["image"]))
+        self.assertLessEqual(sum(img.width * img.height for img in kwargs["image"]), 1_000_000)
         self.assertEqual((kwargs["width"], kwargs["height"]), (1024, 1024))
 
     def test_custom_limit_preserves_alpha_and_explicit_output_canvas(self):
         norm = request([image_data(2048, 2048, mode="RGBA"), image_data(384, 256)],
                        width=2048, height=1024, model_options={"reference_megapixels": .5})
-        self.assertEqual([img.size for img in norm.images], [(704, 704), (384, 256)])
+        self.assertEqual([img.size for img in norm.images], [(480, 480), (384, 256)])
         self.assertEqual(norm.images[0].mode, "RGBA")
         self.assertEqual(norm.images[0].getpixel((100, 100))[3], 80)
         self.assertEqual((norm.width, norm.height), (2048, 1024))
@@ -72,7 +104,7 @@ class ReferenceMegapixelsTests(unittest.TestCase):
     def test_automatic_canvas_and_large_last_reference_follow_megapixel_budget(self):
         norm = request([image_data(512, 512), image_data(4000, 2000)])
         self.assertEqual((norm.width, norm.height), (1408, 704))
-        self.assertEqual(norm.images[-1].size, (1408, 704))
+        self.assertEqual(norm.images[-1].size, (992, 480))
 
     def test_larger_requested_budget_is_used_without_upscaling(self):
         norm = request([image_data(2048, 2048)], model_options={"reference_megapixels": 2})
@@ -82,9 +114,9 @@ class ReferenceMegapixelsTests(unittest.TestCase):
     def test_rounding_stays_below_budget_and_existing_side_limit(self):
         norm = request([image_data(8192, 32), image_data(1024, 1024)],
                        width=1024, height=1024, model_options={"reference_megapixels": .1})
-        self.assertEqual(norm.images[1].size, (288, 288))
+        self.assertEqual(norm.images[1].size, (192, 192))
         for img in norm.images:
-            self.assertLessEqual(img.width * img.height, 100_000)
+            self.assertLessEqual(img.width * img.height, 50_000)
             self.assertLessEqual(max(img.size), 2752)
             self.assertEqual(img.width % 32, 0)
             self.assertEqual(img.height % 32, 0)

@@ -90,21 +90,26 @@ the request's seeded generator. Changing sampling options does not reload weight
 |---|---|---|---|
 | `variant` | string | `turbo` | `turbo` or `base`; one resident pipeline, unloaded before switching variants |
 | `output_resolution` | integer or null | null | 256..2752, multiple of 32. Sets edit canvas area when width/height are omitted; preserves the last reference's aspect ratio |
-| `reference_megapixels` | number | 1.0 | Maximum area of **each** edit reference and target area of the automatic edit canvas in decimal megapixels (1 MP = 1,000,000 pixels). Finite, 0.001024..4.3008 |
+| `reference_megapixels` | number | 1.0 | **Total** edit reference budget, divided equally across images, and full target area of the automatic edit canvas in decimal megapixels (1 MP = 1,000,000 pixels). Finite, 0.001024..4.3008; at least 0.001024 MP per reference |
 
 Generate defaults to 1024x1024. For edit, omit both width and height to target
 `reference_megapixels` at the **original last reference's aspect ratio**, even
 when the source is small. Dimensions round down to multiples of 32, so the
 area is approximately the requested MP and never exceeds it. For example,
 100x30 produces a 1824x544 canvas (0.992256 MP) by default. Pass both dimensions
-for an explicit canvas; passing only one is an error. Every reference is independently downscaled
+for an explicit canvas; passing only one is an error. Each reference receives a
+pixel cap of `reference_megapixels * 1,000,000 / number_of_references` and is downscaled
 on CPU before the vision/text encoder and VAE, preserving aspect ratio subject to
 32px alignment. Dimensions round down to multiples of 32 (minimum 32px), so the
 inference area stays below the budget. Smaller references are not enlarged, apart
 from the model's 32px minimum side. For example, a 2048x2048 or 1024x1024 reference
-becomes 992x992 with the default 1 MP limit. References also fit 2752px per side.
-The limit is per image, not the total across references; five references may still
-consume more VRAM than one. It does not guarantee that every request fits a GPU.
+becomes 992x992 when it is the only reference at the default 1 MP budget.
+Two square references become 704x704 each, five become 416x416 each, while the
+automatic square output remains 992x992 in all three cases. Unused area from small
+references is not redistributed. The budget must allow the 32x32 minimum for every
+reference; smaller budgets are validation errors. References also fit 2752px per side.
+This limits the combined reference area; GPU memory also depends on the output
+canvas, CFG, LoRAs and model variant. It does not guarantee that every request fits a GPU.
 
 Explicit dimensions or `output_resolution` determine the output canvas separately
 from the reference budget. The canvas must fit 256..2752px per side and 4,300,800

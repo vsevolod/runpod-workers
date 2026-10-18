@@ -120,7 +120,8 @@ def normalize_job_input(
     ``raw_keys`` contains explicit keys before the shared parser fills defaults,
     including the legacy equivalents of explicitly nested model options.
     Edit uses it so an omitted width/height targets the requested megapixel area
-    at the original last-reference aspect ratio. References are capped separately.
+    at the original last-reference aspect ratio. The reference budget is shared
+    equally across images, independently of the output canvas.
     """
     raw_keys = set(raw_keys or ())
 
@@ -132,8 +133,16 @@ def normalize_job_input(
     common = normalize_common_fields(validated, QWEN_API, raw_keys=raw_keys, default_steps=default_steps)
     source_images = common.images
     reference_megapixels = validated.get("model_options", {}).get("reference_megapixels", 1.)
-    images = tuple(_resize_reference(image, int(reference_megapixels * 1_000_000)) for image in common.images)
-    common = replace(common, images=images)
+    if source_images:
+        pixels_per_reference = int(reference_megapixels * 1_000_000) // len(source_images)
+        if pixels_per_reference < MULTIPLE * MULTIPLE:
+            minimum_mp = len(source_images) * MULTIPLE * MULTIPLE / 1_000_000
+            raise RequestError(
+                f"reference_megapixels must be at least {minimum_mp:g} for {len(source_images)} references "
+                f"(each requires at least {MULTIPLE}x{MULTIPLE} pixels)"
+            )
+        images = tuple(_resize_reference(image, pixels_per_reference) for image in source_images)
+        common = replace(common, images=images)
 
     output_resolution = validated.get("output_resolution")
     if output_resolution is not None:

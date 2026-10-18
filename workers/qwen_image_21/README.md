@@ -337,27 +337,35 @@ without an immediate OOM. Pass an official size when the GPU has room.
 }
 ```
 
-Each reference is downscaled on CPU to at most
-`model_options.reference_megapixels` megapixels (default **1.0**), before both the
-vision/text encoder and VAE. One megapixel is 1,000,000 pixels. Aspect ratio is
-preserved subject to rounding dimensions down to multiples of 32; a 2048x2048
-reference becomes 992x992 at the default limit. Smaller references are not enlarged,
-apart from the model's 32px minimum side. Alpha and reference order are preserved.
+`model_options.reference_megapixels` is the **total** reference budget (default
+**1.0** MP). Each reference is downscaled on CPU to at most this budget divided
+by the number of references, before both the vision/text encoder and VAE.
+One megapixel is 1,000,000 pixels. Aspect ratio is preserved subject to rounding
+dimensions down to multiples of 32. With the default budget, one square reference
+is capped at 992x992, two at 704x704 each, and five at 416x416 each.
+Smaller references are not enlarged, apart from the model's 32px minimum side.
+Their unused share is not redistributed. Alpha and reference order are preserved.
 Use `{"model_options": {"reference_megapixels": 0.5}}` or CLI
 `--reference-megapixels 0.5` for a smaller budget. Finite values from 0.001024 to
-4.3008 are accepted. This option applies to both Base and Turbo editing.
+4.3008 are accepted. The total budget must also allow at least 32x32 pixels per
+reference; otherwise the request is rejected. This option applies to both Base
+and Turbo editing.
 
 Omit `width`, `height` and `output_resolution` to target `reference_megapixels`
 for the output at the **original last reference's aspect ratio**, even for a
 small input. Output dimensions round down to multiples of 32 without exceeding
 the requested area: a 100x30 reference produces a 1824x544 result at 1 MP.
-The reference itself remains small. Pass both dimensions to choose a canvas, or
+The full requested MP is used for the automatic output regardless of the number
+of references: two large square inputs at 1 MP become 704x704 each, while the
+output is 992x992. A small reference itself remains small.
+Pass both dimensions to choose a canvas, or
 `output_resolution` to choose its approximate square-root area while keeping
 the last reference's aspect ratio. These overrides affect the result only.
 
 References are also downscaled to at most 2752px per side. Encoded input limits
 (25 MiB per file, 8192px per source side) still apply before resizing. The megapixel
-budget is per reference, not a total; multiple references can still cause CUDA OOM.
+budget limits the combined reference area; GPU memory also depends on the output
+canvas, CFG, LoRAs and model variant, so requests can still cause CUDA OOM.
 Output dimensions still
 must be at least 256px per side. References keep their alpha; the vision encoder
 composites RGBA over white, and the VAE still reads the alpha channel.

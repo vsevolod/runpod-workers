@@ -281,7 +281,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--reference-megapixels", type=float, default=None,
-        help="Per-reference megapixel cap and automatic edit output area (default: 1.0). Small references stay small.",
+        help=("Total reference megapixel budget, split equally across images, and automatic edit output area "
+              "(default: 1.0). Small references stay small."),
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
