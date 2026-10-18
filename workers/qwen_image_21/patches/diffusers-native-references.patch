@@ -1,5 +1,15 @@
 --- a/diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py
 +++ b/diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py
+@@ -286,6 +286,9 @@
+             "return_tensors": "pt",
+         }
+         if not is_t2i:
+             processor_kwargs["images"] = condition_pil_list
++            # References already share a 32-aligned grid with the VAE. The processor's
++            # minimum pixel area must not resize small images independently of that grid.
++            processor_kwargs["images_kwargs"] = {"do_resize": False}
+
+         model_inputs = self.processor(**processor_kwargs).to(device)
 @@ -532,6 +532,7 @@
          callback_on_step_end_tensor_inputs: list[str] = ["latents"],
          output_resolution: int = 1024,

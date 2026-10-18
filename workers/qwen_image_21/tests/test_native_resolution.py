@@ -19,8 +19,89 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 HAS_DIFFUSERS = all(importlib.util.find_spec(name) is not None for name in ("torch", "diffusers", "transformers"))
 
 
+def load_patched_pipeline(root):
+    from diffusers.pipelines.qwenimage21 import pipeline_qwenimage21
+
+    target = root / "diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py"
+    target.parent.mkdir(parents=True)
+    shutil.copyfile(pipeline_qwenimage21.__file__, target)
+    patch_file = Path(__file__).parents[1] / "patches/diffusers-native-references.patch"
+    if "reference_resolution" not in inspect.signature(pipeline_qwenimage21.QwenImage21Pipeline.__call__).parameters:
+        subprocess.run(["git", "apply", str(patch_file)], cwd=root, check=True, capture_output=True)
+    name = "diffusers.pipelines.qwenimage21._native_resolution_test"
+    spec = importlib.util.spec_from_file_location(name, target)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @unittest.skipUnless(HAS_DIFFUSERS, "Install worker dependencies for native-resolution integration tests")
 class NativeResolutionTests(unittest.TestCase):
+    def test_small_references_denoise_with_real_processor_and_transformer(self):
+        import torch
+        from diffusers import FlowMatchEulerDiscreteScheduler, QwenImage21Transformer2DModel
+        from tokenizers import Tokenizer, models, pre_tokenizers
+        from transformers import PreTrainedTokenizerFast, Qwen2VLImageProcessor, Qwen3VLProcessor, Qwen3VLVideoProcessor
+
+        # Keep the checkpoint's actual vision preprocessing, token expansion and
+        # transformer grid assembly. Only the expensive encoder/VAE weights are replaced.
+        special = ["[UNK]", "[PAD]", "<|image_pad|>", "<|video_pad|>",
+                   "<|vision_start|>", "<|vision_end|>", "<|im_start|>", "<|im_end|>"]
+        tokenizer = Tokenizer(models.WordLevel({s: i for i, s in enumerate(special)}, unk_token="[UNK]"))
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+        processor = Qwen3VLProcessor(
+            image_processor=Qwen2VLImageProcessor(
+                patch_size=16, merge_size=2, temporal_patch_size=2,
+                size={"shortest_edge": 65536, "longest_edge": 16777216},
+            ),
+            video_processor=Qwen3VLVideoProcessor(),
+            tokenizer=PreTrainedTokenizerFast(
+                tokenizer_object=tokenizer, unk_token="[UNK]", pad_token="[PAD]",
+                additional_special_tokens=special[2:],
+            ),
+            chat_template="{% for message in messages %}<|im_start|>{{ message['role'] }}\n"
+                          "{% for content in message['content'] %}{{ content['text'] }}{% endfor %}"
+                          "<|im_end|>\n{% endfor %}",
+        )
+
+        class TextEncoder(torch.nn.Module):
+            dtype = torch.float32
+            device = torch.device("cpu")
+
+            def __init__(self):
+                super().__init__()
+                self.anchor = torch.nn.Parameter(torch.zeros(1))
+                self.model = SimpleNamespace(norm=torch.nn.Identity())
+
+            def forward(self, input_ids, **kwargs):
+                hidden = self.model.norm(torch.zeros(*input_ids.shape, 16, device=input_ids.device))
+                return SimpleNamespace(hidden_states=[hidden])
+
+        class VAE:
+            config = SimpleNamespace(z_dim=4, latents_mean=[0.] * 4, latents_std=[1.] * 4)
+
+            def encode(self, image):
+                return SimpleNamespace(latents=image.new_zeros(1, 4, 1, image.shape[-2] // 16, image.shape[-1] // 16))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            module = load_patched_pipeline(Path(tmp))
+            transformer = QwenImage21Transformer2DModel(
+                in_channels=4, out_channels=4, num_layers=1, attention_head_dim=8,
+                num_attention_heads=2, context_in_dim=16, mlp_ratio=2, axes_dims_rope=(2, 2, 4),
+            )
+            pipe = module.QwenImage21Pipeline(
+                scheduler=FlowMatchEulerDiscreteScheduler(), vae=VAE(),
+                processor=processor, text_encoder=TextEncoder(), transformer=transformer,
+            )
+            pipe.set_progress_bar_config(disable=True)
+            result = pipe(
+                prompt="combine", image=[Image.new("RGB", (96, 32)), Image.new("RGBA", (32, 64))],
+                width=256, height=256, reference_resolution=0, true_cfg_scale=1.,
+                num_inference_steps=1, output_type="latent",
+            )
+            self.assertEqual(tuple(result.images.shape), (1, 256, 4))
+            self.assertTrue(torch.isfinite(result.images).all())
+
     def test_native_refs_reach_text_encoder_vae_and_transformer_with_matching_grids(self):
         self._native_reference_case("turbo")
 
@@ -33,21 +114,10 @@ class NativeResolutionTests(unittest.TestCase):
     def _native_reference_case(self, model_variant, *, capped=False):
         import torch
         from diffusers import FlowMatchEulerDiscreteScheduler, QwenImage21Transformer2DModel
-        from diffusers.pipelines.qwenimage21 import pipeline_qwenimage21
         from qwen_image_21_infer.sampling import base_scheduler, comfy_simple_sigmas
 
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            target = root / "diffusers/pipelines/qwenimage21/pipeline_qwenimage21.py"
-            target.parent.mkdir(parents=True)
-            shutil.copyfile(pipeline_qwenimage21.__file__, target)
-            patch_file = Path(__file__).parents[1] / "patches/diffusers-native-references.patch"
-            if "reference_resolution" not in inspect.signature(pipeline_qwenimage21.QwenImage21Pipeline.__call__).parameters:
-                subprocess.run(["git", "apply", str(patch_file)], cwd=root, check=True, capture_output=True)
-            name = "diffusers.pipelines.qwenimage21._native_resolution_test"
-            spec = importlib.util.spec_from_file_location(name, target)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_patched_pipeline(Path(tmp))
 
             class Processor:
                 def apply_chat_template(self, *args, **kwargs):
