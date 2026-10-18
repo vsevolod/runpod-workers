@@ -14,6 +14,8 @@ QWEN_API = ModelAPI(
         "variant": {"type": str, "required": False, "default": "turbo", "constraints": lambda v: v in ("base", "turbo")},
         "output_resolution": {"type": int, "required": False, "default": None, "nullable": True,
                               "constraints": lambda v: v is None or type(v) is int and 256 <= v <= 2752 and v % 32 == 0},
+        "reference_megapixels": {"type": float, "required": False, "default": 1.,
+                                 "constraints": lambda v: math.isfinite(v) and .001024 <= v <= 4.3008},
     },
     aliases={"model_variant": "variant", "output_resolution": "output_resolution"},
 )

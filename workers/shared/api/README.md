@@ -60,7 +60,7 @@ Numbers cannot be booleans; floating-point NaN/infinity are rejected.
 Each reference is raw base64 or a `data:image/...;base64,...` URL, never a remote
 image URL. Input order is preserved. Krea converts references to RGB. Qwen keeps
 alpha when present, limits each decoded file to 25 MiB and each source side to
-8192 pixels, then checks the native inference dimensions described below.
+8192 pixels, then downsizes references using the megapixel limit below.
 
 ### Guidance semantics and sampling
 
@@ -90,15 +90,25 @@ the request's seeded generator. Changing sampling options does not reload weight
 |---|---|---|---|
 | `variant` | string | `turbo` | `turbo` or `base`; one resident pipeline, unloaded before switching variants |
 | `output_resolution` | integer or null | null | 256..2752, multiple of 32. Sets edit canvas area when width/height are omitted; preserves the last reference's aspect ratio |
+| `reference_megapixels` | number | 1.0 | Maximum area of **each** edit reference and target area of the automatic edit canvas in decimal megapixels (1 MP = 1,000,000 pixels). Finite, 0.001024..4.3008 |
 
-Generate defaults to 1024x1024. For edit, omit both width and height to follow the
-**last** reference's native size, rounded to the nearest multiple of 32. Pass both
-dimensions for an explicit canvas; passing only one is an error. References keep
-their individual native dimensions, rounded to multiples of 32, independently of
-the canvas. Each reference and the final canvas must fit 2752px per side and
-4,300,800 pixels. Oversized references are rejected before model loading.
+Generate defaults to 1024x1024. For edit, omit both width and height to target
+`reference_megapixels` at the **original last reference's aspect ratio**, even
+when the source is small. Dimensions round down to multiples of 32, so the
+area is approximately the requested MP and never exceeds it. For example,
+100x30 produces a 1824x544 canvas (0.992256 MP) by default. Pass both dimensions
+for an explicit canvas; passing only one is an error. Every reference is independently downscaled
+on CPU before the vision/text encoder and VAE, preserving aspect ratio subject to
+32px alignment. Dimensions round down to multiples of 32 (minimum 32px), so the
+inference area stays below the budget. Smaller references are not enlarged, apart
+from the model's 32px minimum side. For example, a 2048x2048 or 1024x1024 reference
+becomes 992x992 with the default 1 MP limit. References also fit 2752px per side.
+The limit is per image, not the total across references; five references may still
+consume more VRAM than one. It does not guarantee that every request fits a GPU.
 
-When explicit dimensions are present, they determine the output canvas.
+Explicit dimensions or `output_resolution` determine the output canvas separately
+from the reference budget. The canvas must fit 256..2752px per side and 4,300,800
+pixels; unsupported aspect-ratio/area combinations are validation errors.
 In response `model_options`, `output_resolution: null` preserves the automatic
 mode so the options can be reused for another edit. The legacy top-level
 `output_resolution` also reports the derived control value. VAE choice, offload
@@ -115,7 +125,7 @@ and mmap remain worker configuration, not request fields.
     "sampler": "er_sde",
     "seed": 123,
     "loras": [{"name": "portrait_style", "strength": 0.8}],
-    "model_options": {"variant": "base"}
+    "model_options": {"variant": "base", "reference_megapixels": 1.0}
   }
 }
 ```
@@ -191,7 +201,7 @@ RunPod wraps the worker result in `output`. Both workers return:
   "guidance_scale": 3.5,
   "sampler": "euler",
   "loras": [],
-  "model_options": {"variant": "base", "output_resolution": null},
+  "model_options": {"variant": "base", "output_resolution": null, "reference_megapixels": 1.0},
   "num_refs": 1
 }
 ```
@@ -236,6 +246,8 @@ shared parser instead of relying on the RunPod SDK validator's default handling.
 The CLI flags remain compatible. Both clients now send model-specific fields
 under `model_options`; both expose `--steps`, `--guidance-scale`/`--cfg`, and
 `--sampler` with their worker's supported choices.
+Qwen also accepts `--reference-megapixels` (for example, `0.5`). This is a new
+nested model option, without a legacy top-level alias, and requires an updated image.
 Canonical nested requests require the updated worker images; old images accept
 the legacy flat form. Existing clients using the flat form work with new images.
 

@@ -240,7 +240,7 @@ The worker uses [`shared/api`](../shared/api/README.md) together with Krea.
 That document is the complete contract, including common fields, model-specific
 options, responses, errors and compatibility aliases. New clients should send
 Qwen-specific controls under `"model_options": {"variant": "base"}` and optional
-`output_resolution` inside that object. Existing flat examples below remain
+`output_resolution` and `reference_megapixels` inside that object. Existing flat examples below remain
 supported as compatibility aliases.
 
 The following fields work for both `image_generate` and `image_edit`, with
@@ -337,16 +337,28 @@ without an immediate OOM. Pass an official size when the GPU has room.
 }
 ```
 
-Each reference keeps its own native inference size, rounded to the nearest
-multiple of 32. References are no longer resized to the output canvas area.
-Omit `width`, `height` and `output_resolution` to use the **last** reference's
-native size for the result too. Pass both dimensions to choose a canvas, or
+Each reference is downscaled on CPU to at most
+`model_options.reference_megapixels` megapixels (default **1.0**), before both the
+vision/text encoder and VAE. One megapixel is 1,000,000 pixels. Aspect ratio is
+preserved subject to rounding dimensions down to multiples of 32; a 2048x2048
+reference becomes 992x992 at the default limit. Smaller references are not enlarged,
+apart from the model's 32px minimum side. Alpha and reference order are preserved.
+Use `{"model_options": {"reference_megapixels": 0.5}}` or CLI
+`--reference-megapixels 0.5` for a smaller budget. Finite values from 0.001024 to
+4.3008 are accepted. This option applies to both Base and Turbo editing.
+
+Omit `width`, `height` and `output_resolution` to target `reference_megapixels`
+for the output at the **original last reference's aspect ratio**, even for a
+small input. Output dimensions round down to multiples of 32 without exceeding
+the requested area: a 100x30 reference produces a 1824x544 result at 1 MP.
+The reference itself remains small. Pass both dimensions to choose a canvas, or
 `output_resolution` to choose its approximate square-root area while keeping
 the last reference's aspect ratio. These overrides affect the result only.
 
-Native references must fit the existing supported bounds: at most 2752px per
-side and 4,300,800 pixels after alignment. Larger references return a validation
-error before inference; resize them before submitting. Output dimensions still
+References are also downscaled to at most 2752px per side. Encoded input limits
+(25 MiB per file, 8192px per source side) still apply before resizing. The megapixel
+budget is per reference, not a total; multiple references can still cause CUDA OOM.
+Output dimensions still
 must be at least 256px per side. References keep their alpha; the vision encoder
 composites RGBA over white, and the VAE still reads the alpha channel.
 

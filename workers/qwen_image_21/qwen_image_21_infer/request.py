@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import sys
 from pathlib import Path
 
@@ -46,6 +46,7 @@ class NormalizedRequest(CommonRequest):
     size_from_source: bool
     output_resolution: int
     requested_output_resolution: int | None
+    reference_megapixels: float
 
     @property
     def scheduler(self) -> str:
@@ -78,8 +79,27 @@ def _derived_output_resolution(width: int, height: int) -> int:
     return max(MIN_SIDE, min(MAX_SIDE, side))
 
 
-def _native_size(image: Image.Image) -> tuple[int, int]:
-    return tuple(max(MULTIPLE, round(side / MULTIPLE) * MULTIPLE) for side in image.size)
+def _canvas_at_megapixels(image: Image.Image, megapixels: float) -> tuple[int, int]:
+    """Target area, including upscaling, from the unrounded source aspect ratio."""
+    area = int(megapixels * 1_000_000)
+    ratio = image.width / image.height
+    return (
+        max(MULTIPLE, int(math.sqrt(area * ratio)) // MULTIPLE * MULTIPLE),
+        max(MULTIPLE, int(math.sqrt(area / ratio)) // MULTIPLE * MULTIPLE),
+    )
+
+
+def _resize_reference(image: Image.Image, max_pixels: int) -> Image.Image:
+    """Downscale before either encoder; floor alignment keeps the area bounded."""
+    width, height = image.size
+    scale = min(
+        1., math.sqrt(max_pixels / (width * height)),
+        MAX_SIDE / width, MAX_SIDE / height,
+        # Account for the minimum 32px side on very narrow references.
+        max_pixels / (MULTIPLE * width), max_pixels / (MULTIPLE * height),
+    )
+    size = tuple(max(MULTIPLE, int(side * scale) // MULTIPLE * MULTIPLE) for side in image.size)
+    return image if size == image.size else image.resize(size, Image.Resampling.LANCZOS)
 
 
 def _canvas_at_resolution(image: Image.Image, resolution: int) -> tuple[int, int]:
@@ -99,8 +119,8 @@ def normalize_job_input(
 
     ``raw_keys`` contains explicit keys before the shared parser fills defaults,
     including the legacy equivalents of explicitly nested model options.
-    Edit uses it so an omitted width/height follows the last reference instead
-    of the schema default canvas. Reference images keep their native sizes.
+    Edit uses it so an omitted width/height targets the requested megapixel area
+    at the original last-reference aspect ratio. References are capped separately.
     """
     raw_keys = set(raw_keys or ())
 
@@ -110,7 +130,10 @@ def normalize_job_input(
         raise RequestError("model_variant must be 'base' or 'turbo'") from err
     default_steps = TURBO_STEPS if variant == "turbo" else BASE_STEPS
     common = normalize_common_fields(validated, QWEN_API, raw_keys=raw_keys, default_steps=default_steps)
-    images = common.images
+    source_images = common.images
+    reference_megapixels = validated.get("model_options", {}).get("reference_megapixels", 1.)
+    images = tuple(_resize_reference(image, int(reference_megapixels * 1_000_000)) for image in common.images)
+    common = replace(common, images=images)
 
     output_resolution = validated.get("output_resolution")
     if output_resolution is not None:
@@ -129,28 +152,20 @@ def normalize_job_input(
         if output_resolution is None:
             output_resolution = _derived_output_resolution(width, height)
     else:
-        for index, image in enumerate(images, 1):
-            native_w, native_h = _native_size(image)
-            if native_w > MAX_SIDE or native_h > MAX_SIDE or native_w * native_h > MAX_AREA:
-                raise RequestError(
-                    f"reference {index} native size {native_w}x{native_h} exceeds "
-                    f"the supported limit ({MAX_SIDE}px per side, {MAX_AREA} pixels); "
-                    "resize the reference before submitting"
-                )
         has_width = "width" in raw_keys
         has_height = "height" in raw_keys
         if has_width ^ has_height:
             raise RequestError(
                 "pass both width and height, or neither "
-                "(size follows the last reference)"
+                "(automatic size uses the last reference's aspect ratio)"
             )
         size_from_source = not has_width and not has_height
         if size_from_source:
             if output_resolution is None:
-                width, height = _native_size(images[-1])
+                width, height = _canvas_at_megapixels(source_images[-1], reference_megapixels)
                 output_resolution = _derived_output_resolution(width, height)
             else:
-                width, height = _canvas_at_resolution(images[-1], output_resolution)
+                width, height = _canvas_at_resolution(source_images[-1], output_resolution)
             _check_canvas(width, height)
         else:
             width = int(validated["width"])
@@ -164,6 +179,7 @@ def normalize_job_input(
         width=width, height=height, size_from_source=size_from_source,
         output_resolution=output_resolution,
         requested_output_resolution=validated.get("output_resolution"),
+        reference_megapixels=reference_megapixels,
     )
 
 

@@ -277,7 +277,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output-resolution",
         type=int,
         default=None,
-        help="Edit canvas area when size is omitted. Default: native last-reference size; references keep their own sizes.",
+        help="Override edit canvas area when size is omitted, keeping the last reference's aspect ratio.",
+    )
+    parser.add_argument(
+        "--reference-megapixels", type=float, default=None,
+        help="Per-reference megapixel cap and automatic edit output area (default: 1.0). Small references stay small.",
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
@@ -336,6 +340,8 @@ def _model_options(args: argparse.Namespace) -> dict:
     options = {"variant": args.model_variant}
     if args.output_resolution is not None:
         options["output_resolution"] = args.output_resolution
+    if args.reference_megapixels is not None:
+        options["reference_megapixels"] = args.reference_megapixels
     return options
 
 

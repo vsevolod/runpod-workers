@@ -69,7 +69,7 @@ jobs:
               from transformers import Qwen3VLForConditionalGeneration
           print("Runtime imports OK; torch=" + torch.__version__)
           '
-      - name: Check Qwen loading against real Diffusers configs and LoRA files
+      - name: Check Qwen loading, LoRAs and reference preprocessing
         if: matrix.worker == 'qwen_image_21'
         shell: bash
         run: |
@@ -79,6 +79,12 @@ jobs:
           docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
             --entrypoint python "$IMAGE" -m unittest discover \
             -s workers/qwen_image_21/tests -p test_lora_loading.py
+          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
+            --entrypoint python "$IMAGE" -m unittest discover \
+            -s workers/qwen_image_21/tests -p test_reference_megapixels.py
+          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
+            --entrypoint python "$IMAGE" -m unittest discover \
+            -s workers/qwen_image_21/tests -p test_native_resolution.py
       - name: Publish validated image
         if: github.event_name == 'push' || inputs.publish
         shell: bash

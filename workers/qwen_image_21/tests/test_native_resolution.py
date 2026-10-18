@@ -5,12 +5,16 @@ import inspect
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).parents[2]))
 
 HAS_DIFFUSERS = all(importlib.util.find_spec(name) is not None for name in ("torch", "diffusers", "transformers"))
 
@@ -23,7 +27,10 @@ class NativeResolutionTests(unittest.TestCase):
     def test_base_native_refs_reach_transformer_with_forty_unmodified_simple_sigmas(self):
         self._native_reference_case("base")
 
-    def _native_reference_case(self, model_variant):
+    def test_five_capped_references_reach_both_encoders_and_transformer(self):
+        self._native_reference_case("turbo", capped=True)
+
+    def _native_reference_case(self, model_variant, *, capped=False):
         import torch
         from diffusers import FlowMatchEulerDiscreteScheduler, QwenImage21Transformer2DModel
         from diffusers.pipelines.qwenimage21 import pipeline_qwenimage21
@@ -91,14 +98,30 @@ class NativeResolutionTests(unittest.TestCase):
                 seen["latent_shape"] = tuple(kwargs["hidden_states"].shape)
                 raise Captured
 
+            inputs = dict(
+                prompt="combine", image=[Image.new("RGB", (96, 64)), Image.new("RGBA", (65, 127))],
+                width=64, height=64, output_resolution=1024, reference_resolution=0,
+                true_cfg_scale=1., **sampling,
+            )
+            if capped:
+                from shared.api import QWEN_API, parse_job_input
+                from shared.api.images import images_to_base64_data_urls
+                from qwen_image_21_infer.request import build_pipe_kwargs, normalize_job_input
+                parsed = parse_job_input({"input": {
+                    "type": "image_edit", "prompt": "combine", "width": 256, "height": 256,
+                    "images": images_to_base64_data_urls([Image.new("RGBA", (2048, 2048)) for _ in range(5)]),
+                }}, QWEN_API)
+                norm = normalize_job_input(parsed.values, raw_keys=parsed.raw_keys)
+                inputs = build_pipe_kwargs(norm)
             with patch.object(pipe, "encode_prompt", new=encode_prompt), patch.object(transformer, "forward", new=forward):
                 with self.assertRaises(Captured):
-                    pipe(
-                        prompt="combine", image=[Image.new("RGB", (96, 64)), Image.new("RGBA", (65, 127))],
-                        width=64, height=64, output_resolution=1024,
-                        reference_resolution=0, true_cfg_scale=1., output_type="latent",
-                        **sampling,
-                    )
+                    pipe(**inputs, output_type="latent")
+            if capped:
+                self.assertEqual(seen["vl_sizes"], [(992, 992)] * 5)
+                self.assertEqual(vae.seen, [(1, 4, 1, 992, 992)] * 5)
+                self.assertEqual(seen["img_shapes"], [[(1, 62, 62)] * 5 + [(1, 16, 16)]])
+                self.assertEqual(seen["latent_shape"], (1, 19476, 4))
+                return
             self.assertEqual(seen["vl_sizes"], [(96, 64), (64, 128)])
             self.assertEqual(vae.seen, [(1, 4, 1, 64, 96), (1, 4, 1, 128, 64)])
             self.assertEqual(seen["img_shapes"], [[(1, 4, 6), (1, 8, 4), (1, 4, 4)]])
