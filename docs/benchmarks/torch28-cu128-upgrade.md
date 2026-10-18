@@ -83,6 +83,9 @@ results were preserved. Production endpoints were not redeployed or edited.
 Deployment of these images requires selecting CUDA 12.8 and newer in Runpod's
 allowed CUDA versions; current Ampere/Ada GPU model pools remain compatible.
 
+Both production endpoints were subsequently deployed after explicit user
+authorization: [deployment and API smoke evidence](../deployments/2026-10-19-image-workers.md).
+
 For a new model, use the [calibration procedure](image-megapixels.md#procedure-for-a-new-image-model-or-gpu)
 and run the actual candidate image, recording its digest and runtime versions
 before the first measured request.

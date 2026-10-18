@@ -1,0 +1,111 @@
+{
+  "verified_at_utc": "2026-10-18T21:39:16.318837+00:00",
+  "source_commit": "938a3238e186a6b8038f3fddaffc94b3ca4c3f76",
+  "build_ci": "https://github.com/vsevolod/runpod-workers/actions/runs/39162351332",
+  "endpoints": {
+    "krea2": {
+      "configuration": {
+        "endpoint": "9zb0wyo61ck3wk",
+        "version": 46,
+        "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:96d5b11d4595d4305e26dd1ff3b42bacb521668987fa8b160ffee57490b998ff",
+        "allowedCudaVersions": "12.8,12.9,13.0,13.1,13.2,13.3,13.4",
+        "minCudaVersion": "12.8",
+        "gpuIds": "AMPERE_24,ADA_24,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+        "workersMin": 0,
+        "workersMax": 1
+      },
+      "smoke": {
+        "delayTime": 207555,
+        "executionTime": 218062,
+        "id": "cee1b177-e59d-4fa0-8471-a6f1ddd88caa-e2",
+        "status": "COMPLETED",
+        "workerId": "we7olzyfxt20f1",
+        "output": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "guidance_scale": 0,
+          "height": 1152,
+          "loras": [
+            {
+              "name": "krea2_identity_edit_v2",
+              "strength": 1,
+              "type": "lora"
+            }
+          ],
+          "model_options": {
+            "fit_mode": "fit",
+            "grounding_px": 768,
+            "mu": 1.15,
+            "ref_boost": 1,
+            "ref_boost_a": 1,
+            "ref_position": "aligned",
+            "ref_position_a": "aligned"
+          },
+          "num_inference_steps": 8,
+          "num_refs": 2,
+          "ref_boost": 1,
+          "reference_megapixels": "max",
+          "resolved_reference_megapixels": 1,
+          "sampler": "euler",
+          "seed": 42,
+          "type": "image_edit",
+          "vram_gib": 22.0440673828125,
+          "width": 864
+        },
+        "verified": true,
+        "image_sha256": "11e61b9843ca13d9785dd6ac90bf0c20efcdb139b68773c81f37752d0fa41e82",
+        "image_bytes": 878450
+      }
+    },
+    "qwen_image_21": {
+      "configuration": {
+        "endpoint": "b1zzsd2eqqdrvp",
+        "version": 30,
+        "image": "ghcr.io/vsevolod/runpod-workers-qwen_image_21@sha256:2f7b4b7eb5c25ef95a8b017c68ecc84737e9affad510d23c0669bd257e01573e",
+        "allowedCudaVersions": "12.8,12.9,13.0,13.1,13.2,13.3,13.4",
+        "minCudaVersion": "12.8",
+        "gpuIds": "AMPERE_24,ADA_24,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+        "workersMin": 0,
+        "workersMax": 1
+      },
+      "smoke": {
+        "delayTime": 97096,
+        "executionTime": 89981,
+        "id": "1375311e-fdbe-488b-8e06-67b0eb9f255d-e1",
+        "status": "COMPLETED",
+        "workerId": "sxdqohm0sx1ozv",
+        "output": {
+          "guidance_scale": 1,
+          "height": 1152,
+          "loras": [
+            {
+              "name": "lenovo_qwen21",
+              "strength": 1,
+              "type": "lora"
+            }
+          ],
+          "model_id": "Qwen/Qwen-Image-2.1-Turbo",
+          "model_options": {
+            "output_resolution": null,
+            "variant": "turbo"
+          },
+          "model_variant": "turbo",
+          "num_inference_steps": 8,
+          "num_refs": 3,
+          "output_resolution": 998,
+          "reference_megapixels": "max",
+          "resolved_reference_megapixels": 1,
+          "sampler": "euler",
+          "scheduler": "checkpoint",
+          "seed": 42,
+          "type": "image_edit",
+          "vram_gib": 23.547119140625,
+          "width": 864
+        },
+        "verified": true,
+        "image_sha256": "34642018eef00ae51042b8da65499e70c82f3026925f3b6a70a7ace7065d02d7",
+        "image_bytes": 951883
+      }
+    }
+  }
+}
