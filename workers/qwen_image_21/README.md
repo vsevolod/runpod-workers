@@ -240,7 +240,8 @@ The worker uses [`shared/api`](../shared/api/README.md) together with Krea.
 That document is the complete contract, including common fields, model-specific
 options, responses, errors and compatibility aliases. New clients should send
 Qwen-specific controls under `"model_options": {"variant": "base"}` and optional
-`output_resolution` and `reference_megapixels` inside that object. Existing flat examples below remain
+`output_resolution` inside that object. `reference_megapixels` is a common top-level
+field accepting a number or `"max"` (default). Existing flat examples below remain
 supported as compatibility aliases.
 
 The following fields work for both `image_generate` and `image_edit`, with
@@ -337,15 +338,21 @@ without an immediate OOM. Pass an official size when the GPU has room.
 }
 ```
 
-`model_options.reference_megapixels` is the **total** reference budget (default
-**1.0** MP). Each reference is downscaled on CPU to at most this budget divided
+Top-level `reference_megapixels` is the **total** reference budget (default
+`"max"`). The worker selects a number from the shared model/VRAM
+[table](../shared/megapixels.py). The 48 GB tier selects **4 MP** for Base and
+Turbo, measured on L40S with three square references, Lenovo LoRA and CFG 1;
+other tiers remain **1 MP** placeholders. See the
+[benchmark procedure and results](../../docs/benchmarks/image-megapixels.md).
+Explicit numbers bypass the table. The old nested input remains
+accepted for compatibility. Each reference is downscaled on CPU to at most this budget divided
 by the number of references, before both the vision/text encoder and VAE.
 One megapixel is 1,000,000 pixels. Aspect ratio is preserved subject to rounding
-dimensions down to multiples of 32. With the default budget, one square reference
+dimensions down to multiples of 32. With a 1 MP budget, one square reference
 is capped at 992x992, two at 704x704 each, and five at 416x416 each.
 Smaller references are not enlarged, apart from the model's 32px minimum side.
 Their unused share is not redistributed. Alpha and reference order are preserved.
-Use `{"model_options": {"reference_megapixels": 0.5}}` or CLI
+Use `{"reference_megapixels": 0.5}` or CLI
 `--reference-megapixels 0.5` for a smaller budget. Finite values from 0.001024 to
 4.3008 are accepted. The total budget must also allow at least 32x32 pixels per
 reference; otherwise the request is rejected. This option applies to both Base

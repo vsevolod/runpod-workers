@@ -365,6 +365,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Empty string = no LoRA."
         ),
     )
+    parser.add_argument("--reference-megapixels", type=lambda value: "max" if value == "max" else float(value),
+                        default="max", help="Total reference and automatic edit canvas budget (default: max).")
     parser.add_argument(
         "--edit-model", choices=("identity", "general"), default="identity",
         help="Edit preset: identity V2 for restaging people; general V2 for instruction edits.",
@@ -506,6 +508,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
         "sampler": args.sampler,
+        "reference_megapixels": args.reference_megapixels,
         "model_options": {"mu": args.mu, "grounding_px": args.grounding_px,
                           "ref_boost": ref_boost, "ref_boost_a": args.ref_boost_a,
                           "ref_position": ref_position, "ref_position_a": args.ref_position_a,
@@ -576,6 +579,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         "num_inference_steps": args.steps,
         "guidance_scale": args.guidance_scale,
         "sampler": args.sampler,
+        "reference_megapixels": args.reference_megapixels,
         "model_options": {"mu": args.mu},
         "loras": loras,
     }

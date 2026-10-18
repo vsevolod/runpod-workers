@@ -2,6 +2,7 @@ import base64
 import importlib.util
 import sys
 import unittest
+from unittest.mock import patch
 from io import BytesIO
 from pathlib import Path
 
@@ -46,6 +47,21 @@ def _png_b64(w=32, h=32, color=(255, 0, 0)) -> str:
 
 
 class NormalizeJobInputTests(unittest.TestCase):
+    def test_shared_max_budget_uses_quant_profile_and_keeps_full_output_area(self):
+        from shared import megapixels
+        from shared.api import KREA_API, parse_job_input
+        raw = {"type": "image_edit", "prompt": "combine", "images": [_png_b64(2048, 2048)] * 2,
+               "reference_megapixels": "max"}
+        parsed = parse_job_input({"input": raw}, KREA_API)
+        with patch.dict("os.environ", {"DIT_QUANT": "int8"}), patch.object(
+            megapixels, "detect_vram_gib", return_value=47.5
+        ), patch.dict(megapixels.MEGAPIXEL_LIMITS, {"krea2.int8_convrot": {0: 1., 48: 2.}}):
+            norm = normalize_job_input(parsed.values, raw_keys=parsed.raw_keys, quant_mode="int8_convrot")
+        self.assertEqual(norm.reference_megapixels, 2.)
+        self.assertEqual([im.size for im in norm.images], [(1000, 1000)] * 2)
+        self.assertEqual((norm.width, norm.height), (1408, 1408))
+        self.assertTrue(norm.size_from_source)
+
     def test_default_type_is_generate(self):
         out = normalize_job_input(
             {"prompt": "cat", "width": 1024, "height": 1024, "images": []},
@@ -127,8 +143,7 @@ class NormalizeJobInputTests(unittest.TestCase):
             raw_keys={"type", "prompt", "images"},
         )
         self.assertTrue(out.size_from_source)
-        self.assertIsNone(out.width)
-        self.assertIsNone(out.height)
+        self.assertEqual((out.width, out.height), (1152, 864))
         self.assertEqual(len(out.images), 2)
         self.assertEqual(out.images[0].size, (80, 60))
 
@@ -181,9 +196,7 @@ class NormalizeJobInputTests(unittest.TestCase):
             raw_keys={"type", "prompt", "images"},
         )
         self.assertTrue(out.size_from_source)
-        # width/height on NormalizedRequest may be None until geometry; or store flags only
-        self.assertIsNone(out.width)
-        self.assertIsNone(out.height)
+        self.assertEqual((out.width, out.height), (1152, 864))
 
     def test_edit_honors_explicit_width_height_in_raw(self):
         raw = _png_b64(800, 600)

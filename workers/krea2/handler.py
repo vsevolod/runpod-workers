@@ -88,7 +88,9 @@ def _oom_cleanup():
 @torch.inference_mode()
 def generate_image(job: dict):
     return handle_job(
-        job, profile=KREA_API, normalize=normalize_job_input, infer=_infer,
+        job, profile=KREA_API,
+        normalize=lambda values, *, raw_keys: normalize_job_input(
+            values, raw_keys=raw_keys, quant_mode=getattr(MODELS.pipe, "quant_mode", "fp8")), infer=_infer,
         logger=logger, log_stage=log_stage, deliver=_save_and_upload_images,
         client_errors=(LoRAError,), oom_errors=(torch.cuda.OutOfMemoryError,),
         oom_cleanup=_oom_cleanup,

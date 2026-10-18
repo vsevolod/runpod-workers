@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -27,6 +28,18 @@ def request(images, **fields):
 
 
 class ReferenceMegapixelsTests(unittest.TestCase):
+    def test_top_level_max_uses_model_and_gpu_table_for_references_and_canvas(self):
+        from shared import megapixels
+        with patch.object(megapixels, "detect_vram_gib", return_value=23.7), patch.dict(
+            megapixels.MEGAPIXEL_LIMITS, {"qwen_image_21.base": {0: 1., 24: 2.}}
+        ):
+            norm = request([image_data(2048, 2048)] * 2, reference_megapixels="max",
+                           model_options={"variant": "base"})
+        self.assertEqual(norm.reference_megapixels, 2.)
+        self.assertEqual(norm.requested_reference_megapixels, "max")
+        self.assertEqual([img.size for img in norm.images], [(992, 992)] * 2)
+        self.assertEqual((norm.width, norm.height), (1408, 1408))
+
     def test_budget_is_shared_equally_while_output_keeps_the_full_area(self):
         source = image_data(2048, 2048)
         for variant in ("base", "turbo"):

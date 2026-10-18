@@ -222,6 +222,14 @@ The worker uses [`shared/api`](../shared/api/README.md) together with Qwen.
 See that document for the complete contract, defaults, responses and errors.
 New clients put `mu`, `grounding_px`, reference controls and `fit_mode` inside
 `model_options`; the flat examples below remain supported as compatibility aliases.
+`reference_megapixels` is a common **top-level** field, accepting a number or
+`"max"` (default). Max selects the active FP8/INT8 profile and total CUDA VRAM
+in the shared [table](../shared/megapixels.py). The 48 GB tier selects 4 MP,
+measured on L40S with Identity Edit V2, two square references and CFG off;
+other tiers remain 1 MP placeholders. See the
+[benchmark procedure and results](../../docs/benchmarks/image-megapixels.md).
+Explicit numbers bypass the table. Both the selected number and detected VRAM
+are reported in the common response; see the [shared API](../shared/api/README.md#shared-megapixel-budget).
 The common `sampler` field accepts only `"euler"` on Krea. Both `"lora"` and
 `"weight_diff"` entries remain supported in the top-level `loras` list.
 
@@ -344,7 +352,7 @@ Edit fields:
 | Field | Default | Notes |
 |-------|---------|--------|
 | `images` | `[]` | **Required** length **1 or 2** (raw base64 or `data:image/...;base64,...`) |
-| `width` / `height` | schema 1024 | If **both omitted** by the client, canvas is derived from **`images[0]`** (MP-capped, snap to 16). If present, both used as explicit target. Prefer omit both or send both. `images[1]` never sets canvas. Different native sizes are fine (each ref fit independently). |
+| `width` / `height` | schema 1024 | If **both omitted**, canvas uses the original **`images[0]`** aspect at the full shared MP budget, rounded down to 16px, including upscaling small sources. Explicit dimensions take priority. `images[1]` never sets canvas. |
 | `grounding_px` | `768` | Long-side cap for vision TE **per** image; `0` = no resize |
 | `ref_boost` | `1.0` | Attention boost toward the **last/only** ref: person in scene+person workflows. Recommend 2 for Identity, 4 for General. |
 | `ref_boost_a` | `1.0` | Independent boost toward the **first** ref in two-image workflows (scene); ignored for one ref. |
@@ -357,6 +365,14 @@ Edit fields:
 **GQA / reference boosts:** when either active reference boost differs from 1, the DiT uses a dense float attention bias and expands K/V heads (GQA → full heads) so SDPA has a valid kernel. CUDA backends are FLASH + EFFICIENT only (no MATH — would OOM on full L×L).
 
 **VRAM:** 1-ref edit ≈ ~2× image tokens (source + target); **2 refs ≈ ~3×**. Same 24 GB class with TE offload; prefer ≤1.5 MP targets. OOM → lower resolution / fewer steps / no CFG / single ref.
+
+Before conditioning, input references share the resolved `reference_megapixels`
+budget equally and are downscaled on CPU, preserving aspect and never enlarged.
+Their unused shares are not redistributed. The source-pixel fit step still
+resamples each reference to the training-matched target grid, aligned to 16px;
+the input budget therefore does not cap the combined VAE token count.
+The automatic output uses the full budget regardless
+of reference count. The CLI accepts `--reference-megapixels max` or a number.
 
 What is **not** available yet: N>2 refs, Raw-model editing, Diffusers pipeline rewrite.
 The author's Raw/20-step/CFG-3 preset for difficult removals requires a different

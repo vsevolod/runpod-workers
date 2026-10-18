@@ -1,0 +1,30 @@
+[
+  {
+    "profile": "krea2.int8_convrot",
+    "refs": 2,
+    "sweep_code": 0,
+    "highest_successful_mp": 4.0,
+    "confirmation_code": 0
+  },
+  {
+    "profile": "krea2.fp8",
+    "refs": 2,
+    "sweep_code": 0,
+    "highest_successful_mp": 4.0,
+    "confirmation_code": 0
+  },
+  {
+    "profile": "qwen_image_21.turbo",
+    "refs": 3,
+    "sweep_code": 0,
+    "highest_successful_mp": 4.0,
+    "confirmation_code": 0
+  },
+  {
+    "profile": "qwen_image_21.base",
+    "refs": 3,
+    "sweep_code": 0,
+    "highest_successful_mp": 4.0,
+    "confirmation_code": 0
+  }
+]

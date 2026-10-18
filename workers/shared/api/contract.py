@@ -9,6 +9,7 @@ import math
 from PIL import Image
 
 from .images import decode_image_string
+from ..megapixels import resolve_megapixels
 
 
 class RequestError(ValueError):
@@ -49,6 +50,8 @@ class ModelAPI:
             "sampler": {"type": str, "required": False, "default": "euler", "constraints": lambda v: v in self.samplers},
             "num_images": {"type": int, "required": False, "default": 1, "constraints": lambda v: type(v) is int and 1 <= v <= 4},
             "images": {"type": list, "required": False, "default": []},
+            "reference_megapixels": {"type": float, "required": False, "default": "max", "special_values": ("max",),
+                                     "constraints": lambda v: math.isfinite(v) and .001024 <= v <= 4.3008},
             "loras": {"type": list, "required": False, "default": [], "nullable": True},
         }
 
@@ -67,6 +70,8 @@ class ParsedInput:
 
 
 def _validate_field(name, value, rule):
+    if isinstance(value, str) and value in rule.get("special_values", ()):
+        return value
     if value is None and rule.get("nullable"):
         return None
     expected = rule["type"]
@@ -92,7 +97,7 @@ def _validate_field(name, value, rule):
 def parse_job_input(job, profile: ModelAPI) -> ParsedInput:
     if not isinstance(job, dict) or not isinstance(job.get("input"), dict):
         raise RequestError("Job must contain an 'input' object")
-    raw = job["input"]
+    raw = dict(job["input"])
     unknown = set(raw) - set(profile.input_schema())
     if unknown:
         raise RequestError(f"Unknown input field(s): {', '.join(sorted(unknown))}")
@@ -100,6 +105,14 @@ def parse_job_input(job, profile: ModelAPI) -> ParsedInput:
     if not isinstance(options, dict):
         raise RequestError("model_options must be an object")
     options = dict(options)
+    if "reference_megapixels" in options:
+        budget_rule = profile.common_schema()["reference_megapixels"]
+        nested_budget = _validate_field("model_options.reference_megapixels", options.pop("reference_megapixels"), budget_rule)
+        if "reference_megapixels" in raw:
+            top_budget = _validate_field("reference_megapixels", raw["reference_megapixels"], budget_rule)
+            if top_budget != nested_budget:
+                raise RequestError("Parameter conflict: reference_megapixels and model_options.reference_megapixels differ")
+        raw["reference_megapixels"] = nested_budget
     unknown = set(options) - set(profile.options)
     if unknown:
         raise RequestError(f"Unknown model_options for {profile.name}: {', '.join(sorted(unknown))}")
@@ -142,9 +155,13 @@ class CommonRequest:
     sampler: str
     num_images: int
     images: tuple[Image.Image, ...]
+    reference_megapixels: float
+    requested_reference_megapixels: float | str
+    vram_gib: float | None
 
 
-def normalize_common_fields(values: dict, profile: ModelAPI, *, raw_keys=None, default_steps=None) -> CommonRequest:
+def normalize_common_fields(values: dict, profile: ModelAPI, *, raw_keys=None, default_steps=None,
+                            megapixel_model=None) -> CommonRequest:
     schema = profile.common_schema()
     common = {}
     for name in ("type", "prompt", "negative_prompt", "seed", "num_inference_steps", "guidance_scale", "sampler", "num_images", "images"):
@@ -169,6 +186,12 @@ def normalize_common_fields(values: dict, profile: ModelAPI, *, raw_keys=None, d
         image, preserve_alpha=profile.preserve_alpha,
         max_bytes=profile.max_image_bytes, max_side=profile.max_source_side,
     ) for image in images)
+    requested = _validate_field("reference_megapixels", values.get("reference_megapixels", "max"),
+                                schema["reference_megapixels"])
+    budget = resolve_megapixels(requested, megapixel_model or profile.name)
+    resolved = _validate_field("resolved_reference_megapixels", budget.megapixels, schema["reference_megapixels"])
+    common.update(reference_megapixels=resolved, requested_reference_megapixels=requested,
+                  vram_gib=budget.vram_gib)
     if profile.standard_cfg:
         negative = common["negative_prompt"]
         negative = negative.strip() or None if negative is not None else None

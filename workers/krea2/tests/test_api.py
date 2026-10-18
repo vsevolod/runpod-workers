@@ -41,6 +41,23 @@ class Pipeline:
 
 
 class KreaAPITests(unittest.TestCase):
+    def test_max_budget_uses_resident_quant_mode_and_returns_common_metadata(self):
+        from shared import megapixels
+        self.pipe.quant_mode = "int8_convrot"
+        buffer = BytesIO(); Image.new("RGB", (2048, 2048)).save(buffer, format="PNG")
+        with patch.object(megapixels, "detect_vram_gib", return_value=47.5), patch.dict(
+            megapixels.MEGAPIXEL_LIMITS, {"krea2.int8_convrot": {0: 1., 48: 2.}}
+        ):
+            output = self.handler.generate_image({"input": {
+                "type": "image_edit", "prompt": "edit", "reference_megapixels": "max",
+                "images": [base64.b64encode(buffer.getvalue()).decode()],
+            }})
+        self.assertNotIn("error", output)
+        self.assertEqual(output["reference_megapixels"], "max")
+        self.assertEqual(output["resolved_reference_megapixels"], 2.)
+        self.assertEqual(output["vram_gib"], 47.5)
+        self.assertEqual((self.pipe.calls[-1][1]["width"], self.pipe.calls[-1][1]["height"]), (1408, 1408))
+
     def test_v2_reference_controls_reach_inference_and_are_reported(self):
         buffer = BytesIO(); Image.new("RGB", (64, 96)).save(buffer, format="PNG")
         image = base64.b64encode(buffer.getvalue()).decode()
@@ -114,7 +131,7 @@ class KreaAPITests(unittest.TestCase):
             self.assertEqual(kwargs["steps"], 25)
             self.assertEqual(kwargs["guidance"], 2.5)
             self.assertEqual(kwargs["seed"], 0)
-            self.assertIsNone(kwargs["width"])
+            self.assertEqual((kwargs["width"], kwargs["height"]), (816, 1216))
             self.assertEqual(kwargs["mu"], .9)
             self.assertEqual(kwargs["loras"][0].type, "weight_diff")
             self.assertEqual(kwargs["loras"][0].strength, 4.)

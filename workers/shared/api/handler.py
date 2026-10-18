@@ -41,6 +41,8 @@ def handle_job(job, *, profile, normalize, infer, logger, log_stage=None,
         request.guidance_scale, request.sampler, seed, len(request.images),
         getattr(request, "width", "auto"), getattr(request, "height", "auto"), parsed.values["model_options"],
     )
+    logger.info("reference_megapixels requested=%s resolved=%s vram_gib=%s",
+                request.requested_reference_megapixels, request.reference_megapixels, request.vram_gib)
     try:
         with stage("inference"):
             generated = infer(request, seed, parsed.values["loras"])
@@ -73,6 +75,9 @@ def handle_job(job, *, profile, normalize, infer, logger, log_stage=None,
         "type": request.type, "num_inference_steps": request.num_inference_steps,
         "guidance_scale": request.guidance_scale, "sampler": request.sampler,
         "model_options": generated.model_options,
+        "reference_megapixels": request.requested_reference_megapixels,
+        "resolved_reference_megapixels": request.reference_megapixels,
+        "vram_gib": request.vram_gib,
         "loras": [item.as_dict() for item in generated.loras],
     }
     if request.type == "image_edit":

@@ -17,6 +17,7 @@ if (workers_dir / "shared").is_dir():
     sys.path.insert(0, str(workers_dir))
 from shared.api import CommonRequest, QWEN_API, RequestError, normalize_common_fields
 from shared.api.images import decode_image_string as _decode_image
+from shared.megapixels import canvas_at_megapixels, resize_references
 
 MIN_SIDE = 256
 MAX_SIDE = QWEN_API.max_side
@@ -46,7 +47,6 @@ class NormalizedRequest(CommonRequest):
     size_from_source: bool
     output_resolution: int
     requested_output_resolution: int | None
-    reference_megapixels: float
 
     @property
     def scheduler(self) -> str:
@@ -79,29 +79,6 @@ def _derived_output_resolution(width: int, height: int) -> int:
     return max(MIN_SIDE, min(MAX_SIDE, side))
 
 
-def _canvas_at_megapixels(image: Image.Image, megapixels: float) -> tuple[int, int]:
-    """Target area, including upscaling, from the unrounded source aspect ratio."""
-    area = int(megapixels * 1_000_000)
-    ratio = image.width / image.height
-    return (
-        max(MULTIPLE, int(math.sqrt(area * ratio)) // MULTIPLE * MULTIPLE),
-        max(MULTIPLE, int(math.sqrt(area / ratio)) // MULTIPLE * MULTIPLE),
-    )
-
-
-def _resize_reference(image: Image.Image, max_pixels: int) -> Image.Image:
-    """Downscale before either encoder; floor alignment keeps the area bounded."""
-    width, height = image.size
-    scale = min(
-        1., math.sqrt(max_pixels / (width * height)),
-        MAX_SIDE / width, MAX_SIDE / height,
-        # Account for the minimum 32px side on very narrow references.
-        max_pixels / (MULTIPLE * width), max_pixels / (MULTIPLE * height),
-    )
-    size = tuple(max(MULTIPLE, int(side * scale) // MULTIPLE * MULTIPLE) for side in image.size)
-    return image if size == image.size else image.resize(size, Image.Resampling.LANCZOS)
-
-
 def _canvas_at_resolution(image: Image.Image, resolution: int) -> tuple[int, int]:
     ratio = image.width / image.height
     return (
@@ -130,19 +107,15 @@ def normalize_job_input(
     except (ValueError, TypeError) as err:
         raise RequestError("model_variant must be 'base' or 'turbo'") from err
     default_steps = TURBO_STEPS if variant == "turbo" else BASE_STEPS
-    common = normalize_common_fields(validated, QWEN_API, raw_keys=raw_keys, default_steps=default_steps)
+    common = normalize_common_fields(validated, QWEN_API, raw_keys=raw_keys, default_steps=default_steps,
+                                     megapixel_model=f"qwen_image_21.{variant}")
     source_images = common.images
-    reference_megapixels = validated.get("model_options", {}).get("reference_megapixels", 1.)
-    if source_images:
-        pixels_per_reference = int(reference_megapixels * 1_000_000) // len(source_images)
-        if pixels_per_reference < MULTIPLE * MULTIPLE:
-            minimum_mp = len(source_images) * MULTIPLE * MULTIPLE / 1_000_000
-            raise RequestError(
-                f"reference_megapixels must be at least {minimum_mp:g} for {len(source_images)} references "
-                f"(each requires at least {MULTIPLE}x{MULTIPLE} pixels)"
-            )
-        images = tuple(_resize_reference(image, pixels_per_reference) for image in source_images)
-        common = replace(common, images=images)
+    reference_megapixels = common.reference_megapixels
+    try:
+        common = replace(common, images=resize_references(source_images, reference_megapixels,
+                                                        multiple=MULTIPLE, max_side=MAX_SIDE))
+    except ValueError as err:
+        raise RequestError(str(err)) from err
 
     output_resolution = validated.get("output_resolution")
     if output_resolution is not None:
@@ -171,7 +144,7 @@ def normalize_job_input(
         size_from_source = not has_width and not has_height
         if size_from_source:
             if output_resolution is None:
-                width, height = _canvas_at_megapixels(source_images[-1], reference_megapixels)
+                width, height = canvas_at_megapixels(source_images[-1], reference_megapixels, multiple=MULTIPLE)
                 output_resolution = _derived_output_resolution(width, height)
             else:
                 width, height = _canvas_at_resolution(source_images[-1], output_resolution)
@@ -188,7 +161,6 @@ def normalize_job_input(
         width=width, height=height, size_from_source=size_from_source,
         output_resolution=output_resolution,
         requested_output_resolution=validated.get("output_resolution"),
-        reference_megapixels=reference_megapixels,
     )
 
 

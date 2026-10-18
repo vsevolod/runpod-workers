@@ -26,6 +26,10 @@ response contract for Krea 2 and Qwen Image 2.1. Common fields use the same name
 model-specific controls live under `model_options`, with existing flat keys
 preserved as aliases.
 
+The shared `reference_megapixels: "max"` policy and its GPU calibration procedure
+are documented in [Image megapixel benchmarks](docs/benchmarks/image-megapixels.md),
+including raw measurements and the scripts used for the L40S 48 GB run.
+
 ### Qwen Image and Krea2: build on GitHub, run on Runpod
 
 [Build Runpod workers](.github/workflows/build-workers.yml) builds both complete

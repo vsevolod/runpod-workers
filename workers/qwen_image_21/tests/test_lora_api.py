@@ -187,8 +187,9 @@ class LoRAAPITests(unittest.TestCase):
         self.assertNotIn("error", output)
         self.assertEqual(output["model_variant"], "base")
         self.assertEqual(output["num_inference_steps"], 40)
-        self.assertEqual(output["model_options"], {"variant": "base", "output_resolution": 2048,
-                                                   "reference_megapixels": 1.})
+        self.assertEqual(output["model_options"], {"variant": "base", "output_resolution": 2048})
+        self.assertEqual(output["reference_megapixels"], "max")
+        self.assertEqual(output["resolved_reference_megapixels"], 1.)
         self.assertEqual(self.pipe.calls[-1][0]["num_inference_steps"], 40)
 
     def test_invalid_nested_options_do_not_load_or_run_the_model(self):
@@ -205,12 +206,13 @@ class LoRAAPITests(unittest.TestCase):
         output = self.handler.generate_image({"input": payload})
         self.assertNotIn("error", output)
         self.assertIsNone(output["model_options"]["output_resolution"])
-        repeated = self.handler.generate_image({"input": {**payload, "model_options": output["model_options"]}})
+        repeated = self.handler.generate_image({"input": {**payload, "model_options": output["model_options"],
+                                                         "reference_megapixels": output["reference_megapixels"]}})
         self.assertNotIn("error", repeated)
         self.assertEqual(self.pipe.calls[-1][0]["width"], 800)
         self.assertEqual(self.pipe.calls[-1][0]["height"], 1216)
 
-    def test_reference_budget_is_applied_and_returned_as_reusable_model_options(self):
+    def test_legacy_reference_budget_is_applied_and_returned_at_top_level(self):
         buffer = BytesIO()
         Image.new("RGBA", (2048, 2048), (10, 20, 30, 80)).save(buffer, format="PNG")
         payload = {"type": "image_edit", "prompt": "fox", "width": 1024, "height": 1024,
@@ -218,11 +220,14 @@ class LoRAAPITests(unittest.TestCase):
                    "model_options": {"variant": "base", "reference_megapixels": .5}}
         output = self.handler.generate_image({"input": payload})
         self.assertNotIn("error", output)
-        self.assertEqual(output["model_options"]["reference_megapixels"], .5)
+        self.assertEqual(output["reference_megapixels"], .5)
+        self.assertEqual(output["resolved_reference_megapixels"], .5)
+        self.assertNotIn("reference_megapixels", output["model_options"])
         kwargs = self.pipe.calls[-1][0]
         self.assertEqual([image.size for image in kwargs["image"]], [(480, 480)] * 2)
         self.assertEqual((kwargs["width"], kwargs["height"]), (1024, 1024))
-        repeated = self.handler.generate_image({"input": {**payload, "model_options": output["model_options"]}})
+        repeated = self.handler.generate_image({"input": {**payload, "model_options": output["model_options"],
+                                                         "reference_megapixels": output["reference_megapixels"]}})
         self.assertNotIn("error", repeated)
         self.assertEqual([image.size for image in self.pipe.calls[-1][0]["image"]], [(480, 480)] * 2)
 
@@ -324,8 +329,8 @@ class ClientLoRATests(unittest.TestCase):
                 self.assertEqual(method(args, endpoint_id="same-endpoint", api_key="key"), 0)
             self.assertEqual(submit.call_args.args[0], "same-endpoint")
             payload = submit.call_args.args[2]
-            self.assertEqual(payload["model_options"], {"variant": "base", "output_resolution": 2048,
-                                                       "reference_megapixels": .5})
+            self.assertEqual(payload["model_options"], {"variant": "base", "output_resolution": 2048})
+            self.assertEqual(payload["reference_megapixels"], .5)
             self.assertNotIn("model_variant", payload)
             self.assertNotIn("output_resolution", payload)
             self.assertEqual(payload["num_inference_steps"], 40)

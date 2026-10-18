@@ -280,9 +280,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override edit canvas area when size is omitted, keeping the last reference's aspect ratio.",
     )
     parser.add_argument(
-        "--reference-megapixels", type=float, default=None,
+        "--reference-megapixels", type=lambda value: "max" if value == "max" else float(value), default="max",
         help=("Total reference megapixel budget, split equally across images, and automatic edit output area "
-              "(default: 1.0). Small references stay small."),
+              "(default: max, chosen from the model/VRAM table). Small references stay small."),
     )
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
@@ -341,8 +341,6 @@ def _model_options(args: argparse.Namespace) -> dict:
     options = {"variant": args.model_variant}
     if args.output_resolution is not None:
         options["output_resolution"] = args.output_resolution
-    if args.reference_megapixels is not None:
-        options["reference_megapixels"] = args.reference_megapixels
     return options
 
 
@@ -364,6 +362,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
 
     job_input: dict[str, Any] = {
         "model_options": _model_options(args),
+        "reference_megapixels": args.reference_megapixels,
         "type": "image_edit",
         "prompt": prompt,
         "images": [_image_to_data_url(path) for path in paths],
@@ -400,6 +399,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         return 1
     job_input: dict[str, Any] = {
         "model_options": _model_options(args),
+        "reference_megapixels": args.reference_megapixels,
         "type": "image_generate",
         "prompt": prompt,
         "width": width,

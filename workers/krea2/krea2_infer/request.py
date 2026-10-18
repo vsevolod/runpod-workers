@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import sys
 from pathlib import Path
 
@@ -12,12 +12,13 @@ if (workers_dir / "shared").is_dir():
     sys.path.insert(0, str(workers_dir))
 from shared.api import CommonRequest, KREA_API, RequestError, normalize_common_fields
 from shared.api.images import decode_image_string
+from shared.megapixels import canvas_at_megapixels, resize_references
 
 
 @dataclass(frozen=True)
 class NormalizedRequest(CommonRequest):
-    width: int | None
-    height: int | None
+    width: int
+    height: int
     size_from_source: bool
     mu: float | None
     grounding_px: int
@@ -32,14 +33,17 @@ def normalize_job_input(
     validated: dict,
     *,
     raw_keys: set[str] | None = None,
+    quant_mode: str | None = None,
 ) -> NormalizedRequest:
     """
     validated: parsed shared API fields with defaults and compatibility aliases.
     raw_keys: explicit client fields before defaults — used for edit size.
+    quant_mode: canonical mode of the resident pipeline, used for the VRAM table.
     """
     raw_keys = set(raw_keys or ())
 
-    common = normalize_common_fields(validated, KREA_API, raw_keys=raw_keys)
+    common = normalize_common_fields(validated, KREA_API, raw_keys=raw_keys,
+                                     megapixel_model=f"krea2.{quant_mode or 'fp8'}")
 
     if common.type == "image_generate":
         size_from_source = False
@@ -52,8 +56,9 @@ def normalize_job_input(
     else:
         size_from_source = ("width" not in raw_keys) and ("height" not in raw_keys)
         if size_from_source:
-            # Canvas primary is images[0]; both None (handler/pipeline invariant).
-            width, height = None, None
+            width, height = canvas_at_megapixels(common.images[0], common.reference_megapixels, multiple=16)
+            if not (256 <= width <= KREA_API.max_side and 256 <= height <= KREA_API.max_side):
+                raise RequestError("automatic canvas is outside 256..2048; pass explicit width and height")
         else:
             width = int(validated["width"])
             height = int(validated["height"])
@@ -61,6 +66,12 @@ def normalize_job_input(
                 raise RequestError(
                     f"width and height must be multiples of 16 (got {width}x{height})"
                 )
+
+    try:
+        common = replace(common, images=resize_references(common.images, common.reference_megapixels,
+                                                        multiple=1, max_side=KREA_API.max_side))
+    except ValueError as err:
+        raise RequestError(str(err)) from err
 
     fit_mode = validated.get("fit_mode") or "fit"
     if fit_mode not in ("fit", "crop"):

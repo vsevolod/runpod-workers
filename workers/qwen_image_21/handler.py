@@ -36,8 +36,7 @@ def _infer(norm, seed, raw_loras):
     images = MODELS.run(norm, seed=seed, loras=loras)
     return GenerationResult(
         images, loras,
-        {"variant": norm.model_variant, "output_resolution": norm.requested_output_resolution,
-         "reference_megapixels": norm.reference_megapixels},
+        {"variant": norm.model_variant, "output_resolution": norm.requested_output_resolution},
         {"model_variant": norm.model_variant, "model_id": resolve_model_id(norm.model_variant),
          "scheduler": norm.scheduler, "output_resolution": norm.output_resolution},
     )

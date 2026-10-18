@@ -50,6 +50,7 @@ are optional. Unknown root fields and unknown model options are errors.
 | `sampler` | string | `euler` only, default `euler` | `euler` (default), `heun`, `er_sde` |
 | `num_images` | integer | Generate: 1..4 (default 1); edit: exactly 1 | Same |
 | `images` | array of strings | Generate: absent/empty; edit: 1..2 references | Generate: absent/empty; edit: 1..10 references |
+| `reference_megapixels` | number or `"max"` | Default `"max"`; total reference budget and automatic edit canvas area | Same |
 | `loras` | array of objects or null | Up to 4 adapters; default [] | Same count; supported adapter types differ below |
 | `model_options` | object | Krea-specific options below; default {} | Qwen-specific options below; default {} |
 
@@ -84,13 +85,57 @@ Euler and ER-SDE use one denoiser evaluation per step; Heun uses `2 * steps - 1`
 Enabled CFG doubles the number of model passes. Qwen ER-SDE additional noise uses
 the request's seeded generator. Changing sampling options does not reload weights.
 
+### Shared megapixel budget
+
+`reference_megapixels` belongs at the **top level** of `input`, alongside
+`images` and `num_inference_steps`. Both workers accept a number or `"max"`
+(the default). Numeric values are finite, 0.001024..4.3008 MP, where 1 MP means
+1,000,000 pixels. Existing model canvas limits still apply.
+
+With `"max"`, the worker reads **total VRAM of the active CUDA device** and
+selects a budget from [`MEGAPIXEL_LIMITS`](../megapixels.py). There are separate
+rows for Qwen Base/Turbo and Krea FP8/INT8 ConvRot. Total CUDA memory is converted
+from binary GiB to decimal GB and rounded up to the next whole GB before selecting
+the largest nominal GB tier not exceeding that capacity. For example, L40S
+reports 44.40 GiB / 47.68 GB and selects the 48 GB tier. Missing CUDA, unknown
+models and capacities below the table use the 1 MP fallback.
+
+**The 48 GB tier selects 4 MP** for all four profiles, calibrated on L40S with
+Krea Identity Edit V2 / Qwen Lenovo as fixed LoRA baselines. All other tiers
+remain 1 MP placeholders, including larger GPUs pending calibration.
+See the [measurements, scope and repeatable procedure](../../../docs/benchmarks/image-megapixels.md).
+Additional LoRAs, reference counts, aspect ratios and CFG can change memory use;
+the current lookup only considers model and total VRAM. Explicit numbers bypass the table
+and GPU detection. Free/remaining VRAM is never used, so prior jobs do not alter
+the selected tier.
+
+The selected budget is divided equally among input references; unused shares
+are not redistributed. References are only downscaled, with model-specific
+alignment. The automatic edit canvas gets the **full** selected area, independent
+of reference count, including upscaling small inputs. Its aspect comes from the
+last original reference on Qwen and the first original reference on Krea.
+Explicit width/height (or Qwen `output_resolution`) override the automatic canvas,
+while reference resizing still uses the budget. Text-to-image size behavior is unchanged.
+
+Responses return `reference_megapixels` with the requested value (including
+`"max"`), `resolved_reference_megapixels` with the chosen number, and `vram_gib`
+with the detected capacity (null for explicit numbers or unavailable CUDA).
+These values are also logged. When repeating a request, reuse the common
+`reference_megapixels` field separately from `model_options`.
+
+The old `model_options.reference_megapixels` input is accepted for compatibility
+and normalized to the top level. Conflicting values in both locations are errors.
+
+```json
+{"input": {"type": "image_edit", "prompt": "Combine the references", "images": ["data:image/png;base64,..."], "reference_megapixels": "max"}}
+```
+
 ### Qwen `model_options`
 
 | Key | Type | Default | Behavior |
 |---|---|---|---|
 | `variant` | string | `turbo` | `turbo` or `base`; one resident pipeline, unloaded before switching variants |
 | `output_resolution` | integer or null | null | 256..2752, multiple of 32. Sets edit canvas area when width/height are omitted; preserves the last reference's aspect ratio |
-| `reference_megapixels` | number | 1.0 | **Total** edit reference budget, divided equally across images, and full target area of the automatic edit canvas in decimal megapixels (1 MP = 1,000,000 pixels). Finite, 0.001024..4.3008; at least 0.001024 MP per reference |
 
 Generate defaults to 1024x1024. For edit, omit both width and height to target
 `reference_megapixels` at the **original last reference's aspect ratio**, even
@@ -130,7 +175,8 @@ and mmap remain worker configuration, not request fields.
     "sampler": "er_sde",
     "seed": 123,
     "loras": [{"name": "portrait_style", "strength": 0.8}],
-    "model_options": {"variant": "base", "reference_megapixels": 1.0}
+    "reference_megapixels": "max",
+    "model_options": {"variant": "base"}
   }
 }
 ```
@@ -148,8 +194,8 @@ and mmap remain worker configuration, not request fields.
 | `fit_mode` | string | `fit` | `fit` preserves aspect while fitting each source; `crop` uses center crop to target aspect |
 
 Generate defaults to 1024x1024. Edit with neither dimension uses the **first**
-reference's aspect ratio, capped to approximately 1.5 megapixels and aligned to
-16. This preserves Krea's existing geometry. Explicit dimensions define the
+reference's aspect ratio at the shared resolved megapixel budget and aligned to
+16. Explicit dimensions define the
 target canvas. For legacy compatibility, passing only one dimension still uses
 the schema default 1024 for the other; new clients should pass both or neither.
 The other edit options have no effect on text-to-image generation.
@@ -214,7 +260,10 @@ RunPod wraps the worker result in `output`. Both workers return:
   "guidance_scale": 3.5,
   "sampler": "euler",
   "loras": [],
-  "model_options": {"variant": "base", "output_resolution": null, "reference_megapixels": 1.0},
+  "reference_megapixels": "max",
+  "resolved_reference_megapixels": 1.0,
+  "vram_gib": 23.7,
+  "model_options": {"variant": "base", "output_resolution": null},
   "num_refs": 1
 }
 ```
@@ -259,8 +308,8 @@ shared parser instead of relying on the RunPod SDK validator's default handling.
 The CLI flags remain compatible. Both clients now send model-specific fields
 under `model_options`; both expose `--steps`, `--guidance-scale`/`--cfg`, and
 `--sampler` with their worker's supported choices.
-Qwen also accepts `--reference-megapixels` (for example, `0.5`). This is a new
-nested model option, without a legacy top-level alias, and requires an updated image.
+Both CLIs accept `--reference-megapixels max` (default) or a number such as `0.5`
+and send it at the top level. The shared parameter and `max` require updated images.
 Canonical nested requests require the updated worker images; old images accept
 the legacy flat form. Existing clients using the flat form work with new images.
 

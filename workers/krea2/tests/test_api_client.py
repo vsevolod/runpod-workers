@@ -26,6 +26,8 @@ class KreaAPIClientTests(unittest.TestCase):
                     ), patch.object(client, "_save_result", return_value=0):
                         self.assertEqual(client._run_edit(args, endpoint_id="endpoint", api_key="key"), 0)
                     payload = submit.call_args.args[2]
+                    self.assertEqual(payload["reference_megapixels"], "max")
+                    self.assertNotIn("reference_megapixels", payload["model_options"])
                     self.assertEqual(payload["loras"], [{"name": f"krea2_{mode}_edit_v2", "strength": 1.}])
                     self.assertEqual(payload["model_options"]["ref_boost"], boost)
                     self.assertEqual(payload["model_options"]["ref_boost_a"], 1.)
@@ -51,6 +53,7 @@ class KreaAPIClientTests(unittest.TestCase):
                 method = client._run_edit if edit else client._run_generate
                 self.assertEqual(method(args, endpoint_id="endpoint", api_key="key"), 0)
             payload = submit.call_args.args[2]
+            self.assertEqual(payload["reference_megapixels"], "max")
             self.assertEqual(payload["model_options"]["mu"], .9)
             self.assertEqual(payload["sampler"], "euler")
             self.assertEqual(payload["seed"], 0)

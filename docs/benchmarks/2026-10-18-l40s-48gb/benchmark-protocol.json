@@ -1,0 +1,31 @@
+{
+  "repository": "https://github.com/vsevolod/runpod-workers",
+  "commit": "6f8cf4fcfba8da763348156736530376af02c715",
+  "local_patch_sha256": "1001b40d1a34cd88fb3d0764db2c5149bd174ab747d087e567ebb966a84d6aa6",
+  "sweep_mp": [
+    1,
+    1.5,
+    2,
+    2.5,
+    3,
+    3.5,
+    4
+  ],
+  "seed": 42,
+  "krea_lora": "krea2_identity_edit_v2",
+  "qwen_lora": "lenovo_qwen21",
+  "lora_strength": 1.0,
+  "krea_refs": 2,
+  "qwen_refs": 3,
+  "krea_steps": 8,
+  "qwen_turbo_steps": 8,
+  "qwen_base_steps": 40,
+  "krea_guidance": 0,
+  "qwen_guidance": 1,
+  "offload_qwen": "cpu",
+  "scope": "square image edits, one output, default CFG off, fixed LoRA per architecture; production deployments unchanged",
+  "baseline_definition": {
+    "krea2": "Model plus required krea2_identity_edit_v2@1.0; additional LoRAs are above this baseline",
+    "qwen_image_21": "Model plus lenovo_qwen21@1.0; small adapter included in measured baseline"
+  }
+}
