@@ -59,7 +59,10 @@ jobs:
         shell: bash
         run: |
           docker run --rm --env WORKER --entrypoint python "$IMAGE" -c '
-          import importlib, inspect, os, torch
+          import importlib, inspect, os, torch, torchvision
+          assert torch.__version__ == "2.8.0+cu128", torch.__version__
+          assert torchvision.__version__ == "0.23.0+cu128", torchvision.__version__
+          assert torch.version.cuda == "12.8", torch.version.cuda
           importlib.import_module(os.environ["WORKER"] + "_infer.pipeline")
           if os.environ["WORKER"] == "qwen_image_21":
               from diffusers import QwenImage21Pipeline
@@ -67,7 +70,8 @@ jobs:
           else:
               from diffusers import AutoencoderKLQwenImage
               from transformers import Qwen3VLForConditionalGeneration
-          print("Runtime imports OK; torch=" + torch.__version__)
+          print("Runtime imports OK; torch=" + torch.__version__ +
+                " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
       - name: Check Qwen loading, LoRAs and reference preprocessing
         if: matrix.worker == 'qwen_image_21'

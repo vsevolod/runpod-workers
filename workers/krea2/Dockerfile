@@ -8,7 +8,7 @@
 # Local build from monorepo root:
 #   docker build -f workers/krea2/Dockerfile -t runpod-krea2 .
 
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04@sha256:17e2934e1fa96152b14f78078bfbafd0f00f391df995dc6c641a720fce1202bb
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -37,14 +37,15 @@ RUN python -m pip install --no-cache-dir uv
 ENV PATH="/.venv/bin:${PATH}"
 RUN uv venv --python 3.12 /.venv
 
-# CUDA torch (cu124 matches this base image)
-RUN uv pip install --no-cache torch torchvision \
-    --extra-index-url https://download.pytorch.org/whl/cu124
+# Use the GPU-calibrated pair and constrain subsequent dependency installs too.
+COPY workers/shared/torch-cu128.constraints.txt /app/torch-constraints.txt
+RUN uv pip install --no-cache -r /app/torch-constraints.txt \
+    --index-url https://download.pytorch.org/whl/cu128
 
 WORKDIR /app
 
 COPY workers/krea2/requirements.txt /app/requirements.txt
-RUN uv pip install --no-cache -r /app/requirements.txt
+RUN uv pip install --no-cache -c /app/torch-constraints.txt -r /app/requirements.txt
 
 COPY workers/krea2/schemas.py \
      workers/krea2/handler.py \

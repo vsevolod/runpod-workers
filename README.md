@@ -54,6 +54,14 @@ shared coordination tests and model runtime imports before publication. These
 checks do not load weights or prove GPU inference. Base weights remain outside
 the images and download at worker startup.
 
+Both image workers use CUDA 12.8.1 and the pinned Torch 2.8.0+cu128 /
+torchvision 0.23.0+cu128 pair from
+[`torch-cu128.constraints.txt`](workers/shared/torch-cu128.constraints.txt).
+Later dependency installation is constrained to the same pair, and CI verifies
+the installed versions. Before deploying these images, select CUDA 12.8 and
+newer in Runpod's allowed CUDA versions so workers land on compatible drivers;
+the existing Ampere/Ada GPU model selections can stay the same.
+
 Deploy a successfully published image through Runpod's **Import from Docker
 Registry** flow, or update an existing endpoint's template to the exact image
 tag/digest. Keep existing endpoint IDs when updating templates. Ensure the image

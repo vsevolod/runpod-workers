@@ -8,7 +8,7 @@
 # Local build from monorepo root:
 #   docker build -f workers/qwen_image_21/Dockerfile -t runpod-qwen-image-21 .
 
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04@sha256:17e2934e1fa96152b14f78078bfbafd0f00f391df995dc6c641a720fce1202bb
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -37,15 +37,16 @@ RUN python -m pip install --no-cache-dir uv
 ENV PATH="/.venv/bin:${PATH}"
 RUN uv venv --python 3.12 /.venv
 
-# CUDA torch (cu124 matches this base image). torchvision is required by the
-# Qwen3-VL image processor.
-RUN uv pip install --no-cache torch torchvision \
-    --extra-index-url https://download.pytorch.org/whl/cu124
+# Use the GPU-calibrated pair and constrain subsequent dependency installs too.
+# torchvision is required by the Qwen3-VL image processor.
+COPY workers/shared/torch-cu128.constraints.txt /app/torch-constraints.txt
+RUN uv pip install --no-cache -r /app/torch-constraints.txt \
+    --index-url https://download.pytorch.org/whl/cu128
 
 WORKDIR /app
 
 COPY workers/qwen_image_21/requirements.txt /app/requirements.txt
-RUN uv pip install --no-cache -r /app/requirements.txt
+RUN uv pip install --no-cache -c /app/torch-constraints.txt -r /app/requirements.txt
 
 # The pinned upstream pipeline couples reference sizes to the output canvas.
 # Fail the build if this narrow patch no longer applies after a dependency update.
