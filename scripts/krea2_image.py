@@ -18,7 +18,7 @@ Examples:
   # Image edit
   python scripts/krea2_image.py -i person.jpg -o edit.png \\
     --prompt "change the jacket to red leather" \\
-    --lora krea2_identity_edit_v1_2 --ref-boost 4 --seed 42
+    --edit-model general --seed 42
 
   # Download an already submitted job
   python scripts/krea2_image.py --request-id abc123 -o out.png
@@ -45,8 +45,8 @@ DEFAULT_ENDPOINT_ID = "9zb0wyo61ck3wk"
 POLL_INTERVAL_S = 2.0
 DEFAULT_OUTPUT = "output.png"
 DEFAULT_EDIT_OUTPUT = "edit_output.png"
-DEFAULT_EDIT_LORA = "krea2_identity_edit_v1_2"
-DEFAULT_REF_BOOST = 4.0
+EDIT_LORAS = {"identity": "krea2_identity_edit_v2", "general": "krea2_general_edit_v2"}
+DEFAULT_EDIT_LORA = EDIT_LORAS["identity"]
 DEFAULT_GROUNDING_PX = 768
 DEFAULT_FIT_MODE = "fit"
 DEFAULT_STEPS = 8
@@ -366,11 +366,21 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--edit-model", choices=("identity", "general"), default="identity",
+        help="Edit preset: identity V2 for restaging people; general V2 for instruction edits.",
+    )
+    parser.add_argument(
         "--ref-boost",
         type=float,
-        default=DEFAULT_REF_BOOST,
-        help=f"Edit only: ref_boost (default: {DEFAULT_REF_BOOST})",
+        default=None,
+        help="Last/only reference boost (default: identity 2, general 4).",
     )
+    parser.add_argument("--ref-boost-a", type=float, default=1.,
+                        help="First reference boost in two-image edits (default: 1).")
+    parser.add_argument("--ref-position", choices=("aligned", "beside", "bag_of_features"),
+                        default=None, help="Last/only reference placement (identity: beside; general: aligned).")
+    parser.add_argument("--ref-position-a", choices=("aligned", "beside", "bag_of_features"),
+                        default="aligned", help="First reference placement (default: aligned).")
     parser.add_argument(
         "--grounding-px",
         type=int,
@@ -484,8 +494,10 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         print("error: prompt is required", file=sys.stderr)
         return 1
 
-    lora_raw = args.lora if args.lora is not None else DEFAULT_EDIT_LORA
+    lora_raw = args.lora if args.lora is not None else EDIT_LORAS[args.edit_model]
     loras = _parse_lora(lora_raw)
+    ref_boost = args.ref_boost if args.ref_boost is not None else (2. if args.edit_model == "identity" else 4.)
+    ref_position = args.ref_position or ("beside" if args.edit_model == "identity" else "aligned")
 
     job_input: dict[str, Any] = {
         "type": "image_edit",
@@ -495,7 +507,9 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         "guidance_scale": args.guidance_scale,
         "sampler": args.sampler,
         "model_options": {"mu": args.mu, "grounding_px": args.grounding_px,
-                          "ref_boost": args.ref_boost, "fit_mode": args.fit_mode},
+                          "ref_boost": ref_boost, "ref_boost_a": args.ref_boost_a,
+                          "ref_position": ref_position, "ref_position_a": args.ref_position_a,
+                          "fit_mode": args.fit_mode},
         "loras": loras,
     }
     if args.width is not None and args.height is not None:
@@ -513,7 +527,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
     print(f"prompt:   {prompt}")
     print(f"loras:    {loras or '(none)'}")
     print(
-        f"ref_boost={args.ref_boost}  fit_mode={args.fit_mode}  "
+        f"ref_boost={ref_boost}  ref_position={ref_position}  fit_mode={args.fit_mode}  "
         f"grounding_px={args.grounding_px}  steps={args.steps}"
     )
     if args.width is not None:

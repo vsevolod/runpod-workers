@@ -311,7 +311,7 @@ class LoRAManager:
 
     def normalize(self, raw: object) -> tuple[LoRASelection, ...]:
         if raw and isinstance(self.catalog, LoRACatalog):
-            self.catalog = LoRACatalog.scan(self.catalog.root)
+            self.catalog = LoRACatalog.scan(self.catalog.root, builtin_directory=self.catalog.builtin_root)
         return normalize_lora_requests(raw, self.catalog)
 
     def load_prepared(

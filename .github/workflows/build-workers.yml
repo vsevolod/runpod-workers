@@ -85,6 +85,13 @@ jobs:
           docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
             --entrypoint python "$IMAGE" -m unittest discover \
             -s workers/qwen_image_21/tests -p test_native_resolution.py
+      - name: Check Krea V2 edit runtime and downloads
+        if: matrix.worker == 'krea2'
+        shell: bash
+        run: |
+          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
+            --entrypoint python "$IMAGE" -m unittest discover \
+            -s workers/krea2/tests -p 'test_*.py'
       - name: Publish validated image
         if: github.event_name == 'push' || inputs.publish
         shell: bash

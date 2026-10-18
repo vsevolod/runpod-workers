@@ -52,6 +52,18 @@ class TargetSizeTests(unittest.TestCase):
 
 
 class FitSourcePixelsTests(unittest.TestCase):
+    def test_fit_crops_to_grid_instead_of_squashing_reference_content(self):
+        # 100x201 fits into 256x256 at scale 256/201; the short axis floors
+        # to 112px. Its 88 source pixels must be cropped, not all 100 squashed.
+        img = Image.new("RGB", (100, 201))
+        for x in range(100):
+            for y in range(201):
+                img.putpixel((x, y), (x * 2, 0, 0))
+        out = fit_source_pixels(img, target_h=256, target_w=256)
+        self.assertEqual(out.size, (112, 256))
+        self.assertGreaterEqual(out.getpixel((0, 128))[0], 10)
+        self.assertLessEqual(out.getpixel((111, 128))[0], 188)
+
     def test_crop_returns_exact_target_hw(self):
         img = Image.new("RGB", (300, 200), (10, 20, 30))
         out = fit_source_pixels(img, target_h=256, target_w=512, fit_mode="crop")

@@ -285,6 +285,8 @@ publisher.ready('vae', root / 'vae')
 wait('vae_loaded')
 (root / 'encoder').mkdir()
 publisher.ready('text_encoder', root / 'encoder')
+(root / 'edit_loras').mkdir()
+publisher.ready('edit_loras', root / 'edit_loras')
 publisher.ready('all', root)
 ''')
             events = []

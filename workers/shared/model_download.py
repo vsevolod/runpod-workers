@@ -56,13 +56,15 @@ class ModelDownloader:
         status = "failed" if exc_type is not None else "done"
         print(f"stage=model_download {status} elapsed_s={time.monotonic() - self.started:.2f}", flush=True)
 
-    def _hub_options(self, repo_id: str) -> dict:
+    def _hub_options(self, repo_id: str, *, revision: str | None = None) -> dict:
         options = {"token": self.token}
         if self.cache_dir is not None:
             # Explicit cache_dir also works if another caller imported the Hub
             # before this session selected HF_HOME.
             options["cache_dir"] = str(self.cache_dir)
-        if self.pin_revisions:
+        if revision is not None:
+            options["revision"] = revision
+        elif self.pin_revisions:
             if repo_id not in self.revisions:
                 from huggingface_hub import HfApi
 
@@ -86,12 +88,13 @@ class ModelDownloader:
         print(f"  -> {path}", flush=True)
         return path
 
-    def file(self, repo_id: str, filename: str) -> Path:
+    def file(self, repo_id: str, filename: str, *, revision: str | None = None) -> Path:
         from huggingface_hub import hf_hub_download
 
         print(f"Downloading {repo_id}/{filename} …", flush=True)
         path = Path(hf_hub_download(
-            repo_id=repo_id, filename=filename, local_dir=str(self.output), **self._hub_options(repo_id),
+            repo_id=repo_id, filename=filename, local_dir=str(self.output),
+            **self._hub_options(repo_id, revision=revision),
         ))
         print(f"  -> {path}", flush=True)
         return path

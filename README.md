@@ -6,7 +6,7 @@ Monorepo for custom [RunPod](https://www.runpod.io/) serverless workers.
 
 | Path | Description | Status |
 |------|-------------|--------|
-| [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8 image generation (thin Python handler) | MVP |
+| [`workers/krea2`](workers/krea2/) | Krea 2 Turbo FP8/INT8 generation + Identity/General Edit V2 (thin Python handler) | MVP |
 | [`workers/qwen_image_21`](workers/qwen_image_21/) | Qwen-Image-2.1-Turbo text-to-image and multi-ref edit (Diffusers, official 8-step checkpoint) | MVP |
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One image captioning (thin Python handler) | MVP |
 | [`workers/minimax_h3_comfy/`](workers/minimax_h3_comfy/) | MiniMax H3 T2V via headless ComfyUI (native nodes, pruned int8) | scaffold — headless GPU smoke pending |

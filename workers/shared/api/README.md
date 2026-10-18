@@ -141,7 +141,10 @@ and mmap remain worker configuration, not request fields.
 |---|---|---|---|
 | `mu` | number or null | 1.15 | Finite time-shift parameter. null requests resolution-dependent shift for generate; edit resolves null to 1.15 |
 | `grounding_px` | integer | 768 | Vision text-encoder long-side cap per reference; 0 preserves native size; otherwise 256..2048 |
-| `ref_boost` | number | 1.0 | Finite value >= 0; attention boost toward reference tokens |
+| `ref_boost` | number | 1.0 | Finite value >= 0; attention boost toward last/only reference |
+| `ref_boost_a` | number | 1.0 | First reference boost in two-image workflows |
+| `ref_position` | string | `aligned` | Last/only reference placement: `aligned`, `beside`, `bag_of_features` (experimental) |
+| `ref_position_a` | string | `aligned` | First reference placement in two-image workflows; same choices |
 | `fit_mode` | string | `fit` | `fit` preserves aspect while fitting each source; `crop` uses center crop to target aspect |
 
 Generate defaults to 1024x1024. Edit with neither dimension uses the **first**
@@ -162,16 +165,21 @@ The other edit options have no effect on text-to-image generation.
     "sampler": "euler",
     "seed": 123,
     "loras": [
-      {"name": "krea2_identity_edit_v1_2", "type": "lora", "strength": 1.0},
+      {"name": "krea2_identity_edit_v2", "type": "lora", "strength": 1.0},
       {"name": "identity_delta", "type": "weight_diff", "strength": 4.0}
     ],
-    "model_options": {"mu": 1.15, "grounding_px": 768, "ref_boost": 4.0, "fit_mode": "fit"}
+    "model_options": {"mu": 1.15, "grounding_px": 768, "ref_boost": 2.0, "ref_boost_a": 1.0,
+                      "ref_position": "beside", "ref_position_a": "aligned", "fit_mode": "fit"}
   }
 }
 ```
 
-Identity editing normally requires a compatible Krea edit adapter; the worker
-does not silently insert it when `loras` is empty.
+Krea downloads Identity Edit V2 and General Edit V2 at startup. Select
+`krea2_identity_edit_v2` for people/restaging or `krea2_general_edit_v2` for
+instruction edits. Use one at strength 1.0; combining both at 1.0 produces noise.
+The worker does not silently insert an adapter when `loras` is empty.
+The CLI's `--edit-model identity|general` selects the adapter and recommended
+boost/placement defaults. These controls require the updated Krea image.
 
 ### LoRA entries
 
@@ -186,7 +194,7 @@ does not silently insert it when `loras` is empty.
 | `strength` | Default 1.0; finite number. `lora`: 0..2; Krea `weight_diff`: 0..5 |
 
 Unknown LoRA keys are errors. Adapters must exist in the worker's configured
-LoRA directory and be compatible with that model. A zero-strength adapter is
+LoRA directory (or Krea's built-in V2 catalog) and be compatible with that model. A zero-strength adapter is
 validated but not applied. Selected files are copied/repaired locally as needed,
 including on a warm worker; unrelated adapters are not copied for the request.
 Adapters are removed after inference, including after failures.
@@ -217,7 +225,7 @@ RunPod wraps the worker result in `output`. Both workers return:
 - `num_inference_steps`, `guidance_scale`, `sampler`: resolved request settings.
 - `loras`: applied selection with explicit `name`, `strength`, `type`.
 - `model_options`: normalized model-specific controls, including defaults. Qwen
-  keeps null for automatic `output_resolution`; Krea includes all four options
+  keeps null for automatic `output_resolution`; Krea includes all its options
   and resolves edit null mu.
 - `num_refs`: edit only, number of reference images.
 
@@ -240,7 +248,7 @@ Old flat model-specific keys remain supported:
 |---|---|
 | Qwen `model_variant` | `model_options.variant` |
 | Qwen `output_resolution` | `model_options.output_resolution` |
-| Krea `mu`, `grounding_px`, `ref_boost`, `fit_mode` | Same names inside `model_options` |
+| Krea `mu`, `grounding_px`, `ref_boost`, `ref_boost_a`, `ref_position`, `ref_position_a`, `fit_mode` | Same names inside `model_options` |
 
 Aliases are compared **before** defaults are inserted. Both forms may appear
 together when their values agree. Different values are a validation error;

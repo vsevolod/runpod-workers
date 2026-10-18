@@ -1,6 +1,6 @@
 # RunPod worker — Krea 2 Turbo (FP8 / INT8 ConvRot)
 
-Thin serverless worker: text-to-image **and** identity image edit via dual
+Thin serverless worker: text-to-image **and** Identity/General Edit V2 via dual
 conditioning. No ComfyUI.
 
 | | |
@@ -35,13 +35,15 @@ Hub transfers, cache/token setup and timing use the shared
 Use an **80 GB container disk**. On each fresh worker, `start.sh` starts the
 shared bootstrap with a separate CPU-only downloader. ML imports run immediately
 with `LOCAL_FILES_ONLY=1`. The download order is DiT → clean Diffusers VAE → text
-encoder. DiT files go to `/models/krea2`; HF snapshots go to `/models/hf`.
+encoder → Identity Edit V2 + General Edit V2. DiT files go to `/models/krea2`;
+HF snapshots go to `/models/hf`. Both edit adapters (~1.83 GB each) are downloaded
+to container disk and exposed under `$MODEL_DIR/edit_loras`.
 
 The loader waits for each component immediately before loading it, so DiT can
 load into VRAM while VAE/encoder downloads continue. Each repo is pinned to one
 commit for the session, and the VAE/encoder loaders receive the exact local
 snapshot paths. Loading into VRAM remains sequential. No requests are accepted
-until all required components are loaded and the downloader exits successfully.
+until all required components, including both V2 adapters, are ready and the downloader exits successfully.
 A failed transfer or model load aborts startup and reaps the downloader.
 New containers download again because their storage is temporary.
 
@@ -85,7 +87,8 @@ a datacenter. The default startup downloads directly to container disk.
 | DiT Turbo INT8 ConvRot (optional) | `krea2_turbo_int8_convrot.safetensors` (Comfy-Org) | ~13.5 GB |
 | Text encoder | HF `Qwen/Qwen3-VL-4B-Instruct` (bf16 snapshot) | ~8–10 GB |
 | VAE | HF `Qwen/Qwen-Image` `vae/` (preferred); optional local single-file | ~0.3 GB |
-| **Total (FP8 path)** | | **~20–23 GB** |
+| Edit V2 LoRAs | Identity + General, downloaded automatically | ~3.66 GB |
+| **Total (FP8 path)** | | **~24–27 GB** |
 | Recommended volume | models + HF cache slack (+ LoRA / second DiT) | **≥25–30 GB** |
 
 `≥40 GB` is only “plenty of headroom”, not a hard requirement.
@@ -101,7 +104,12 @@ a datacenter. The default startup downloads directly to container disk.
 /runpod-volume/hf/                         # HF_HOME: TE + clean VAE cache
 ```
 
-Place Krea 2 adapter `.safetensors` files in `loras/` (or `$LORA_DIR`): standard
+Identity Edit V2 and General Edit V2 are built in: no volume is required for them.
+Downloads are pinned to `conradlocke/krea2-identity-edit` revision
+`f33b26291c640e8ec50b0da420bfee3c9a660daa`. They take priority over same-named
+files on the volume. There is no v1.2 fallback.
+
+Place additional Krea 2 adapter `.safetensors` files in `loras/` (or `$LORA_DIR`): standard
 rank LoRA and/or full `weight_diff` files (e.g. Fedor-style
 `diffusion_model.txtfusion.projector.diff`). The worker scans **only top-level**
 `*.safetensors` stems into an allowlist at startup and refreshes it on requests
@@ -212,7 +220,7 @@ change the endpoint template. See the shared [deployment instructions](../../REA
 
 The worker uses [`shared/api`](../shared/api/README.md) together with Qwen.
 See that document for the complete contract, defaults, responses and errors.
-New clients put `mu`, `grounding_px`, `ref_boost` and `fit_mode` inside
+New clients put `mu`, `grounding_px`, reference controls and `fit_mode` inside
 `model_options`; the flat examples below remain supported as compatibility aliases.
 The common `sampler` field accepts only `"euler"` on Krea. Both `"lora"` and
 `"weight_diff"` entries remain supported in the top-level `loras` list.
@@ -250,20 +258,43 @@ The common `sampler` field accepts only `"euler"` on Krea. Both `"lora"` and
 
 Turbo defaults: **8 steps**, **CFG 0**, **mu 1.15**. Width/height multiples of **16** (1024–2048).
 
-### Identity edit (`image_edit`)
+### Identity / General Edit V2 (`image_edit`)
 
 Dual conditioning (not a plain LoRA attach):
 
 1. **Grounded Qwen3-VL encode** — instruction + **1 or 2** source images through the vision TE (`mm_processor`).
 2. **Source VAE tokens** — each ref independently fit/crop → encode → RoPE frames `1..N` concatenated with target noise (frame=`0`).
 
-Primary reference implementation: [conradlocke/krea2-identity-edit](https://huggingface.co/spaces/conradlocke/krea2-identity-edit) **v1.2** Space (and ComfyUI-Krea2Edit). Place the identity LoRA on the volume:
+Reference implementation: [ComfyUI-Krea2Edit v2.0.0](https://github.com/lbouaraba/comfyui-krea2edit/releases/tag/v2.0.0),
+commit `13ef60f20828949becada815d3cbc371eb5ccaab`. The thin worker implements
+crop-to-grid fitting, fractional RoPE centering and per-reference placement.
+Select one built-in adapter through `loras`:
 
 ```text
-/runpod-volume/krea2/loras/krea2_identity_edit_v1_2.safetensors
+krea2_identity_edit_v2   # restage a person while preserving likeness
+krea2_general_edit_v2    # remove, recolor, relight, backgrounds, objects, text, outfits
 ```
 
-Restart warm workers after adding the file so the catalog re-scans.
+Both are downloaded automatically at startup. Use one per task. Loading both
+at strength 1.0 produces noise; the author's optional blend is about 0.6 each.
+The API does not insert an adapter when `loras` is empty.
+
+Recommended Turbo presets (8 steps, worker guidance 0, grounding 768):
+
+| Task | Adapter | Last/only ref boost | Placement |
+|---|---|---:|---|
+| Restage a person | Identity V2 | 2 | `beside` |
+| Keep portrait framing | Identity V2 | 1–2 | `aligned` |
+| Put a person into a scene | Identity V2 | person 2–3, scene 1 | person `beside`, scene `aligned` |
+| Instruction edit | General V2 | 4 | `aligned` |
+
+The CLI selects these defaults with `--edit-model identity` (default) or
+`--edit-model general`; `--lora` overrides the preset's adapter selection.
+
+```bash
+python scripts/krea2_image.py -i person.jpg --prompt "Full body portrait in a blue suit" --seed 42
+python scripts/krea2_image.py -i scene.jpg --edit-model general --prompt "Remove the car" --seed 42
+```
 
 **Single ref:**
 
@@ -271,10 +302,11 @@ Restart warm workers after adding the file so the catalog re-scans.
 {
   "input": {
     "type": "image_edit",
-    "prompt": "recolor the car matte black, keep the same person",
+    "prompt": "recolor the car matte black, keep everything else unchanged",
     "images": ["data:image/png;base64,..."],
-    "loras": [{"name": "krea2_identity_edit_v1_2", "strength": 1.0}],
+    "loras": [{"name": "krea2_general_edit_v2", "strength": 1.0}],
     "ref_boost": 4.0,
+    "ref_position": "aligned",
     "grounding_px": 768,
     "fit_mode": "fit",
     "num_inference_steps": 8,
@@ -296,8 +328,11 @@ Restart warm workers after adding the file so the catalog re-scans.
       "data:image/png;base64,...",
       "data:image/jpeg;base64,..."
     ],
-    "loras": [{"name": "krea2_identity_edit_v1_2", "strength": 1.0}],
-    "ref_boost": 4.0,
+    "loras": [{"name": "krea2_identity_edit_v2", "strength": 1.0}],
+    "ref_boost": 2.0,
+    "ref_boost_a": 1.0,
+    "ref_position": "beside",
+    "ref_position_a": "aligned",
     "fit_mode": "fit",
     "seed": 42
   }
@@ -311,16 +346,21 @@ Edit fields:
 | `images` | `[]` | **Required** length **1 or 2** (raw base64 or `data:image/...;base64,...`) |
 | `width` / `height` | schema 1024 | If **both omitted** by the client, canvas is derived from **`images[0]`** (MP-capped, snap to 16). If present, both used as explicit target. Prefer omit both or send both. `images[1]` never sets canvas. Different native sizes are fine (each ref fit independently). |
 | `grounding_px` | `768` | Long-side cap for vision TE **per** image; `0` = no resize |
-| `ref_boost` | `1.0` | Attention boost target→**each** source (shared scalar). **Recommend `4.0` for likeness**; `1.0` is the API default (no dense float bias). |
+| `ref_boost` | `1.0` | Attention boost toward the **last/only** ref: person in scene+person workflows. Recommend 2 for Identity, 4 for General. |
+| `ref_boost_a` | `1.0` | Independent boost toward the **first** ref in two-image workflows (scene); ignored for one ref. |
+| `ref_position` | `"aligned"` | Last/only ref placement: `aligned`, `beside`, `bag_of_features` (experimental). |
+| `ref_position_a` | `"aligned"` | First ref placement in two-image workflows; ignored for one ref. |
 | `fit_mode` | `"fit"` | `"fit"` (AR-preserving, may be smaller) or `"crop"` (exact target); applied to **all** refs |
 | `num_images` | `1` | Must be **1** for edit (output count, not ref count) |
 | `mu` | `1.15` | Always pinned for edit (auto-mu disabled) |
 
-**GQA / `ref_boost`:** when `ref_boost != 1`, the DiT uses a dense float attention bias and expands K/V heads (GQA → full heads) so SDPA has a valid kernel. CUDA backends are FLASH + EFFICIENT only (no MATH — would OOM on full L×L).
+**GQA / reference boosts:** when either active reference boost differs from 1, the DiT uses a dense float attention bias and expands K/V heads (GQA → full heads) so SDPA has a valid kernel. CUDA backends are FLASH + EFFICIENT only (no MATH — would OOM on full L×L).
 
 **VRAM:** 1-ref edit ≈ ~2× image tokens (source + target); **2 refs ≈ ~3×**. Same 24 GB class with TE offload; prefer ≤1.5 MP targets. OOM → lower resolution / fewer steps / no CFG / single ref.
 
-What is **not** available yet: N>2 refs, per-image `ref_boosts`, “removals → raw” export, Diffusers pipeline rewrite. Style-only dual-ref is not a quality guarantee.
+What is **not** available yet: N>2 refs, Raw-model editing, Diffusers pipeline rewrite.
+The author's Raw/20-step/CFG-3 preset for difficult removals requires a different
+base checkpoint; this worker remains Turbo. Style-only dual-ref is not a quality guarantee.
 
 Optional `loras` (default `[]`, both modes):
 
@@ -331,7 +371,7 @@ Optional `loras` (default `[]`, both modes):
   - `weight_diff` → **0.0..5.0** (community filter-bypass files often use **3–5**)
   - `0.0` skips that adapter
 - Declared `type` must match file contents (no silent auto-detect). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
-- Identity edit expects the identity LoRA on the volume; running edit without it is allowed but quality will be poor.
+- Edit expects one selected V2 adapter; both are available locally after startup.
 - Unknown names, type/content mismatch, or invalid shapes fail the job with a safe error (no `refresh_worker`).
 
 Each request copies only its nonzero-strength adapters from `LORA_DIR` to
@@ -371,7 +411,7 @@ Response:
     "fit_mode": "fit",
     "num_refs": 1,
     "loras": [
-      {"name": "krea2_identity_edit_v1_2", "strength": 1.0, "type": "lora"}
+      {"name": "krea2_identity_edit_v2", "strength": 1.0, "type": "lora"}
     ]
   }
 }
@@ -410,8 +450,8 @@ Generation needs a GPU and enough container disk for the startup downloads.
 - **FP8 DiT (default):** weights stay `float8_e4m3fn` where quantized; Linear layers cast to bf16 on the fly so VRAM stays closer to ~12 GB for the transformer.
 - **INT8 ConvRot DiT (`DIT_QUANT=int8_convrot`):** stock Comfy `int8_tensorwise` layout (`weight` int8 + `weight_scale` + `comfy_quant`); online Hadamard on activations when marker has `convrot`; CUDA uses `torch._int_mm` for larger token batches.
 - **VAE:** prefer clean HF Diffusers weights; do not overlay incompatible Comfy key names with `strict=False`.
-- **Runtime LoRA:** up to four pre-placed adapters applied only during DiT denoise (base FP8/INT8 weights unchanged; LoRA delta in compute dtype); released before VAE decode.
-- **Identity edit:** grounded multimodal TE (`mm_processor`, separate from text tokenizer) + 1–2 source VAE streams with RoPE frame split; optional `ref_boost` dense bias with GQA-safe expand.
+- **Runtime LoRA:** up to four selected built-in or volume adapters applied only during DiT denoise (base FP8/INT8 weights unchanged; LoRA delta in compute dtype); released before VAE decode.
+- **Edit V2:** grounded multimodal TE (`mm_processor`, separate from text tokenizer) + 1–2 source VAE streams; per-reference RoPE placement and boost with GQA-safe attention.
 - **Not in MVP:** Comfy workflows, N>2 refs, removals→raw, baking 18 GB into the image layer.
 
 ## License
@@ -425,3 +465,5 @@ Generation needs a GPU and enough container disk for the startup downloads.
   in this repository.
 - Model weights are not included. Krea 2 weights and derivatives are governed
   by the [Krea 2 Community License](https://www.krea.ai/krea-2-licensing).
+- Identity Edit V2 and General Edit V2 additionally use the author's
+  [V2 model license](LICENSES/KREA-2-EDIT-V2.md).

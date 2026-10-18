@@ -36,6 +36,9 @@ DIT_FILE_INT8_FLAT = "krea2_turbo_int8_convrot.safetensors"
 VAE_FILE = "qwen_image_vae.safetensors"
 TEXT_ENCODER_ID = "Qwen/Qwen3-VL-4B-Instruct"
 VAE_REPO = "Qwen/Qwen-Image"
+EDIT_LORA_REPO = "conradlocke/krea2-identity-edit"
+EDIT_LORA_REVISION = "f33b26291c640e8ec50b0da420bfee3c9a660daa"
+EDIT_LORA_FILES = ("krea2_identity_edit_v2.safetensors", "krea2_general_edit_v2.safetensors")
 
 
 def _load_dit_quant_module():
@@ -130,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 encoder = downloads.snapshot(text_encoder_id)
             publisher.ready("text_encoder", encoder)
+        edit_loras = out / "edit_loras"
+        edit_loras.mkdir(exist_ok=True)
+        for filename in EDIT_LORA_FILES:
+            adapter = downloads.file(EDIT_LORA_REPO, filename, revision=EDIT_LORA_REVISION)
+            link_or_copy(adapter, edit_loras / filename)
+        publisher.ready("edit_loras", edit_loras)
     publisher.ready("all", out)
     print()
     print("Model directory layout:")

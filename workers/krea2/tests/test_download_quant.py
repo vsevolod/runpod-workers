@@ -65,8 +65,12 @@ class DownloadQuantResolveTests(unittest.TestCase):
         # cache setup and INT8 hardlink against a real temporary filesystem.
         hub = types.ModuleType("huggingface_hub")
 
-        def download(*, repo_id, filename, local_dir, token, cache_dir):
-            self.assertEqual(repo_id, "Comfy-Org/Krea-2")
+        def download(*, repo_id, filename, local_dir, token, cache_dir, **kwargs):
+            if repo_id == "conradlocke/krea2-identity-edit":
+                self.assertEqual(kwargs["revision"], "f33b26291c640e8ec50b0da420bfee3c9a660daa")
+                self.assertIn(filename, ("krea2_identity_edit_v2.safetensors", "krea2_general_edit_v2.safetensors"))
+            else:
+                self.assertEqual(repo_id, "Comfy-Org/Krea-2")
             path = Path(local_dir) / filename
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"test weights")
@@ -100,6 +104,8 @@ class DownloadQuantResolveTests(unittest.TestCase):
             self.assertFalse((model / "qwen_image_vae.safetensors").exists())
             self.assertTrue((cache / "hub/models--example--conditioner/snapshots/revision/config.json").is_file())
             self.assertTrue((cache / "hub/models--Qwen--Qwen-Image/snapshots/revision/vae/config.json").is_file())
+            for name in ("krea2_identity_edit_v2", "krea2_general_edit_v2"):
+                self.assertEqual((model / "edit_loras" / (name + ".safetensors")).read_bytes(), b"test weights")
 
     def test_existing_local_encoder_is_not_sent_to_hub_as_a_repo_id(self):
         hub = types.ModuleType("huggingface_hub")
@@ -116,6 +122,11 @@ class DownloadQuantResolveTests(unittest.TestCase):
                 return str(vae)
 
             hub.snapshot_download = snapshot
+            def download(**kwargs):
+                path = Path(kwargs["local_dir"]) / kwargs["filename"]
+                path.write_bytes(b"v2 weights")
+                return str(path)
+            hub.hf_hub_download = download
             with patch.dict(sys.modules, {"huggingface_hub": hub}), patch.dict(
                 os.environ, {"TEXT_ENCODER_ID": str(encoder)},
             ), contextlib.redirect_stdout(io.StringIO()):

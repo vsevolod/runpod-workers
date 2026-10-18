@@ -27,7 +27,10 @@ KREA_API = ModelAPI(
         "mu": {"type": float, "required": False, "default": 1.15, "nullable": True, "constraints": math.isfinite},
         "grounding_px": {"type": int, "required": False, "default": 768, "constraints": lambda v: v == 0 or 256 <= v <= 2048},
         "ref_boost": {"type": float, "required": False, "default": 1., "constraints": lambda v: math.isfinite(v) and v >= 0},
+        "ref_boost_a": {"type": float, "required": False, "default": 1., "constraints": lambda v: math.isfinite(v) and v >= 0},
+        "ref_position": {"type": str, "required": False, "default": "aligned", "constraints": lambda v: v in ("aligned", "beside", "bag_of_features")},
+        "ref_position_a": {"type": str, "required": False, "default": "aligned", "constraints": lambda v: v in ("aligned", "beside", "bag_of_features")},
         "fit_mode": {"type": str, "required": False, "default": "fit", "constraints": lambda v: v in ("fit", "crop")},
     },
-    aliases={name: name for name in ("mu", "grounding_px", "ref_boost", "fit_mode")},
+    aliases={name: name for name in ("mu", "grounding_px", "ref_boost", "ref_boost_a", "ref_position", "ref_position_a", "fit_mode")},
 )

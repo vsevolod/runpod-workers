@@ -41,6 +41,29 @@ class Pipeline:
 
 
 class KreaAPITests(unittest.TestCase):
+    def test_v2_reference_controls_reach_inference_and_are_reported(self):
+        buffer = BytesIO(); Image.new("RGB", (64, 96)).save(buffer, format="PNG")
+        image = base64.b64encode(buffer.getvalue()).decode()
+        output = self.handler.generate_image({"input": {
+            "type": "image_edit", "prompt": "put the person into this scene",
+            "images": [image, image],
+            "loras": [{"name": "krea2_identity_edit_v2", "strength": 1.}],
+            "model_options": {"ref_position": "beside", "ref_position_a": "aligned",
+                              "ref_boost": 3., "ref_boost_a": 1.},
+        }})
+        self.assertNotIn("error", output)
+        for key, value in {"ref_position": "beside", "ref_position_a": "aligned",
+                           "ref_boost": 3., "ref_boost_a": 1.}.items():
+            self.assertEqual(self.pipe.calls[-1][1][key], value)
+            self.assertEqual(output["model_options"][key], value)
+
+    def test_invalid_reference_placement_and_nonfinite_scene_boost_are_rejected(self):
+        for options in ({"ref_position": "wrong"}, {"ref_position_a": "wrong"},
+                        {"ref_boost_a": float("inf")}, {"ref_boost_a": -1.}):
+            output = self.handler.generate_image({"input": {"prompt": "fox", "model_options": options}})
+            self.assertIn("error", output)
+        self.assertEqual(self.pipe.calls, [])
+
     def setUp(self):
         self.pipe = Pipeline()
         package = ModuleType("krea2_infer")
@@ -80,7 +103,8 @@ class KreaAPITests(unittest.TestCase):
                 "loras": [{"name": "identity", "type": "weight_diff", "strength": 4.}], **fields,
             }})
             self.assertNotIn("error", output)
-            self.assertEqual(output["model_options"], options)
+            self.assertEqual(output["model_options"], {**options, "ref_boost_a": 1.,
+                                                       "ref_position": "aligned", "ref_position_a": "aligned"})
             self.assertEqual(output["ref_boost"], 4.)
             self.assertEqual((output["width"], output["height"]), (512, 768))
             self.assertEqual(output["num_inference_steps"], 25)

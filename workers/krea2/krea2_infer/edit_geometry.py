@@ -48,7 +48,7 @@ def fit_source_pixels(
     """
     Pixel-space prep before VAE encode.
     - crop: center-crop to target AR, bicubic to exactly (target_w, target_h).
-    - fit: AR-preserving fit-inside with /16 floor snap (Comfy _fit_encode_image);
+    - fit: crop-to-grid then fit-inside (V2 Comfy _fit_encode_image);
       may return size <= target; never non-uniform stretch.
     Returns RGB PIL.Image with size (W, H) = (pixel_w, pixel_h).
     """
@@ -56,7 +56,7 @@ def fit_source_pixels(
     iw, ih = img.size
     px_h, px_w = target_h, target_w  # already pixel space
 
-    if fit_mode == "crop" or fit_mode == "crop (legacy)":
+    if fit_mode == "crop":
         s = max(px_h / ih, px_w / iw)
         ch = min(ih, int(round(px_h / s)))
         cw = min(iw, int(round(px_w / s)))
@@ -80,4 +80,10 @@ def fit_source_pixels(
 
     nh = min(max(16, int(ih * sc) // 16 * 16), max(16, px_h // 16 * 16))
     nw = min(max(16, int(iw * sc) // 16 * 16), max(16, px_w // 16 * 16))
+    # Crop before resizing: snapping a full image down to /16 squashes its
+    # content and misregisters reference edges against the target's RoPE grid.
+    ch = min(ih, max(1, int(round(nh / sc))))
+    cw = min(iw, max(1, int(round(nw / sc))))
+    y0, x0 = (ih - ch) // 2, (iw - cw) // 2
+    img = img.crop((x0, y0, x0 + cw, y0 + ch))
     return img.resize((nw, nh), PILImage.Resampling.BICUBIC)

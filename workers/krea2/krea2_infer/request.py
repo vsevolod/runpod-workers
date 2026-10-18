@@ -22,6 +22,9 @@ class NormalizedRequest(CommonRequest):
     mu: float | None
     grounding_px: int
     ref_boost: float
+    ref_boost_a: float
+    ref_position: str
+    ref_position_a: str
     fit_mode: str
 
 
@@ -75,8 +78,17 @@ def normalize_job_input(
     if not math.isfinite(ref_boost) or ref_boost < 0:
         raise RequestError("ref_boost must be a finite number >= 0")
 
+    ref_boost_a = float(validated.get("ref_boost_a", 1.))
+    if not math.isfinite(ref_boost_a) or ref_boost_a < 0:
+        raise RequestError("ref_boost_a must be a finite number >= 0")
+    ref_position = validated.get("ref_position", "aligned")
+    ref_position_a = validated.get("ref_position_a", "aligned")
+    if ref_position not in ("aligned", "beside", "bag_of_features") or ref_position_a not in ("aligned", "beside", "bag_of_features"):
+        raise RequestError("reference positions must be aligned, beside or bag_of_features")
+
     return NormalizedRequest(
         **vars(common), width=width, height=height, size_from_source=size_from_source,
         mu=validated.get("mu"), grounding_px=grounding_px,
         ref_boost=ref_boost, fit_mode=fit_mode,
+        ref_boost_a=ref_boost_a, ref_position=ref_position, ref_position_a=ref_position_a,
     )

@@ -289,10 +289,13 @@ class Krea2Pipeline:
         negative_prompt: str | None = None,
         grounding_px: int = 768,
         ref_boost: float = 1.0,
+        ref_boost_a: float = 1.0,
+        ref_position: str = "aligned",
+        ref_position_a: str = "aligned",
         fit_mode: str = "fit",
         loras: Sequence[LoRASelection] = (),
     ):
-        """Identity edit with 1..2 reference images.
+        """Identity / General Edit V2 with 1..2 reference images.
 
         Prefer ``sources=``. Deprecated ``source=`` alone is accepted as a
         single-ref adapter. Passing both is an error.
@@ -328,6 +331,9 @@ class Krea2Pipeline:
                 mu=mu,
                 grounding_px=grounding_px,
                 ref_boost=ref_boost,
+                ref_boost_a=ref_boost_a,
+                ref_position=ref_position,
+                ref_position_a=ref_position_a,
                 fit_mode=fit_mode,
                 lora_activation=lora_activation,
             )
@@ -388,8 +394,6 @@ def load_pipeline(
         dit = load_dit(
             resolved_dit, device=device, compute_dtype=dtype, quant_mode=mode
         )
-    lora_catalog = LoRACatalog.scan(lora_dir)
-    lora_manager = LoRAManager(dit, lora_catalog, dtype)
     vae_source = wait_for_component("vae")
     resolved_vae = _resolve_path(
         model_dir, vae_path or os.environ.get("VAE_PATH"), VAE_CANDIDATES
@@ -407,6 +411,9 @@ def load_pipeline(
             dtype=dtype,
             local_files_only=local_files_only,
         )
+    edit_loras = wait_for_component("edit_loras") or model_dir / "edit_loras"
+    lora_catalog = LoRACatalog.scan(lora_dir, builtin_directory=edit_loras)
+    lora_manager = LoRAManager(dit, lora_catalog, dtype)
     wait_for_component("all")
 
     if device.type == "cuda":

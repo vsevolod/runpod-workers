@@ -1,5 +1,6 @@
 """Request-time copies must never expose network mappings or partial adapters."""
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -51,7 +52,11 @@ class AdapterCacheTests(unittest.TestCase):
 
     def test_replaced_source_of_same_size_is_refreshed(self):
         self.fetch(self.a)
+        previous = self.a.stat()
         self.a.write_bytes(b'adapter C')
+        # A metadata-based cache needs an observable metadata change, even on
+        # filesystems whose timestamps do not advance between these fast writes.
+        os.utime(self.a, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000_000))
         self.assertEqual(self.fetch(self.a)[0].read_bytes(), b'adapter C')
 
     def test_background_copy_overlaps_caller_and_failed_copy_is_retryable(self):
@@ -78,7 +83,9 @@ class AdapterCacheTests(unittest.TestCase):
         original = module.shutil.copyfile
         def changing(source, destination):
             original(source, destination)
+            previous = self.a.stat()
             self.a.write_bytes(b'adapter C')
+            os.utime(self.a, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000_000))
         with self.assertLogs(module.logger, level='ERROR'), patch.object(module.shutil, 'copyfile', side_effect=changing):
             with self.assertRaisesRegex(OSError, 'changed'):
                 self.fetch(self.a)

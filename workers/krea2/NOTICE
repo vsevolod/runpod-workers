@@ -24,6 +24,20 @@ The following files contain modifications or adaptations:
   krea2_infer/pipeline.py    -- FP8 loading and RunPod-oriented pipeline
   krea2_infer/sampling.py    -- offload text encoder to CPU after encode
 
+ComfyUI-Krea2Edit
+----------------
+
+Reference conditioning, crop-to-grid geometry, fractional RoPE centering and
+per-reference placement in krea2_infer/edit_geometry.py and edit_sampling.py
+are adapted from lbouaraba/comfyui-krea2edit v2.0.0:
+
+  https://github.com/lbouaraba/comfyui-krea2edit
+  upstream revision 13ef60f20828949becada815d3cbc371eb5ccaab
+
+The node code is licensed under Apache-2.0 (see
+LICENSES/KREA-2-APACHE-2.0.txt). The adaptations use PIL pixel preparation and
+the thin worker's sampler instead of ComfyUI model patches.
+
 RunPod worker-sdxl
 ------------------
 
@@ -46,3 +60,10 @@ License:
 
   https://www.krea.ai/krea-2-licensing
   https://huggingface.co/AlperKTS/Krea2_FP8
+
+Identity Edit V2 and General Edit V2 are downloaded at startup from:
+
+  https://huggingface.co/conradlocke/krea2-identity-edit
+  revision f33b26291c640e8ec50b0da420bfee3c9a660daa
+
+Their additional terms are provided in LICENSES/KREA-2-EDIT-V2.md.

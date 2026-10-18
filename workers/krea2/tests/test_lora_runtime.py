@@ -96,6 +96,23 @@ def _diff_layer(target, delta):
 
 
 class ModuleIsolationTest(unittest.TestCase):
+    def test_builtin_v2_adapters_survive_catalog_refresh_and_cannot_be_shadowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            builtin = root / "builtin"; builtin.mkdir()
+            volume = root / "volume"; volume.mkdir()
+            name = "krea2_identity_edit_v2"
+            (builtin / (name + ".safetensors")).write_bytes(b"pinned v2")
+            self.assertEqual(LoRACatalog.scan(root / "no-volume", builtin_directory=builtin).resolve(name).read_bytes(),
+                             b"pinned v2")
+            (volume / (name + ".safetensors")).write_bytes(b"untrusted duplicate")
+            catalog = LoRACatalog.scan(volume, builtin_directory=builtin)
+            manager = LoRAManager(_TwoLinearModel(), catalog, torch.float32, cache_dir=root / "cache")
+            (volume / "style.safetensors").write_bytes(b"new style")
+            choices = manager.normalize([{"name": name}, {"name": "style"}])
+            self.assertEqual(choices[0].path.read_bytes(), b"pinned v2")
+            self.assertEqual(choices[1].path.read_bytes(), b"new style")
+
     def test_loader_preserves_canonical_package_bindings(self):
         self.assertIs(
             sys.modules.get("krea2_infer", _MISSING_MODULE),

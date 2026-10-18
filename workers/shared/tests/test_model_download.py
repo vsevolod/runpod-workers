@@ -17,6 +17,21 @@ MODULE = Path(__file__).parents[1] / "model_download.py"
 
 
 class ModelDownloadTests(unittest.TestCase):
+    def test_explicit_file_revision_is_used_without_resolving_mutable_main(self):
+        hub = types.ModuleType("huggingface_hub")
+        calls = []
+        def transfer(**kwargs):
+            calls.append(kwargs)
+            path = Path(kwargs["local_dir"]) / kwargs["filename"]
+            path.write_bytes(b"pinned weights")
+            return str(path)
+        hub.hf_hub_download = transfer
+        with patch.dict(sys.modules, {"huggingface_hub": hub}), contextlib.redirect_stdout(io.StringIO()):
+            with self.mod.ModelDownloader(self.root / "models", pin_revisions=True) as downloads:
+                path = downloads.file("example/model", "adapter.safetensors", revision="c" * 40)
+        self.assertEqual(path.read_bytes(), b"pinned weights")
+        self.assertEqual(calls[0]["revision"], "c" * 40)
+
     def setUp(self):
         self.assertTrue(MODULE.is_file(), "The shared download module is missing")
         spec = importlib.util.spec_from_file_location("_worker_model_download_tests", MODULE)

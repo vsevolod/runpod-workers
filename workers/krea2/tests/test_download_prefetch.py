@@ -15,7 +15,7 @@ from test_download_quant import _load_download_module
 
 
 class DownloadPrefetchTests(unittest.TestCase):
-    def run_download(self, root, *, fail_encoder=False):
+    def run_download(self, root, *, fail_encoder=False, fail_adapter=False):
         mod = _load_download_module()
         state = root / "state"
         state.mkdir()
@@ -23,7 +23,11 @@ class DownloadPrefetchTests(unittest.TestCase):
         hub.HfApi = lambda **kwargs: types.SimpleNamespace(model_info=lambda repo: types.SimpleNamespace(sha="a" * 40))
 
         def file(**kwargs):
-            self.assertEqual(kwargs["revision"], "a" * 40)
+            if fail_adapter and kwargs["filename"] == "krea2_general_edit_v2.safetensors":
+                raise OSError("V2 adapter transfer failed")
+            expected = ("f33b26291c640e8ec50b0da420bfee3c9a660daa"
+                        if kwargs["repo_id"] == "conradlocke/krea2-identity-edit" else "a" * 40)
+            self.assertEqual(kwargs["revision"], expected)
             path = Path(kwargs["local_dir"]) / kwargs["filename"]
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"complete dit")
@@ -58,6 +62,9 @@ class DownloadPrefetchTests(unittest.TestCase):
             self.assertIn("a" * 40, str(paths["vae"]))
             self.assertIn("a" * 40, str(paths["text_encoder"]))
             self.assertEqual(paths["all"], root / "models")
+            adapters = Path(json.loads((state / "edit_loras.json").read_text())["path"])
+            self.assertEqual(sorted(path.name for path in adapters.glob("*.safetensors")),
+                             ["krea2_general_edit_v2.safetensors", "krea2_identity_edit_v2.safetensors"])
 
     def test_later_download_failure_never_publishes_all_ready(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -66,4 +73,14 @@ class DownloadPrefetchTests(unittest.TestCase):
                 self.run_download(root, fail_encoder=True)
             self.assertTrue((root / "state/dit.json").exists())
             self.assertTrue((root / "state/vae.json").exists())
+            self.assertFalse((root / "state/all.json").exists())
+
+    def test_partial_v2_download_never_releases_the_edit_catalog_or_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(OSError, "V2 adapter transfer failed"):
+                self.run_download(root, fail_adapter=True)
+            self.assertTrue((root / "state/text_encoder.json").exists())
+            self.assertTrue((root / "models/edit_loras/krea2_identity_edit_v2.safetensors").exists())
+            self.assertFalse((root / "state/edit_loras.json").exists())
             self.assertFalse((root / "state/all.json").exists())

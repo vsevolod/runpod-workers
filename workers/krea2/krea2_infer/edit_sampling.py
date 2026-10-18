@@ -1,4 +1,4 @@
-"""Identity-edit sampling: dual conditioning (grounded TE + source VAE tokens)."""
+"""Krea Edit V2 sampling: grounded TE, source VAE tokens and reference placement."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _img_ids(bs: int, frame: float, gh: int, gw: int, device) -> torch.Tensor:
 
 
 def _img_ids_offset(bs, frame, gh, gw, th, tw, device) -> torch.Tensor:
-    off_h, off_w = max(0, (th - gh) // 2), max(0, (tw - gw) // 2)
+    off_h, off_w = max(0., (th - gh) / 2), max(0., (tw - gw) / 2)
     ids = torch.zeros(gh, gw, 3, device=device, dtype=torch.float32)
     ids[..., 0] = frame
     ids[..., 1] = (torch.arange(gh, device=device, dtype=torch.float32) + off_h)[:, None]
@@ -44,17 +44,30 @@ def build_edit_position_ids(
     *,
     pos_mode: str,
     device,
+    ref_position: str = "aligned",
+    ref_position_a: str = "aligned",
 ) -> torch.Tensor:
     """Returns (B, text_len + sum(gh*gw) + th*tw, 3)."""
     th, tw = tgt_grid
     txt = torch.zeros(batch, text_len, 3, device=device, dtype=torch.float32)
     blocks = [txt]
+    next_column = float(tw)
     for i, (gh, gw) in enumerate(src_grids):
         frame = float(i + 1)
         if pos_mode == "stride1":
-            blocks.append(_img_ids_offset(batch, frame, gh, gw, th, tw, device))
+            ids = _img_ids_offset(batch, frame, gh, gw, th, tw, device)
         else:
-            blocks.append(_img_ids(batch, frame, gh, gw, device))
+            ids = _img_ids(batch, frame, gh, gw, device)
+        position = ref_position if i == len(src_grids) - 1 else ref_position_a
+        if position == "beside":
+            ids[..., 2] = ids[..., 2] - ids[..., 2].min() + next_column
+            next_column = float(ids[..., 2].max()) + 1.
+        elif position == "bag_of_features":
+            ids[..., 1] = (th - 1) / 2.
+            ids[..., 2] = (tw - 1) / 2.
+        elif position != "aligned":
+            raise ValueError(f"unknown ref_position: {position}")
+        blocks.append(ids)
     blocks.append(_img_ids(batch, 0.0, th, tw, device))
     return torch.cat(blocks, dim=1)
 
@@ -155,6 +168,9 @@ def sample_edit(
     mu: float | None = 1.15,
     grounding_px: int = 768,
     ref_boost: float = 1.0,
+    ref_boost_a: float = 1.0,
+    ref_position: str = "aligned",
+    ref_position_a: str = "aligned",
     fit_mode: str = "fit",
     max_megapixels: float = 1.5,
     lora_activation=None,
@@ -236,11 +252,13 @@ def sample_edit(
         (th, tw),
         pos_mode=pos_mode,
         device=device,
+        ref_position=ref_position,
+        ref_position_a=ref_position_a,
     )
     img_ones = torch.ones(1, src_total + tgt_len, device=device, dtype=torch.bool)
     mask = torch.cat([txtmask.to(device), img_ones], dim=1)
 
-    boosts = [ref_boost] * n_src
+    boosts = [ref_boost_a] * (n_src - 1) + [ref_boost]
     bias = build_ref_boost_bias(
         boosts,
         txt.shape[1],
@@ -278,6 +296,8 @@ def sample_edit(
                         (th, tw),
                         pos_mode=pos_mode,
                         device=device,
+                        ref_position=ref_position,
+                        ref_position_a=ref_position_a,
                     )
                     unmask = torch.cat([untxtmask.to(device), img_ones], dim=1)
                     unbias = build_ref_boost_bias(

@@ -113,17 +113,17 @@ class PreparedLoRA:
 class LoRACatalog:
     root: Path
     _paths: Mapping[str, Path]
+    builtin_root: Path | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_paths", MappingProxyType(dict(self._paths)))
 
     @classmethod
-    def scan(cls, directory: Path | str) -> "LoRACatalog":
+    def scan(cls, directory: Path | str, *, builtin_directory: Path | str | None = None) -> "LoRACatalog":
         root = Path(directory)
         if not root.exists():
             logger.warning("LoRA directory does not exist: %s", root)
-            return cls(root=root, _paths={})
-        if not root.is_dir():
+        elif not root.is_dir():
             raise RuntimeError(f"LoRA path is not a directory: {root}")
 
         paths: dict[str, Path] = {}
@@ -138,7 +138,11 @@ class LoRACatalog:
             paths[name] = path
 
         logger.info("Discovered %d LoRA(s) in %s", len(paths), root)
-        return cls(root=root, _paths=paths)
+        builtin_root = Path(builtin_directory) if builtin_directory is not None else None
+        if builtin_root is not None:
+            # The pinned built-ins win over same-named files on the volume.
+            paths.update(cls.scan(builtin_root)._paths)
+        return cls(root=root, _paths=paths, builtin_root=builtin_root)
 
     @property
     def names(self) -> tuple[str, ...]:
