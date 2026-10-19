@@ -1,0 +1,19 @@
+{
+  "state": "complete",
+  "summaries": [
+    {
+      "variant": "base",
+      "highest_successful_side": 2048,
+      "confirmed_side_with_headroom": 2048,
+      "confirmed_megapixels": 4.194304
+    },
+    {
+      "variant": "turbo",
+      "highest_successful_side": 2048,
+      "confirmed_side_with_headroom": 2048,
+      "confirmed_megapixels": 4.194304
+    }
+  ],
+  "at": 1792427526.6708767,
+  "label": "rtx4090-24gb"
+}

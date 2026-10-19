@@ -1,0 +1,48 @@
+{
+  "source_commit": "d95b30908773c9d0d5d49ad69ede571ad1caffe5",
+  "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+  "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+  "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+  "lora_id": "lodestones/MOSS-Image-SFT-8-steps-dmd",
+  "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+  "lora_strength": 0.7,
+  "profiles": {
+    "base": {
+      "steps": 50,
+      "cfg": 3,
+      "uncond_skip_layers": [
+        22
+      ]
+    },
+    "turbo": {
+      "steps": 8,
+      "cfg": 1,
+      "uncond_skip_layers": []
+    }
+  },
+  "offload": "cpu",
+  "seed": 42,
+  "num_images": 1,
+  "aspect_ratio": "1:1",
+  "square_sides": [
+    992,
+    1216,
+    1408,
+    1568,
+    1728,
+    1856,
+    2000,
+    2048
+  ],
+  "gpu_tiers": [
+    "NVIDIA L40S 48 GB",
+    "NVIDIA GeForce RTX 4090 24 GB"
+  ],
+  "sampling_seconds": 0.1,
+  "minimum_headroom": "max(1 GiB, 5 percent total VRAM); conservative peak=max(sampled whole-device, allocator peak reserved plus pre-inference nonallocator use)",
+  "scope": "MOSS capacity only, fixed short prompt, square one-image generation; API maximum 2048 squared=4.194304 decimal MP; no production limit or deployment changes",
+  "harness_sha256": {
+    "run_suite.py": "61e303dbe6dfb490473a18df0f513030f16620080bceaab9a54f5e23830b744a",
+    "benchmark.py": "480f4ad176cd6277b0656e5b4e86a26ebb696007d3af02523b1f7b129252583d"
+  }
+}

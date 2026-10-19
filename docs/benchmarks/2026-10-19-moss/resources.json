@@ -1,0 +1,86 @@
+[
+  {
+    "label": "l40s-48gb",
+    "pod_id": "zslb5xy7ji2xlj",
+    "name": "moss-mp-l40s-48gb-20261019",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+    "data_center": "US-MO-1",
+    "cloud": "SECURE",
+    "gpu_id": "NVIDIA L40S",
+    "gpu_count": 1,
+    "allocated_host_ram_gb": 125,
+    "allocated_vcpus": 32,
+    "disk_gb": 140,
+    "host_reported_cuda_version": "13.0",
+    "created_at": "2026-10-19T15:38:49.856Z",
+    "started_at": "2026-10-19T15:38:49.85Z",
+    "mounts": {
+      "global": [
+        {
+          "path": "/workspace",
+          "volumeId": "cmv1ht9mt000007lb00es0w9n"
+        }
+      ]
+    },
+    "cleanup": {
+      "stop": {
+        "id": "zslb5xy7ji2xlj",
+        "name": "moss-mp-l40s-48gb-20261019",
+        "status": "EXITED",
+        "cost": 1.09,
+        "actions": [
+          "start",
+          "terminate"
+        ]
+      },
+      "final": {
+        "id": "zslb5xy7ji2xlj",
+        "deleted": true,
+        "readback_status": 404
+      },
+      "at": 1792427716.6514947
+    }
+  },
+  {
+    "label": "rtx4090-24gb",
+    "pod_id": "cfq7oi8s4lxgfc",
+    "name": "moss-mp-rtx4090-24gb-20261019",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+    "data_center": "EUR-IS-2",
+    "cloud": "SECURE",
+    "gpu_id": "NVIDIA GeForce RTX 4090",
+    "gpu_count": 1,
+    "allocated_host_ram_gb": 100,
+    "allocated_vcpus": 12,
+    "disk_gb": 140,
+    "host_reported_cuda_version": "13.0",
+    "created_at": "2026-10-19T15:44:59.29Z",
+    "started_at": "2026-10-19T15:44:59.284Z",
+    "mounts": {
+      "global": [
+        {
+          "path": "/workspace",
+          "volumeId": "cmv1ht9mt000007lb00es0w9n"
+        }
+      ]
+    },
+    "cleanup": {
+      "stop": {
+        "id": "cfq7oi8s4lxgfc",
+        "name": "moss-mp-rtx4090-24gb-20261019",
+        "status": "EXITED",
+        "cost": 0.89,
+        "actions": [
+          "start",
+          "terminate"
+        ]
+      },
+      "final": {
+        "id": "cfq7oi8s4lxgfc",
+        "deleted": true,
+        "readback_status": 404
+      },
+      "at": 1792427754.4030619
+    }
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "repo": "lodestones/MOSS-Image-SFT-8-steps-dmd",
+  "revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+  "files": [
+    {
+      "path": "lora_latest.safetensors",
+      "size": 1189176800
+    }
+  ]
+}

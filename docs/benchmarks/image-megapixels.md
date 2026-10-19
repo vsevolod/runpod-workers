@@ -25,6 +25,28 @@ CFG or offload mode. A calibrated entry describes the baseline below; it does
 not establish a memory bound for every accepted request. In particular, explicit
 output dimensions can select a larger canvas than `reference_megapixels`.
 
+## MOSS generation, 2026-10-19
+
+The [MOSS capacity run](2026-10-19-moss/README.md) completed **40/40**
+generations on the deployed Torch 2.9.1 image. Base (50 steps / CFG 3) and
+Turbo (eight steps / CFG 1 / DMD LoRA at 0.7) each passed eight square sizes
+on RTX 4090 24 GB and L40S 48 GB, then confirmed **2048x2048 = 4.194304 MP**
+with fresh-process first/warm repeats and memory headroom. No CUDA OOM occurred.
+Largest sampled whole-device use at the maximum was **16.15 GiB Base /
+16.52 GiB Turbo on RTX 4090**, and **16.19 GiB for both on L40S**.
+
+This is one output, a fixed short prompt, native BF16 MOSS-SFT, FP32 VAE and
+component CPU offload. It does not establish limits for other batches,
+prompt lengths, aspect ratios or GPU architectures. The run reached the API
+ceiling; it did not search beyond it for a physical GPU maximum.
+
+MOSS selects its generation canvas through explicit `width`/`height`;
+`reference_megapixels` does not control it. These measurements do not add
+a row to `MEGAPIXEL_LIMITS` or change the output-limit policy. See the report
+for raw events, shapes, pinned image/model revisions, package freezes,
+Global hash verification and Pod teardown evidence. Krea/Qwen were not run
+as part of this experiment.
+
 ## L40S run, 2026-10-18
 
 **36/36 successful generations**: seven points per profile plus two additional

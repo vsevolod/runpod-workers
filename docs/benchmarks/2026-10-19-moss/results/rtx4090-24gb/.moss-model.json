@@ -1,0 +1,74 @@
+{
+  "repo": "OpenMOSS-Team/MOSS-Image-SFT",
+  "revision": "2c7954437269461767f533b006823e8f85973a60",
+  "files": [
+    {
+      "path": "scheduler/scheduler_config.json",
+      "size": 494
+    },
+    {
+      "path": "text_encoder/config.json",
+      "size": 2813
+    },
+    {
+      "path": "text_encoder/model-00001-of-00004.safetensors",
+      "size": 4973910744
+    },
+    {
+      "path": "text_encoder/model-00002-of-00004.safetensors",
+      "size": 4988364288
+    },
+    {
+      "path": "text_encoder/model-00003-of-00004.safetensors",
+      "size": 4954202112
+    },
+    {
+      "path": "text_encoder/model-00004-of-00004.safetensors",
+      "size": 1869001848
+    },
+    {
+      "path": "text_encoder/model.safetensors.index.json",
+      "size": 64641
+    },
+    {
+      "path": "tokenizer/chat_template.jinja",
+      "size": 7756
+    },
+    {
+      "path": "tokenizer/tokenizer.json",
+      "size": 19989325
+    },
+    {
+      "path": "tokenizer/tokenizer_config.json",
+      "size": 1123
+    },
+    {
+      "path": "transformer/config.json",
+      "size": 240
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model-00001-of-00003.safetensors",
+      "size": 4991978016
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model-00002-of-00003.safetensors",
+      "size": 4983137016
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model-00003-of-00003.safetensors",
+      "size": 189549184
+    },
+    {
+      "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+      "size": 40298
+    },
+    {
+      "path": "vae/config.json",
+      "size": 838
+    },
+    {
+      "path": "vae/diffusion_pytorch_model.safetensors",
+      "size": 249521372
+    }
+  ]
+}

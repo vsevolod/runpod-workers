@@ -1,0 +1,31 @@
+{
+  "id": "9zb0wyo61ck3wk",
+  "name": "image-workers",
+  "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+  "workers": {
+    "idleTimeout": 10,
+    "max": 1,
+    "min": 0
+  },
+  "gpu": {
+    "allowedCudaVersions": [
+      "12.8",
+      "12.9",
+      "13.0",
+      "13.1",
+      "13.2",
+      "13.3",
+      "13.4"
+    ],
+    "count": 1,
+    "excludedTypes": [
+      "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb"
+    ],
+    "minCudaVersion": "12.8",
+    "pools": [
+      "AMPERE_24",
+      "ADA_24"
+    ]
+  },
+  "checked_at": "2026-10-19T16:40:05.488484+00:00"
+}

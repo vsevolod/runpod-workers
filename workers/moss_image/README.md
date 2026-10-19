@@ -39,7 +39,10 @@ the variant default; `[]` disables skipping. Other options are errors.
 Dimensions default to 1024x1024, must be multiples of 16 in 256..4096, and
 must fit 4,194,304 pixels. These are input limits, not calibrated VRAM bounds.
 The shared `reference_megapixels` field does not change generation dimensions.
-No MOSS capacity row has been calibrated.
+The [2026-10-19 capacity run](../../docs/benchmarks/2026-10-19-moss/README.md)
+confirmed single-image square generation through 2048x2048 in Base/Turbo on
+RTX 4090 24 GB and L40S 48 GB with CPU offload. Output-limit behavior still
+uses explicit dimensions rather than a shared reference-budget table row.
 
 Common `num_inference_steps` can override the default (1..200); Turbo counts
 other than 8 are experimental. Base accepts finite nonnegative CFG; exactly
@@ -111,7 +114,8 @@ CUDA image: MOSS Base/Turbo and repeats, Krea Identity V2, Qwen Turbo/Base,
 and MOSS Turbo after reloading. MOSS outputs were 1024x1024; warm API times
 were 67.8s for Base and 27.3s for Turbo. Repeated MOSS outputs matched their
 respective first outputs byte-for-byte, including after family switches.
-This is a smoke check, not a resolution or capacity calibration.
+This deployment check is separate from the subsequent
+[40-generation capacity calibration](../../docs/benchmarks/2026-10-19-moss/README.md).
 
 ## Sources and licenses
 

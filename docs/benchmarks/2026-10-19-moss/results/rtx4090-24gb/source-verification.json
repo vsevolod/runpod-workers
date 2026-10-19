@@ -1,0 +1,7 @@
+{
+  "workers/moss_image/moss_image_infer/pipeline.py": "e9ee0362a0ba615902910e6e32109fb0d7ab942621cd4fec784c5fb41fa03f9e",
+  "workers/moss_image/moss_image_infer/vendor/pipeline_moss_image.py": "1dac1aca9feb1bfdfc727a401e4b67d61a505d3190706d1b7d2d784f88678b31",
+  "workers/moss_image/moss_image_infer/lora.py": "425678e571c837a6f456f58afcac5a15d44e1992c80b5192e0452215192d008f",
+  "workers/moss_image/moss_image_infer/request.py": "a506f9e7b547480d22c401fbef9ee0776255bcc28099c575641ac74c8f2793c7",
+  "workers/shared/api/contract.py": "045b4b0bd4a66c1f8a90fbcdcb3bb30f1096d5fb819d087be51b4ce30e3c6195"
+}
