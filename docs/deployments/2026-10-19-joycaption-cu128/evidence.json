@@ -1,0 +1,115 @@
+{
+  "verified_at_utc": "2026-10-19T08:15:56.247756+00:00",
+  "release": {
+    "source_commit": "db41ce435ed6f9289a8ffc6aaf10425eaad2b287",
+    "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:3bcbc0df50c7f08d170aca1171f1d1ccb878f6be4cfae28901df711390f4db22",
+    "ci_run": 39218904855,
+    "anonymous_registry_pull": "verified"
+  },
+  "configuration": {
+    "id": "yn0krhztuguxxm",
+    "version": 43,
+    "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:3bcbc0df50c7f08d170aca1171f1d1ccb878f6be4cfae28901df711390f4db22",
+    "native_git_build": null,
+    "minCudaVersion": "12.8",
+    "allowedCudaVersions": "12.8,12.9,13.0,13.1,13.2,13.3,13.4",
+    "workersMin": 0,
+    "workersMax": 1,
+    "gpuIds": "AMPERE_24",
+    "volumeIds": [
+      "cmv1ht9mt000007lb00es0w9n"
+    ]
+  },
+  "standalone_gpu_smoke": {
+    "runtime": {
+      "torch": "2.8.0+cu128",
+      "torchvision": "0.23.0+cu128",
+      "cuda_build": "12.8",
+      "transformers": "4.51.3",
+      "python": "3.12.15",
+      "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+      "capability": [
+        12,
+        0
+      ],
+      "total_vram_bytes": 25367150592,
+      "model_source": "/workspace/joycaption",
+      "cuda_tensor_check": "passed"
+    },
+    "model_load_s": 141.65487123298226,
+    "fixture_sha256": "053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+    "cases": [
+      {
+        "index": 0,
+        "elapsed_s": 6.511638334020972,
+        "result": {
+          "caption": "Photograph of a confident, middle-aged man with a medium build, short curly black hair, and light brown skin. He wears glasses with a thin metal frame and a light gray suit over a light blue dress shirt, which is unbuttoned at the top. His black belt has a silver buckle, and he stands with one hand in his pocket and the other by his side. The background is a plain, light gray studio wall, creating a minimalist setting that highlights his attire. His expression is calm and self-assured, with a slight smile. The image is well-lit, emphasizing the textures of the suit fabric and the crispness of his shirt.",
+          "prompt": "Write a descriptive caption for this image.",
+          "model": "fancyfeast/llama-joycaption-beta-one-hf-llava"
+        },
+        "peak_allocated_bytes": 17171255808,
+        "peak_reserved_bytes": 17207132160
+      },
+      {
+        "index": 1,
+        "elapsed_s": 6.195616137993056,
+        "result": {
+          "caption": "Photograph of a confident, middle-aged man with a medium build, short curly black hair, and light brown skin. He wears glasses with a thin metal frame and a light gray suit over a light blue dress shirt, which is unbuttoned at the top. His black belt has a silver buckle, and he stands with one hand in his pocket and the other by his side. The background is a plain, light gray studio wall, creating a minimalist setting that highlights his attire. His expression is calm and self-assured, with a slight smile. The image is well-lit, emphasizing the textures of the suit fabric and the crispness of his shirt.",
+          "prompt": "Write a descriptive caption for this image.",
+          "model": "fancyfeast/llama-joycaption-beta-one-hf-llava"
+        },
+        "peak_allocated_bytes": 17171255808,
+        "peak_reserved_bytes": 17207132160
+      }
+    ],
+    "successful_cases": 2
+  },
+  "production_api_smoke": {
+    "delayTime": 273541,
+    "executionTime": 6639,
+    "id": "360ef88f-e648-47bf-a0b2-75ee879e00e0-e1",
+    "output": {
+      "caption": "Photograph of a medium-built, light-skinned man with short, curly black hair and glasses, standing against a plain white background. He is wearing a light gray suit with a matching blazer and trousers, a light blue dress shirt, and a black belt with a silver buckle. His left hand is in his trouser pocket, while his right arm rests by his side. He has a slight smile and a confident posture. The suit is well-fitted, and the shirt is buttoned up, with the top button undone. The lighting is even, highlighting the textures and colors of the clothing.",
+      "model": "fancyfeast/llama-joycaption-beta-one-hf-llava",
+      "prompt": "Write a long descriptive caption for this image in a formal tone."
+    },
+    "status": "COMPLETED",
+    "workerId": "gifl7av1ii8s9m",
+    "verified": true,
+    "fixture_sha256": "053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+  },
+  "production_smoke_worker": {
+    "dataCenterId": "US-PA-1",
+    "gpuCount": 1,
+    "gpuTypeId": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+    "id": "gifl7av1ii8s9m",
+    "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:3bcbc0df50c7f08d170aca1171f1d1ccb878f6be4cfae28901df711390f4db22",
+    "isStale": false,
+    "startedAt": "2026-10-19T08:11:41.97Z",
+    "status": "IDLE",
+    "version": 43
+  },
+  "test_pod_cleanup": {
+    "pod": "x3n273nq1i9hgr",
+    "status": "EXITED",
+    "runtime": null
+  },
+  "global_evidence": "/workspace/benchmarks/2026-10-19-joycaption-cu128",
+  "production_fitness_checks": [
+    {
+      "source": "container",
+      "line": "{\"requestId\": null, \"message\": \"CUDA initialization passed: 1 device(s) initialized successfully\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T08:14:05.971228201Z"
+    },
+    {
+      "source": "container",
+      "line": "{\"requestId\": null, \"message\": \"GPU compute benchmark passed: Matrix multiply completed in 71ms\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T08:14:06.206570479Z"
+    },
+    {
+      "source": "container",
+      "line": "{\"requestId\": null, \"message\": \"All fitness checks passed. (812.45ms)\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T08:14:06.206583057Z"
+    }
+  ]
+}
