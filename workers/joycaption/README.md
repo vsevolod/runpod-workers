@@ -8,6 +8,7 @@ Thin serverless worker: **image → English descriptive caption**. No ComfyUI, n
 | **Upstream** | [fpgaminer/joycaption](https://github.com/fpgaminer/joycaption) |
 | **GPU** | **24 GB** class (bf16 model ≈ **17 GB** VRAM) |
 | **Dtype** | `bfloat16` (native) |
+| **Runtime** | PyTorch `2.8.0+cu128`, torchvision `0.23.0+cu128`, CUDA 12.8.1; shared constraints also apply to requirements installation |
 | **Template patterns** | [worker-sdxl](https://github.com/runpod-workers/worker-sdxl), monorepo `workers/krea2` |
 
 ## Layout
@@ -121,10 +122,12 @@ Video is **not** supported (image-only VLM).
 
 1. Network Volume **≥ 25 GB** in the endpoint datacenter.
 2. Pod + volume → `download_weights.py --output /runpod-volume/joycaption`.
-3. Serverless → Import Git → Dockerfile path `workers/joycaption/Dockerfile`,
-   build context **repository root**.
+3. Build CI publishes the validated image as
+   `ghcr.io/vsevolod/runpod-workers-joycaption:<commit SHA>`; deploy its immutable
+   digest after GPU validation. The Dockerfile uses **repository root** context.
 4. Mount volume at `/runpod-volume`.
-5. GPU: **24 GB**.
+5. GPU: **24 GB**, host CUDA **12.8+**. CUDA 12.8 Torch includes Blackwell
+   `sm_120`; older CUDA builds can load weights but fail the first GPU operation.
 6. Env: `MODEL_DIR=/runpod-volume/joycaption`, `LOCAL_FILES_ONLY=1`.
 7. Smoke with `test_input.json` (tiny PNG; well under 10 MB payload).
 

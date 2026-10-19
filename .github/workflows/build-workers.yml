@@ -8,6 +8,7 @@ on:
       - workers/shared/**
       - workers/qwen_image_21/**
       - workers/krea2/**
+      - workers/joycaption/**
   workflow_dispatch:
     inputs:
       publish:
@@ -26,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        worker: [qwen_image_21, krea2]
+        worker: [qwen_image_21, krea2, joycaption]
     env:
       WORKER: ${{ matrix.worker }}
     steps:
@@ -52,8 +53,12 @@ jobs:
         shell: bash
         run: |
           docker run --rm --entrypoint uv "$IMAGE" pip check --python /.venv/bin/python
-          docker run --rm --entrypoint python "$IMAGE" -u /app/shared/bootstrap.py --help
           docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
+      - name: Check image worker bootstrap and shared helpers
+        if: matrix.worker != 'joycaption'
+        shell: bash
+        run: |
+          docker run --rm --entrypoint python "$IMAGE" -u /app/shared/bootstrap.py --help
           docker run --rm --entrypoint python "$IMAGE" -m unittest discover -s /app/shared/tests -p 'test_*.py'
       - name: Check model runtime imports without loading weights
         shell: bash
@@ -63,16 +68,30 @@ jobs:
           assert torch.__version__ == "2.8.0+cu128", torch.__version__
           assert torchvision.__version__ == "0.23.0+cu128", torchvision.__version__
           assert torch.version.cuda == "12.8", torch.version.cuda
-          importlib.import_module(os.environ["WORKER"] + "_infer.pipeline")
-          if os.environ["WORKER"] == "qwen_image_21":
+          worker = os.environ["WORKER"]
+          if worker == "joycaption":
+              import caption_utils, schemas
+              from transformers import AutoProcessor, LlavaForConditionalGeneration
+              compiled_arches = torch._C._cuda_getArchFlags().split()
+              assert "sm_120" in compiled_arches, compiled_arches
+          elif worker == "qwen_image_21":
+              importlib.import_module(worker + "_infer.pipeline")
               from diffusers import QwenImage21Pipeline
               assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
           else:
+              importlib.import_module(worker + "_infer.pipeline")
               from diffusers import AutoencoderKLQwenImage
               from transformers import Qwen3VLForConditionalGeneration
           print("Runtime imports OK; torch=" + torch.__version__ +
                 " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
+      - name: Check JoyCaption image decoding and prompt helpers
+        if: matrix.worker == 'joycaption'
+        shell: bash
+        run: |
+          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" \
+            --env PYTHONPATH=/src/workers/joycaption --entrypoint sh "$IMAGE" -c \
+            'uv pip install --no-cache -c /app/torch-constraints.txt pytest && python -m pytest /src/workers/joycaption/tests -q'
       - name: Check Qwen loading, LoRAs and reference preprocessing
         if: matrix.worker == 'qwen_image_21'
         shell: bash
