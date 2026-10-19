@@ -1,0 +1,1895 @@
+{
+  "release": {
+    "source_commit": "0a98b047854e549d830234dfeb525d02cfabccd6",
+    "branch": "fix/image-component-prefetch",
+    "endpoint": "9zb0wyo61ck3wk",
+    "local_tests": 406,
+    "dispatch_requested_at": 1792437850.398871,
+    "ci_run": 39310676228,
+    "ci_url": "https://github.com/vsevolod/runpod-workers/actions/runs/39310676228",
+    "ci_image_conclusion": "success",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:4a971438c674fe6542934c14272701a4272c8c4cead234280349c37642afed5c",
+    "image_created": "2026-10-19T19:28:06.517792027Z",
+    "compressed_bytes": 7182971152,
+    "anonymous_pull": true,
+    "ci_conclusion": "success"
+  },
+  "ci_image_tests": {
+    "job_id": 118259124712,
+    "test_suite_counts": [
+      41,
+      21,
+      187,
+      139,
+      18
+    ],
+    "total_tests": 406,
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "final_configuration": {
+    "id": "9zb0wyo61ck3wk",
+    "name": "image-workers",
+    "version": 52,
+    "workersMin": 0,
+    "workersMax": 1,
+    "idleTimeout": 10,
+    "gpuIds": "AMPERE_24,ADA_24,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+    "allowedCudaVersions": "12.8,12.9,13.0,13.1,13.2,13.3,13.4",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:4a971438c674fe6542934c14272701a4272c8c4cead234280349c37642afed5c",
+    "containerDiskInGb": 200
+  },
+  "worker_readback": {
+    "endpointVersion": 52,
+    "summary": {
+      "idle": 0,
+      "initializing": 0,
+      "running": 1,
+      "throttled": 2,
+      "total": 3,
+      "unhealthy": 0
+    },
+    "workers": [
+      {
+        "dataCenterId": "EUR-IS-2",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "imphkih9z27zvk",
+        "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:4a971438c674fe6542934c14272701a4272c8c4cead234280349c37642afed5c",
+        "isStale": false,
+        "startedAt": "2026-10-19T19:38:54.802Z",
+        "status": "RUNNING",
+        "uptimeSeconds": 1061,
+        "version": 52
+      },
+      {
+        "dataCenterId": "EUR-IS-2",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "pwlhk0h4t66bp8",
+        "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:4a971438c674fe6542934c14272701a4272c8c4cead234280349c37642afed5c",
+        "isStale": false,
+        "startedAt": "2026-10-19T19:35:01.779Z",
+        "status": "THROTTLED",
+        "version": 52
+      },
+      {
+        "dataCenterId": "EUR-IS-2",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "tff0ohzwhjqwyz",
+        "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:4a971438c674fe6542934c14272701a4272c8c4cead234280349c37642afed5c",
+        "isStale": false,
+        "startedAt": "2026-10-19T19:36:27.285Z",
+        "status": "THROTTLED",
+        "version": 52
+      }
+    ]
+  },
+  "scope": "Seven API generation/edit smoke cases on the deployed image; not a controlled speed or GPU capacity benchmark.",
+  "cases": [
+    {
+      "delayTime": 232136,
+      "executionTime": 188060,
+      "id": "1c733c78-d46d-43cd-af18-92000e430aad-e1",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "moss-turbo-cold",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    },
+    {
+      "delayTime": 48413,
+      "executionTime": 68017,
+      "id": "91cfcb6c-eafa-4d01-9273-df01bdb51dcd-e1",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "moss-base-warm",
+      "output": {
+        "guidance_scale": 3,
+        "height": 1024,
+        "lora_revision": null,
+        "loras": [],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 50,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "ddc227b4cec55f45fb864cd9051efb66f1f4743372b88ae99d9a1e85cbf88480",
+      "image_bytes": 1115392,
+      "channel_stddev": [
+        56.12040513628768,
+        76.30341089347377,
+        70.12288442160448
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "base"
+        },
+        "num_inference_steps": 50,
+        "guidance_scale": 3.0
+      }
+    },
+    {
+      "delayTime": 87,
+      "executionTime": 26689,
+      "id": "79706cfc-5c8f-4e85-8146-b5eecc928769-e1",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "moss-turbo-warm",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    },
+    {
+      "delayTime": 85,
+      "executionTime": 156143,
+      "id": "abf03db6-4a8e-40ec-ac00-f85dcf3b7887-e2",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "qwen-base-cold",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "base"
+        },
+        "model_variant": "base",
+        "num_inference_steps": 40,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "67e50d8e95498770f419310f7412ba1b90b3171353075e7269df9cf985761e15",
+      "image_bytes": 948596,
+      "channel_stddev": [
+        78.22902746501244,
+        73.86765798730575,
+        64.78833720259367
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 40,
+        "guidance_scale": 1.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "base"
+        }
+      }
+    },
+    {
+      "delayTime": 23054,
+      "executionTime": 151986,
+      "id": "3a7413de-4a52-481c-bbfc-7c9867d2fb40-e2",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "qwen-turbo-cold",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1-Turbo",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "turbo"
+        },
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "checkpoint",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "76c3d281e8f5e9d0628a5ddb3c55a2bc4ad67f25c15dc9cba61dd8b81e8e5aaf",
+      "image_bytes": 904214,
+      "channel_stddev": [
+        80.3955927290054,
+        75.83862854726783,
+        66.68657808282805
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "turbo"
+        }
+      }
+    },
+    {
+      "delayTime": 28549,
+      "executionTime": 130064,
+      "id": "fa2d909a-b27c-489b-9148-7b96cf8a3b38-e1",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "krea-identity",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "krea2",
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 2,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "b5cd2399d7764532d7e1db44e3a5a40af6eda2e187c9c50e4591f5762da648cf",
+      "image_bytes": 700573,
+      "channel_stddev": [
+        82.17730626760356,
+        75.4678788832624,
+        68.54070322887247
+      ],
+      "input": {
+        "model": "krea2",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 8,
+        "guidance_scale": 0.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "delayTime": 83,
+      "executionTime": 30848,
+      "id": "60208347-b4bc-437e-9190-b8a5ac8bba24-e2",
+      "status": "COMPLETED",
+      "workerId": "imphkih9z27zvk",
+      "case": "moss-turbo-return",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    }
+  ],
+  "moss_component_overlap": [
+    {
+      "loading_component": "transformer",
+      "load_begin": "2026-10-19T19:40:36.051702540Z",
+      "load_end": "2026-10-19T19:40:36.115691774Z",
+      "downloading_component": "text_encoder",
+      "download_begin": "2026-10-19T19:40:36.049579272Z",
+      "download_end": "2026-10-19T19:41:36.149532252Z",
+      "observed_overlap_seconds": 0.063989
+    },
+    {
+      "loading_component": "text_encoder",
+      "load_begin": "2026-10-19T19:41:36.161399754Z",
+      "load_end": "2026-10-19T19:41:38.432097365Z",
+      "downloading_component": "vae",
+      "download_begin": "2026-10-19T19:41:36.149532252Z",
+      "download_end": "2026-10-19T19:41:40.843868120Z",
+      "observed_overlap_seconds": 2.270698
+    },
+    {
+      "loading_component": "vae",
+      "load_begin": "2026-10-19T19:41:40.868608529Z",
+      "load_end": "2026-10-19T19:41:40.926988285Z",
+      "downloading_component": "turbo_lora",
+      "download_begin": "2026-10-19T19:41:40.845001074Z",
+      "download_end": "2026-10-19T19:41:50.646965870Z",
+      "observed_overlap_seconds": 0.05838
+    }
+  ],
+  "qwen_component_overlap": [
+    {
+      "loading_component": "transformer",
+      "load_begin": "2026-10-19T19:46:02.179301746Z",
+      "load_end": "2026-10-19T19:46:02.236851012Z",
+      "downloading_component": "text_encoder",
+      "download_begin": "2026-10-19T19:46:02.160268303Z",
+      "download_end": "2026-10-19T19:46:20.106642058Z",
+      "observed_overlap_seconds": 0.05755
+    }
+  ],
+  "moss_turbo_repeat_and_family_reload_identical": true,
+  "matches_previous_deployment_fixture": {
+    "moss-turbo-cold": true,
+    "moss-base-warm": true,
+    "moss-turbo-warm": true,
+    "qwen-base-cold": true,
+    "qwen-turbo-cold": true,
+    "krea-identity": true,
+    "moss-turbo-return": true
+  },
+  "runtime_logs": {
+    "moss-turbo-cold": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:39:21,713 job id=1c733c78-d46d-43cd-af18-92000e430aad-e1 model=moss_image type=image_generate steps=8 guidance=1.0 sampler=euler seed=42 refs=0 size=1024x1024 model_options={'variant': 'turbo', 'shift': 5.0, 'uncond_skip_layers': None}",
+        "ts": "2026-10-19T19:39:21.714128673Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:39:21,714 stage=inference begin",
+        "ts": "2026-10-19T19:39:21.714914688Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :48   2026-10-19 19:39:21,714 backend_load begin model=moss_image",
+        "ts": "2026-10-19T19:39:21.715048448Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download begin path=/models/moss_image_sft",
+        "ts": "2026-10-19T19:39:21.760103590Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=transformer",
+        "ts": "2026-10-19T19:39:23.476136459Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=transformer path=/models/moss_image_sft/transformer",
+        "ts": "2026-10-19T19:40:36.049579272Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=transformer elapsed_s=72.58",
+        "ts": "2026-10-19T19:40:36.051668220Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=transformer",
+        "ts": "2026-10-19T19:40:36.051702540Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=transformer elapsed_s=0.06",
+        "ts": "2026-10-19T19:40:36.115691774Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=text_encoder",
+        "ts": "2026-10-19T19:40:36.115723294Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=text_encoder path=/models/moss_image_sft/text_encoder",
+        "ts": "2026-10-19T19:41:36.149532252Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=text_encoder elapsed_s=60.05",
+        "ts": "2026-10-19T19:41:36.161371204Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=text_encoder",
+        "ts": "2026-10-19T19:41:36.161399754Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=text_encoder elapsed_s=2.27",
+        "ts": "2026-10-19T19:41:38.432097365Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=vae",
+        "ts": "2026-10-19T19:41:38.432134725Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=vae path=/models/moss_image_sft/vae",
+        "ts": "2026-10-19T19:41:40.843868120Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download done elapsed_s=139.08",
+        "ts": "2026-10-19T19:41:40.844476277Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download begin path=/models/moss_image_sft/turbo",
+        "ts": "2026-10-19T19:41:40.845001074Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=vae elapsed_s=2.44",
+        "ts": "2026-10-19T19:41:40.868580649Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=vae",
+        "ts": "2026-10-19T19:41:40.868608529Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=vae elapsed_s=0.06",
+        "ts": "2026-10-19T19:41:40.926988285Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=turbo_lora",
+        "ts": "2026-10-19T19:41:40.982717997Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download done elapsed_s=9.80",
+        "ts": "2026-10-19T19:41:50.646965870Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=turbo_lora path=/models/moss_image_sft/turbo/lora_latest.safetensors",
+        "ts": "2026-10-19T19:41:50.647497417Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=all path=/models/moss_image_sft",
+        "ts": "2026-10-19T19:41:50.648053094Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=turbo_lora elapsed_s=9.67",
+        "ts": "2026-10-19T19:41:50.653203384Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=turbo_lora",
+        "ts": "2026-10-19T19:41:50.653238564Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=turbo_lora elapsed_s=0.16",
+        "ts": "2026-10-19T19:41:50.815683166Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:41:50.816011414Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.11",
+        "ts": "2026-10-19T19:41:50.929985903Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:41:50.930029163Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:41:50.930057873Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :61   2026-10-19 19:41:50,930 backend_load done model=moss_image",
+        "ts": "2026-10-19T19:41:50.930445511Z"
+      },
+      {
+        "source": "container",
+        "line": "pipeline.py         :52   2026-10-19 19:41:50,931 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+        "ts": "2026-10-19T19:41:50.931304926Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:42:28,795 stage=inference done elapsed_s=187.08",
+        "ts": "2026-10-19T19:42:28.795986562Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:42:28,795 stage=image_delivery begin",
+        "ts": "2026-10-19T19:42:28.796029691Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:42:29,171 stage=image_delivery done elapsed_s=0.38",
+        "ts": "2026-10-19T19:42:29.171869965Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"1c733c78-d46d-43cd-af18-92000e430aad-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:42:29.701248111Z"
+      }
+    ],
+    "moss-base-warm": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:43:30,175 job id=91cfcb6c-eafa-4d01-9273-df01bdb51dcd-e1 model=moss_image type=image_generate steps=50 guidance=3.0 sampler=euler seed=42 refs=0 size=1024x1024 model_options={'variant': 'base', 'shift': 5.0, 'uncond_skip_layers': None}",
+        "ts": "2026-10-19T19:43:30.175604391Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:43:30,175 stage=inference begin",
+        "ts": "2026-10-19T19:43:30.175707840Z"
+      },
+      {
+        "source": "container",
+        "line": "pipeline.py         :52   2026-10-19 19:43:30,176 MOSS variant=base steps=50 cfg=3.0 shift=5.0 lora=none strength=0.0",
+        "ts": "2026-10-19T19:43:30.176796144Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:44:37,244 stage=inference done elapsed_s=67.07",
+        "ts": "2026-10-19T19:44:37.245156281Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:44:37,244 stage=image_delivery begin",
+        "ts": "2026-10-19T19:44:37.245207810Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:44:37,671 stage=image_delivery done elapsed_s=0.43",
+        "ts": "2026-10-19T19:44:37.672212833Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"91cfcb6c-eafa-4d01-9273-df01bdb51dcd-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:44:38.166107348Z"
+      }
+    ],
+    "moss-turbo-warm": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:44:40,773 job id=79706cfc-5c8f-4e85-8146-b5eecc928769-e1 model=moss_image type=image_generate steps=8 guidance=1.0 sampler=euler seed=42 refs=0 size=1024x1024 model_options={'variant': 'turbo', 'shift': 5.0, 'uncond_skip_layers': None}",
+        "ts": "2026-10-19T19:44:40.773951515Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:44:40,773 stage=inference begin",
+        "ts": "2026-10-19T19:44:40.774103334Z"
+      },
+      {
+        "source": "container",
+        "line": "pipeline.py         :52   2026-10-19 19:44:40,775 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+        "ts": "2026-10-19T19:44:40.775609485Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:45:06,611 stage=inference done elapsed_s=25.84",
+        "ts": "2026-10-19T19:45:06.611979896Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:45:06,611 stage=image_delivery begin",
+        "ts": "2026-10-19T19:45:06.612034945Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:45:06,940 stage=image_delivery done elapsed_s=0.33",
+        "ts": "2026-10-19T19:45:06.941050840Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"79706cfc-5c8f-4e85-8146-b5eecc928769-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:45:07.397648486Z"
+      }
+    ],
+    "qwen-base-cold": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:45:24,479 job id=abf03db6-4a8e-40ec-ac00-f85dcf3b7887-e2 model=qwen_image_21 type=image_edit steps=40 guidance=1.0 sampler=euler seed=42 refs=3 size=768x1024 model_options={'variant': 'base', 'output_resolution': None}",
+        "ts": "2026-10-19T19:45:24.479913123Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:45:24,479 stage=inference begin",
+        "ts": "2026-10-19T19:45:24.480098202Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :32   2026-10-19 19:45:24,480 model_unload begin model=moss_image",
+        "ts": "2026-10-19T19:45:24.480119852Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :38   2026-10-19 19:45:27,344 model_unload done model=moss_image cuda_allocated_bytes=9568256",
+        "ts": "2026-10-19T19:45:27.344463312Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :48   2026-10-19 19:45:27,344 backend_load begin model=qwen_image_21",
+        "ts": "2026-10-19T19:45:27.344511662Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :61   2026-10-19 19:45:27,348 backend_load done model=qwen_image_21",
+        "ts": "2026-10-19T19:45:27.348221111Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :13   2026-10-19 19:45:27,696 LoRA request: lenovo_qwen21@1",
+        "ts": "2026-10-19T19:45:27.696310888Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:45:27,699 stage=startup begin pid=52 rss_kib=11551888 cgroup_used_bytes=40154542080 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:27.699202622Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:45:27,699 stage=runtime_imports begin pid=52 rss_kib=11551888 cgroup_used_bytes=40154796032 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:27.700010727Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:45:27,715 stage=runtime_imports done elapsed_s=0.02 pid=52 rss_kib=11551896 cgroup_used_bytes=40159899648 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:27.715862588Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:45:27,723 stage=cuda_probe begin pid=52 rss_kib=11551904 cgroup_used_bytes=40161357824 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:27.723838263Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:45:27,724 stage=cuda_probe done elapsed_s=0.00 pid=52 rss_kib=11551904 cgroup_used_bytes=40161619968 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:27.724731338Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=config",
+        "ts": "2026-10-19T19:45:27.724758758Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download begin path=/models/qwen_image_21_base",
+        "ts": "2026-10-19T19:45:27.744103419Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=config path=/models/qwen_image_21_base",
+        "ts": "2026-10-19T19:45:30.338920889Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=config elapsed_s=2.64",
+        "ts": "2026-10-19T19:45:30.363438591Z"
+      },
+      {
+        "source": "container",
+        "line": "\rFetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]diagnostics.py      :64   2026-10-19 19:45:30,364 stage=model_source begin pid=52 rss_kib=11551904 cgroup_used_bytes=40234848256 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:30.365056171Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:45:30,367 stage=model_source done elapsed_s=0.00 pid=52 rss_kib=11551904 cgroup_used_bytes=40234848256 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:30.367436488Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:45:30,368 stage=lora_catalog begin pid=52 rss_kib=11551904 cgroup_used_bytes=40234819584 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:30.368712131Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:45:30,371 stage=lora_catalog done elapsed_s=0.00 pid=52 rss_kib=11551904 cgroup_used_bytes=40234819584 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:30.371182207Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:45:30,372 stage=base_model_load begin pid=52 rss_kib=11551904 cgroup_used_bytes=40234819584 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:45:30.372494460Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=transformer",
+        "ts": "2026-10-19T19:45:30.372501650Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=transformer path=/models/qwen_image_21_base/transformer",
+        "ts": "2026-10-19T19:46:02.160268303Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=transformer elapsed_s=31.81",
+        "ts": "2026-10-19T19:46:02.179272676Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=transformer",
+        "ts": "2026-10-19T19:46:02.179301746Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=transformer elapsed_s=0.06",
+        "ts": "2026-10-19T19:46:02.236851012Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=text_encoder",
+        "ts": "2026-10-19T19:46:02.236879571Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=text_encoder path=/models/qwen_image_21_base/text_encoder",
+        "ts": "2026-10-19T19:46:20.106642058Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=text_encoder elapsed_s=17.88",
+        "ts": "2026-10-19T19:46:20.118630821Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=text_encoder",
+        "ts": "2026-10-19T19:46:20.118657421Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=text_encoder elapsed_s=0.42",
+        "ts": "2026-10-19T19:46:20.535921978Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=vae",
+        "ts": "2026-10-19T19:46:20.535969738Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=vae path=/models/qwen_image_21_shared/texture_fix_vae",
+        "ts": "2026-10-19T19:46:34.792808835Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download done elapsed_s=67.05",
+        "ts": "2026-10-19T19:46:34.792843515Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=all path=/models/qwen_image_21_base",
+        "ts": "2026-10-19T19:46:34.793233343Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=vae elapsed_s=14.27",
+        "ts": "2026-10-19T19:46:34.809599920Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=vae",
+        "ts": "2026-10-19T19:46:34.809628120Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=vae elapsed_s=0.15",
+        "ts": "2026-10-19T19:46:34.961661403Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:46:34,962 stage=pipeline_components_load begin pid=52 rss_kib=11585340 cgroup_used_bytes=47235162112 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:34.962638888Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:46:35,602 stage=pipeline_components_load done elapsed_s=0.64 pid=52 rss_kib=11625188 cgroup_used_bytes=45843542016 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.603186756Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:46:35,603 stage=base_model_load done elapsed_s=65.23 pid=52 rss_kib=11625188 cgroup_used_bytes=45843542016 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.603804353Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:46:35,604 stage=sampling_config begin pid=52 rss_kib=11625188 cgroup_used_bytes=45843542016 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.604392189Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:46:35.605599423Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:46:35,605 stage=sampling_config done elapsed_s=0.00 pid=52 rss_kib=11625188 cgroup_used_bytes=45843451904 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.605630082Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:46:35.605742672Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:46:35,606 stage=placement_cpu begin pid=52 rss_kib=11625188 cgroup_used_bytes=45843451904 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.606256869Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:46:35,638 stage=placement_cpu done elapsed_s=0.03 pid=52 rss_kib=11625188 cgroup_used_bytes=45843451904 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.638910805Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:46:35,639 stage=startup done elapsed_s=67.94 pid=52 rss_kib=11625188 cgroup_used_bytes=45843451904 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24706220032 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:46:35.639643091Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:46:35.639828919Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:46:35.639921229Z"
+      },
+      {
+        "source": "container",
+        "line": "adapter_cache.py    :54   2026-10-19 19:46:36,078 stage=lora_download begin name=lenovo_qwen21 bytes=79743896 path=/models/lora_cache/0c0d9e18b693ef63f43cd38a/lenovo_qwen21.safetensors",
+        "ts": "2026-10-19T19:46:36.078900944Z"
+      },
+      {
+        "source": "container",
+        "line": "adapter_cache.py    :71   2026-10-19 19:46:38,405 stage=lora_download done name=lenovo_qwen21 elapsed_s=2.33 path=/models/lora_cache/0c0d9e18b693ef63f43cd38a/lenovo_qwen21.safetensors",
+        "ts": "2026-10-19T19:46:38.405289567Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:47:59,695 stage=inference done elapsed_s=155.22",
+        "ts": "2026-10-19T19:47:59.696075220Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:47:59,695 stage=image_delivery begin",
+        "ts": "2026-10-19T19:47:59.696160330Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:48:00,027 stage=image_delivery done elapsed_s=0.33",
+        "ts": "2026-10-19T19:48:00.027458386Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"abf03db6-4a8e-40ec-ac00-f85dcf3b7887-e2\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:48:00.572566028Z"
+      }
+    ],
+    "qwen-turbo-cold": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:48:36,959 job id=3a7413de-4a52-481c-bbfc-7c9867d2fb40-e2 model=qwen_image_21 type=image_edit steps=8 guidance=1.0 sampler=euler seed=42 refs=3 size=768x1024 model_options={'variant': 'turbo', 'output_resolution': None}",
+        "ts": "2026-10-19T19:48:36.959781273Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:48:36,959 stage=inference begin",
+        "ts": "2026-10-19T19:48:36.959829813Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :32   2026-10-19 19:48:36,959 model_unload begin model=moss_image",
+        "ts": "2026-10-19T19:48:36.959836103Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :38   2026-10-19 19:48:39,793 model_unload done model=moss_image cuda_allocated_bytes=9568256",
+        "ts": "2026-10-19T19:48:39.793912166Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :48   2026-10-19 19:48:39,793 backend_load begin model=qwen_image_21",
+        "ts": "2026-10-19T19:48:39.793971865Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :61   2026-10-19 19:48:39,793 backend_load done model=qwen_image_21",
+        "ts": "2026-10-19T19:48:39.793980265Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :13   2026-10-19 19:48:40,392 LoRA request: lenovo_qwen21@1",
+        "ts": "2026-10-19T19:48:40.392870405Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:48:40,395 stage=startup begin pid=52 rss_kib=11721320 cgroup_used_bytes=73693057024 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:40.395599470Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:48:40,396 stage=runtime_imports begin pid=52 rss_kib=11721320 cgroup_used_bytes=73693057024 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:40.396432055Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:48:40,397 stage=runtime_imports done elapsed_s=0.00 pid=52 rss_kib=11721320 cgroup_used_bytes=73693319168 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:40.397222931Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:48:40,404 stage=cuda_probe begin pid=52 rss_kib=11721320 cgroup_used_bytes=73695653888 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:40.404803768Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:48:40,405 stage=cuda_probe done elapsed_s=0.00 pid=52 rss_kib=11721320 cgroup_used_bytes=73695621120 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:40.405724633Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=config",
+        "ts": "2026-10-19T19:48:40.405755313Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download begin path=/models/qwen_image_21_turbo",
+        "ts": "2026-10-19T19:48:40.446824192Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=config path=/models/qwen_image_21_turbo",
+        "ts": "2026-10-19T19:48:42.949999496Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=config elapsed_s=2.56",
+        "ts": "2026-10-19T19:48:42.969172408Z"
+      },
+      {
+        "source": "container",
+        "line": "\rFetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]diagnostics.py      :64   2026-10-19 19:48:42,970 stage=model_source begin pid=52 rss_kib=11721320 cgroup_used_bytes=73761116160 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:42.971072347Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:48:42,972 stage=model_source done elapsed_s=0.00 pid=52 rss_kib=11721320 cgroup_used_bytes=73761116160 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:42.972730358Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:48:42,973 stage=lora_catalog begin pid=52 rss_kib=11721320 cgroup_used_bytes=73761116160 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:42.974004161Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:48:42,976 stage=lora_catalog done elapsed_s=0.00 pid=52 rss_kib=11721320 cgroup_used_bytes=73761116160 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:42.976471007Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:48:42,977 stage=base_model_load begin pid=52 rss_kib=11721320 cgroup_used_bytes=73761116160 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:48:42.977865009Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=transformer",
+        "ts": "2026-10-19T19:48:42.977885609Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=transformer path=/models/qwen_image_21_turbo/transformer",
+        "ts": "2026-10-19T19:49:33.076416329Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=transformer elapsed_s=50.10",
+        "ts": "2026-10-19T19:49:33.079106124Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=transformer",
+        "ts": "2026-10-19T19:49:33.079134914Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=transformer elapsed_s=0.08",
+        "ts": "2026-10-19T19:49:33.159967479Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=text_encoder",
+        "ts": "2026-10-19T19:49:33.159982539Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=text_encoder path=/models/qwen_image_21_turbo/text_encoder",
+        "ts": "2026-10-19T19:50:00.625860206Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=vae path=/models/qwen_image_21_shared/texture_fix_vae",
+        "ts": "2026-10-19T19:50:00.634986245Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download done elapsed_s=80.19",
+        "ts": "2026-10-19T19:50:00.635021854Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=all path=/models/qwen_image_21_turbo",
+        "ts": "2026-10-19T19:50:00.635505422Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=text_encoder elapsed_s=27.48",
+        "ts": "2026-10-19T19:50:00.640808622Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=text_encoder",
+        "ts": "2026-10-19T19:50:00.640837482Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=text_encoder elapsed_s=0.39",
+        "ts": "2026-10-19T19:50:01.030495169Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=vae",
+        "ts": "2026-10-19T19:50:01.030519019Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=vae elapsed_s=0.00",
+        "ts": "2026-10-19T19:50:01.030660278Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=vae",
+        "ts": "2026-10-19T19:50:01.030708788Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=vae elapsed_s=0.43",
+        "ts": "2026-10-19T19:50:01.465068934Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:50:01,465 stage=pipeline_components_load begin pid=52 rss_kib=11400636 cgroup_used_bytes=86039871488 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:01.466068668Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:50:02,253 stage=pipeline_components_load done elapsed_s=0.79 pid=52 rss_kib=11457432 cgroup_used_bytes=86104346624 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.254048474Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:50:02,254 stage=base_model_load done elapsed_s=79.28 pid=52 rss_kib=11457432 cgroup_used_bytes=86104608768 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.254667440Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:50:02,255 stage=sampling_config begin pid=52 rss_kib=11457432 cgroup_used_bytes=86104604672 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.255297787Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:50:02,255 stage=sampling_config done elapsed_s=0.00 pid=52 rss_kib=11457432 cgroup_used_bytes=86104604672 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.255887544Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:50:02.255923243Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:50:02.256061943Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :64   2026-10-19 19:50:02,256 stage=placement_cpu begin pid=52 rss_kib=11457432 cgroup_used_bytes=86104604672 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.256604790Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:50:02,289 stage=placement_cpu done elapsed_s=0.03 pid=52 rss_kib=11457432 cgroup_used_bytes=86104203264 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.289920712Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :76   2026-10-19 19:50:02,290 stage=startup done elapsed_s=81.90 pid=52 rss_kib=11457432 cgroup_used_bytes=86104203264 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24702025728 cuda_total_bytes=25250627584 cuda_allocated_bytes=9568256 cuda_reserved_bytes=44040192",
+        "ts": "2026-10-19T19:50:02.290515349Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:50:02.290679308Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:50:02.290746157Z"
+      },
+      {
+        "source": "container",
+        "line": "adapter_cache.py    :48   2026-10-19 19:50:02,782 stage=lora_download cache=hit name=lenovo_qwen21 path=/models/lora_cache/0c0d9e18b693ef63f43cd38a/lenovo_qwen21.safetensors",
+        "ts": "2026-10-19T19:50:02.782790299Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:51:07,874 stage=inference done elapsed_s=150.92",
+        "ts": "2026-10-19T19:51:07.874853119Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:51:07,874 stage=image_delivery begin",
+        "ts": "2026-10-19T19:51:07.874917358Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:51:08,216 stage=image_delivery done elapsed_s=0.34",
+        "ts": "2026-10-19T19:51:08.217168263Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"3a7413de-4a52-481c-bbfc-7c9867d2fb40-e2\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:51:08.818019242Z"
+      }
+    ],
+    "krea-identity": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:51:42,777 job id=fa2d909a-b27c-489b-9148-7b96cf8a3b38-e1 model=krea2 type=image_edit steps=8 guidance=0.0 sampler=euler seed=42 refs=2 size=768x1024 model_options={'mu': 1.15, 'grounding_px': 768, 'ref_boost': 1.0, 'ref_boost_a': 1.0, 'ref_position': 'aligned', 'ref_position_a': 'aligned', 'fit_mode': 'fit'}",
+        "ts": "2026-10-19T19:51:42.778059935Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:51:42,778 stage=inference begin",
+        "ts": "2026-10-19T19:51:42.778137974Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :32   2026-10-19 19:51:42,778 model_unload begin model=moss_image",
+        "ts": "2026-10-19T19:51:42.778201974Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :38   2026-10-19 19:51:45,534 model_unload done model=moss_image cuda_allocated_bytes=9568256",
+        "ts": "2026-10-19T19:51:45.535214720Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :48   2026-10-19 19:51:45,535 backend_load begin model=krea2",
+        "ts": "2026-10-19T19:51:45.535852876Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=dit",
+        "ts": "2026-10-19T19:51:45.536845001Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download begin path=/models/krea2",
+        "ts": "2026-10-19T19:51:45.591544843Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=dit path=/models/krea2/diffusion_models/krea2_turbo_int8_convrot.safetensors",
+        "ts": "2026-10-19T19:52:05.200176003Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=dit elapsed_s=19.66",
+        "ts": "2026-10-19T19:52:05.201677605Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=dit",
+        "ts": "2026-10-19T19:52:05.201992543Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=dit elapsed_s=2.47",
+        "ts": "2026-10-19T19:52:07.677015276Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=vae",
+        "ts": "2026-10-19T19:52:07.677062796Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=vae path=/models/hf/hub/models--Qwen--Qwen-Image/snapshots/75e0b4be04f60ec59a75f475837eced720f823b6",
+        "ts": "2026-10-19T19:52:08.541740030Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=vae elapsed_s=0.88",
+        "ts": "2026-10-19T19:52:08.556730516Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=vae",
+        "ts": "2026-10-19T19:52:08.556863115Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=vae elapsed_s=0.13",
+        "ts": "2026-10-19T19:52:08.690544363Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=text_encoder",
+        "ts": "2026-10-19T19:52:08.690578982Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=text_encoder path=/models/hf/hub/models--Qwen--Qwen3-VL-4B-Instruct/snapshots/ebb281ec70b05090aa6165b016eac8ec08e71b17",
+        "ts": "2026-10-19T19:52:17.878499361Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=text_encoder elapsed_s=9.21",
+        "ts": "2026-10-19T19:52:17.898121041Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=text_encoder",
+        "ts": "2026-10-19T19:52:17.898148460Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=text_encoder elapsed_s=1.27",
+        "ts": "2026-10-19T19:52:19.170047733Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=edit_loras",
+        "ts": "2026-10-19T19:52:19.170084863Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=edit_loras path=/models/krea2/edit_loras",
+        "ts": "2026-10-19T19:52:34.021834362Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=model_download done elapsed_s=48.43",
+        "ts": "2026-10-19T19:52:34.021856252Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_ready component=all path=/models/krea2",
+        "ts": "2026-10-19T19:52:34.022230660Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=edit_loras elapsed_s=14.86",
+        "ts": "2026-10-19T19:52:34.030732652Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:52:34.429329619Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:52:34.429834536Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component begin component=all",
+        "ts": "2026-10-19T19:52:34.429872886Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=wait_component done component=all elapsed_s=0.00",
+        "ts": "2026-10-19T19:52:34.430070655Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :61   2026-10-19 19:52:34,430 backend_load done model=krea2",
+        "ts": "2026-10-19T19:52:34.430647552Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :12   2026-10-19 19:52:34,432 LoRA request: krea2_identity_edit_v2@1:lora",
+        "ts": "2026-10-19T19:52:34.432343692Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:52:34,433 stage=dit_vae_offload begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:52:34.433399596Z"
+      },
+      {
+        "source": "container",
+        "line": "adapter_cache.py    :54   2026-10-19 19:52:34,433 stage=lora_download begin name=krea2_identity_edit_v2 bytes=1828285728 path=/models/lora_cache/96a4812f4029dc354db020ad/krea2_identity_edit_v2.safetensors",
+        "ts": "2026-10-19T19:52:34.434123102Z"
+      },
+      {
+        "source": "container",
+        "line": "adapter_cache.py    :71   2026-10-19 19:52:34,904 stage=lora_download done name=krea2_identity_edit_v2 elapsed_s=0.47 path=/models/lora_cache/96a4812f4029dc354db020ad/krea2_identity_edit_v2.safetensors",
+        "ts": "2026-10-19T19:52:34.904246566Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:52:42,730 stage=dit_vae_offload done elapsed_s=8.30",
+        "ts": "2026-10-19T19:52:42.730998965Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:52:42,731 stage=encoder_to_gpu begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:52:42.731229443Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:52:45,818 stage=encoder_to_gpu done elapsed_s=3.09",
+        "ts": "2026-10-19T19:52:45.819272986Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:52:45,819 stage=grounded_encode begin refs=2 cfg=False cuda_synchronized=False",
+        "ts": "2026-10-19T19:52:45.819325076Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:05,150 stage=grounded_encode done elapsed_s=19.33 refs=2 cfg=False",
+        "ts": "2026-10-19T19:53:05.150503178Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:05,150 stage=encoder_offload begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:05.150593447Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:11,428 stage=encoder_offload done elapsed_s=6.28 ",
+        "ts": "2026-10-19T19:53:11.428807320Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:11,428 stage=encoder_offload done elapsed_s=6.28",
+        "ts": "2026-10-19T19:53:11.428807320Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:11,428 stage=dit_to_gpu begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:11.428862939Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,101 stage=dit_to_gpu done elapsed_s=2.67",
+        "ts": "2026-10-19T19:53:14.101903759Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,101 stage=vae_to_gpu begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.101963108Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,136 stage=vae_to_gpu done elapsed_s=0.04",
+        "ts": "2026-10-19T19:53:14.137211070Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,152 stage=vae_encode_reference begin width=768 height=1024 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.152358505Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,323 stage=vae_encode_reference done elapsed_s=0.17 width=768 height=1024",
+        "ts": "2026-10-19T19:53:14.323442283Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,338 stage=vae_encode_reference begin width=768 height=1024 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.339024905Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,476 stage=vae_encode_reference done elapsed_s=0.14 width=768 height=1024",
+        "ts": "2026-10-19T19:53:14.477143888Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,478 stage=lora_prepare begin name=krea2_identity_edit_v2 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.478357551Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,495 stage=lora_prepare done elapsed_s=0.02 name=krea2_identity_edit_v2",
+        "ts": "2026-10-19T19:53:14.495757204Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,495 stage=lora_gpu_copy begin adapters=1 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.495897523Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:14,761 stage=lora_gpu_copy done elapsed_s=0.27 adapters=1",
+        "ts": "2026-10-19T19:53:14.761710558Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:14,762 stage=denoise_step begin step=1 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:14.762517453Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:20,139 stage=denoise_step done elapsed_s=5.38 step=1 total=8",
+        "ts": "2026-10-19T19:53:20.139918994Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:20,139 stage=denoise_step begin step=2 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:20.139968043Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:24,531 stage=denoise_step done elapsed_s=4.39 step=2 total=8",
+        "ts": "2026-10-19T19:53:24.532132348Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:24,531 stage=denoise_step begin step=3 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:24.532175798Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:28,926 stage=denoise_step done elapsed_s=4.39 step=3 total=8",
+        "ts": "2026-10-19T19:53:28.926361982Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:28,926 stage=denoise_step begin step=4 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:28.926411091Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:33,322 stage=denoise_step done elapsed_s=4.40 step=4 total=8",
+        "ts": "2026-10-19T19:53:33.322484584Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:33,322 stage=denoise_step begin step=5 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:33.322519114Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:37,722 stage=denoise_step done elapsed_s=4.40 step=5 total=8",
+        "ts": "2026-10-19T19:53:37.722585104Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:37,722 stage=denoise_step begin step=6 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:37.722639174Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:42,124 stage=denoise_step done elapsed_s=4.40 step=6 total=8",
+        "ts": "2026-10-19T19:53:42.124471654Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:42,124 stage=denoise_step begin step=7 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:42.124521644Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:46,525 stage=denoise_step done elapsed_s=4.40 step=7 total=8",
+        "ts": "2026-10-19T19:53:46.526257275Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:46,526 stage=denoise_step begin step=8 total=8 cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:46.526303445Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:50,931 stage=denoise_step done elapsed_s=4.41 step=8 total=8",
+        "ts": "2026-10-19T19:53:50.932195202Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :23   2026-10-19 19:53:51,817 stage=vae_decode begin  cuda_synchronized=False",
+        "ts": "2026-10-19T19:53:51.817729469Z"
+      },
+      {
+        "source": "container",
+        "line": "diagnostics.py      :32   2026-10-19 19:53:51,946 stage=vae_decode done elapsed_s=0.13",
+        "ts": "2026-10-19T19:53:51.946834263Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:53:52,081 stage=inference done elapsed_s=129.30",
+        "ts": "2026-10-19T19:53:52.081879093Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:53:52,081 stage=image_delivery begin",
+        "ts": "2026-10-19T19:53:52.081910693Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:53:52,320 stage=image_delivery done elapsed_s=0.24",
+        "ts": "2026-10-19T19:53:52.320432561Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"fa2d909a-b27c-489b-9148-7b96cf8a3b38-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:53:52.799212826Z"
+      }
+    ],
+    "moss-turbo-return": [
+      {
+        "source": "container",
+        "line": "handler.py          :38   2026-10-19 19:54:03,324 job id=60208347-b4bc-437e-9190-b8a5ac8bba24-e2 model=moss_image type=image_generate steps=8 guidance=1.0 sampler=euler seed=42 refs=0 size=1024x1024 model_options={'variant': 'turbo', 'shift': 5.0, 'uncond_skip_layers': None}",
+        "ts": "2026-10-19T19:54:03.325315185Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:54:03,325 stage=inference begin",
+        "ts": "2026-10-19T19:54:03.325329615Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :32   2026-10-19 19:54:03,325 model_unload begin model=krea2",
+        "ts": "2026-10-19T19:54:03.325335415Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :38   2026-10-19 19:54:04,745 model_unload done model=krea2 cuda_allocated_bytes=9699328",
+        "ts": "2026-10-19T19:54:04.746254229Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :48   2026-10-19 19:54:04,745 backend_load begin model=moss_image",
+        "ts": "2026-10-19T19:54:04.746306089Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=transformer",
+        "ts": "2026-10-19T19:54:04.747117214Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=transformer elapsed_s=0.05",
+        "ts": "2026-10-19T19:54:04.792688938Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=text_encoder",
+        "ts": "2026-10-19T19:54:04.792717768Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=text_encoder elapsed_s=1.61",
+        "ts": "2026-10-19T19:54:06.401340726Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=vae",
+        "ts": "2026-10-19T19:54:06.401387966Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=vae elapsed_s=0.03",
+        "ts": "2026-10-19T19:54:06.428228964Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load begin component=turbo_lora",
+        "ts": "2026-10-19T19:54:06.459090951Z"
+      },
+      {
+        "source": "container",
+        "line": "stage=component_load done component=turbo_lora elapsed_s=0.08",
+        "ts": "2026-10-19T19:54:06.537185081Z"
+      },
+      {
+        "source": "container",
+        "line": "manager.py          :61   2026-10-19 19:54:06,537 backend_load done model=moss_image",
+        "ts": "2026-10-19T19:54:06.537658419Z"
+      },
+      {
+        "source": "container",
+        "line": "pipeline.py         :52   2026-10-19 19:54:06,538 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+        "ts": "2026-10-19T19:54:06.538572184Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:54:33,370 stage=inference done elapsed_s=30.05",
+        "ts": "2026-10-19T19:54:33.370820125Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :19   2026-10-19 19:54:33,370 stage=image_delivery begin",
+        "ts": "2026-10-19T19:54:33.370879965Z"
+      },
+      {
+        "source": "container",
+        "line": "api.py              :26   2026-10-19 19:54:33,714 stage=image_delivery done elapsed_s=0.34",
+        "ts": "2026-10-19T19:54:33.714459782Z"
+      },
+      {
+        "source": "container",
+        "line": "{\"requestId\": \"60208347-b4bc-437e-9190-b8a5ac8bba24-e2\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+        "ts": "2026-10-19T19:54:34.161940834Z"
+      }
+    ]
+  }
+}
