@@ -1,13 +1,14 @@
-# Image worker API: Krea 2 and Qwen Image 2.1
+# Image worker API: Krea 2, Qwen Image 2.1 and MOSS-Image
 
-Both workers use this shared request parser, common request fields, seed selection,
+All image backends use this shared request parser, common request fields, seed selection,
 image decoding/delivery, response builder and error handling. Their model adapters
 own inference, model selection, reference geometry and LoRA compatibility.
 `profiles.py` declares defaults, limits and supported model options.
 
-Both models share RunPod endpoint `9zb0wyo61ck3wk` (`image-workers`).
-Set `input.model` to `krea2` or `qwen_image_21`; omission defaults to Krea.
-Qwen Base/Turbo is selected with `model_options.variant` on the same endpoint.
+The common RunPod endpoint is `9zb0wyo61ck3wk` (`image-workers`).
+Set `input.model` to `krea2`, `qwen_image_21` or `moss_image`; omission defaults to Krea.
+Qwen and MOSS Base/Turbo are selected with `model_options.variant` on the same endpoint.
+MOSS requires a worker image including its backend; see its section below.
 The response reports the selected model in `output.model`. Unknown model IDs
 are rejected before loading or unloading a model.
 
@@ -66,7 +67,35 @@ image URL. Input order is preserved. Krea converts references to RGB. Qwen keeps
 alpha when present, limits each decoded file to 25 MiB and each source side to
 8192 pixels, then downsizes references using the megapixel limit below.
 
-### Guidance semantics and sampling
+### MOSS generation contract
+
+MOSS uses the same envelope and response/delivery lifecycle. The Krea/Qwen
+table above describes their existing contracts; MOSS differences are:
+
+- Only `image_generate`; `images` must be empty and user `loras` must be empty/null.
+- `model_options.variant`: `turbo` (default) or `base`. Both use MOSS-Image-SFT;
+  Base here means SFT without the accelerator, not MOSS-Image-Base weights.
+- Default steps/CFG: Turbo 8/1; Base 50/3. Steps may be overridden in 1..200.
+- Only Euler. Base's negative branch runs when CFG differs from exactly 1;
+  Turbo requires CFG exactly 1 and no nonblank negative prompt.
+- Dimensions: 256..4096, multiples of 16, area <= 4,194,304 pixels; default 1024x1024.
+- `model_options.shift`: positive finite number, default 5.
+- `model_options.uncond_skip_layers`: unique indices 0..41; omitted/null selects
+  `[22]` for Base or `[]` for Turbo. An explicit empty list disables skipping.
+  Turbo rejects nonempty skip layers.
+
+Turbo applies the pinned built-in DMD adapter unmerged at strength 0.7; it is
+reported in response `loras` as diagnostic metadata, not as a user adapter to
+copy into the next input. Switching modes retains the SFT pipeline and removes
+the adapter after every Turbo call, including failures. The response includes
+`model_revision` and, for Turbo, `lora_revision`.
+
+`reference_megapixels` is accepted by the common parser but does not choose
+MOSS's generation canvas or establish a calibrated capacity. Plain prose,
+tags and serialized JSON layouts go directly into `prompt`.
+See [MOSS runtime and examples](../../moss_image/README.md).
+
+### Krea/Qwen guidance semantics and sampling
 
 Existing guidance behavior is preserved:
 

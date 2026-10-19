@@ -40,14 +40,14 @@ class ModelManagerTests(unittest.TestCase):
             return Backend
 
         self_test = self
-        manager = self.manager({name: factory(name) for name in ('krea2', 'qwen_image_21')})
+        manager = self.manager({name: factory(name) for name in ('krea2', 'qwen_image_21', 'moss_image')})
         self.assertEqual(events, [])
-        for model in ('krea2', 'krea2', 'qwen_image_21', 'krea2'):
+        for model in ('krea2', 'krea2', 'moss_image', 'qwen_image_21', 'krea2'):
             self.assertEqual(manager.infer(model, object(), 0, []), model)
         manager.close()
         manager.close()
         self.assertEqual([e for e in events if e[0] in ('load', 'close')], [
-            ('load', 'krea2'), ('close', 'krea2'), ('load', 'qwen_image_21'),
+            ('load', 'krea2'), ('close', 'krea2'), ('load', 'moss_image'), ('close', 'moss_image'), ('load', 'qwen_image_21'),
             ('close', 'qwen_image_21'), ('load', 'krea2'), ('close', 'krea2'),
         ])
         gc.collect()

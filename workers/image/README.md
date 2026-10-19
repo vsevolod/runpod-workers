@@ -1,6 +1,6 @@
 # Common image worker
 
-One RunPod image and endpoint serve Krea 2 and Qwen Image 2.1.
+One RunPod image serves Krea 2, Qwen Image 2.1 and MOSS-Image-SFT.
 The model registry owns routing; each backend owns its existing inference.
 Requests are serialized so the old backend is closed before another loads.
 The worker does not download a checkpoint until a request selects a model.
@@ -22,16 +22,17 @@ The full request and response contract is in the [shared API](../shared/api/READ
 }
 ```
 
-`model` accepts `krea2` and `qwen_image_21`. Omission selects Krea for existing
+`model` accepts `krea2`, `qwen_image_21` and `moss_image`. Omission selects Krea for existing
 clients. The response includes `model`. Qwen Base uses `variant: "base"`.
 Each model retains its own options, reference limits and compatible LoRAs.
 Additional adapters remain under separate model directories on the volume.
 
-Both bundled clients select the model explicitly and use the same endpoint:
+All three bundled clients select the model explicitly and use the same endpoint:
 
 ```bash
 python scripts/krea2_image.py --prompt "a red fox" --lora '' -o krea.png
 python scripts/qwen_image_21.py --prompt "a red fox" --variant base -o qwen.png
+python scripts/moss_image.py --prompt "a red fox" --variant turbo -o moss.png
 ```
 
 ## Configuration
@@ -49,6 +50,8 @@ python scripts/qwen_image_21.py --prompt "a red fox" --variant base -o qwen.png
 | `QWEN_VAE` | `texture-fix` | Qwen VAE profile |
 | `QWEN_DISABLE_MMAP` | `0` | Keep memory mapping enabled |
 | `OFFLOAD` | `cpu` | Qwen component offload for 24 GB GPUs |
+| `MOSS_MODEL_DIR` | `/models/moss_image_sft` | MOSS SFT components and lazy Turbo adapter |
+| `MOSS_OFFLOAD` | `cpu` | MOSS component offload; also supports `none` |
 | `HF_HOME` | `/models/hf` | Shared local HF cache |
 | `LORA_CACHE_DIR` | `/models/lora_cache` | Local staging of selected volume adapters |
 | `HF_TOKEN` | Endpoint secret | HF access where required |
@@ -61,21 +64,29 @@ disk across model switches within the container lifetime.
 Krea switches release its DiT, encoder, VAE and adapter manager. Leaving Qwen
 also closes its Base/Turbo manager and retained VAE. Within Qwen, the existing
 variant manager reuses the shared VAE and repairs incomplete snapshots.
+MOSS variants share one SFT pipeline; Turbo adds an unmerged DMD LoRA only for
+the current request. MOSS currently supports generation only and rejects user
+adapters. See [MOSS settings and pinned sources](../moss_image/README.md).
 
 ## Deployment
 
 - Dockerfile: `workers/image/Dockerfile`; context: repository root.
 - Image: `ghcr.io/vsevolod/runpod-workers-image:<commit-sha>`.
 - Use an immutable digest after CI passes.
-- Container disk: 200 GB for all three checkpoint caches.
-- GPU: current 24 GB Ampere/Ada profile; CUDA 12.8 or newer.
+- Container disk: existing 200 GB profile; allow roughly 31 GB extra for MOSS SFT/Turbo files.
+- GPU: existing 24 GB Ampere/Ada profile; CUDA 12.8 or newer. MOSS fit is uncalibrated.
 - Global Volume: existing model-adapter volume mounted at `/runpod-volume`.
 - Preserve min=0/max=1 and idle timeout 10 seconds.
 - Leave the start command empty, or use `sh /app/workers/image/start.sh`.
 
-CI builds this image and JoyCaption. It checks dependencies, both backend
+The image worker uses Torch 2.9.1/cu128 and torchvision 0.24.1, constrained
+separately from JoyCaption's Torch 2.8 stack. MOSS availability on an existing
+endpoint requires deploying this candidate image; code registration alone
+does not change the deployed endpoint.
+
+CI builds this image and JoyCaption. It checks dependencies, all backend
 imports, handler registration without weights, shared helpers, common-worker
-tests and both complete model suites. The model-specific folders contain
+tests and all three complete model suites. The model-specific folders contain
 runtime implementations and reference adapters rather than release Dockerfiles.
 
 ## Adding a model
@@ -89,4 +100,5 @@ request parsing and image delivery remain shared.
 ## Attribution
 
 Model source notices and licenses remain in `../krea2/NOTICE`,
-`../krea2/LICENSES/` and `../qwen_image_21/LICENSES/`, and are included in the image.
+`../krea2/LICENSES/`, `../qwen_image_21/LICENSES/` and `../moss_image/LICENSES/`,
+plus `../moss_image/NOTICE`, and are included in the image.

@@ -5,10 +5,10 @@ from pathlib import Path
 import sys
 
 WORKERS = Path(__file__).resolve().parents[2]
-for directory in (WORKERS, WORKERS / 'krea2', WORKERS / 'qwen_image_21'):
+for directory in (WORKERS, WORKERS / 'krea2', WORKERS / 'qwen_image_21', WORKERS / 'moss_image'):
     sys.path.insert(0, str(directory))
 
-from shared.api import KREA_API, QWEN_API
+from shared.api import KREA_API, MOSS_API, QWEN_API
 from shared.prefetch import PrefetchSession
 from krea2_infer import load_pipeline as load_krea_pipeline
 from krea2_infer.api import infer as infer_krea
@@ -19,6 +19,14 @@ from qwen_image_21_infer.api import infer as infer_qwen
 from qwen_image_21_infer.lora import LoRAError as QwenLoRAError
 from qwen_image_21_infer.model_manager import ModelManager as QwenModelManager
 from qwen_image_21_infer.request import normalize_job_input as normalize_qwen
+from moss_image_infer.config import model_directory as moss_directory, offload_mode as moss_offload
+from moss_image_infer.lora import LoRAError as MossLoRAError
+from moss_image_infer.request import normalize_job_input as normalize_moss
+
+
+def load_moss_pipeline(directory):
+    from moss_image_infer.pipeline import load_pipeline
+    return load_pipeline(directory)
 
 
 def krea_quantization():
@@ -76,4 +84,31 @@ class QwenBackend:
             manager.close()
 
 
-REGISTRY = {'krea2': KreaBackend, 'qwen_image_21': QwenBackend}
+class MossBackend:
+    profile = MOSS_API
+    normalize = staticmethod(normalize_moss)
+    client_errors = (MossLoRAError,)
+    oom_message = 'CUDA out of memory. Use MOSS_OFFLOAD=cpu and reduce the canvas or image count.'
+
+    def __init__(self):
+        self.runtime = None
+
+    def load(self):
+        moss_offload()  # Validate configuration before any transfer.
+        directory = moss_directory()
+        command = [sys.executable, '-u', str(WORKERS / 'moss_image/download_weights.py'),
+                   '--output', str(directory)]
+        with PrefetchSession(command) as pending:
+            pending.wait('all')
+            self.runtime = load_moss_pipeline(directory)
+
+    def infer(self, norm, seed, raw_loras):
+        return self.runtime.run(norm, seed)
+
+    def close(self):
+        runtime, self.runtime = self.runtime, None
+        if runtime is not None:
+            runtime.close()
+
+
+REGISTRY = {'krea2': KreaBackend, 'qwen_image_21': QwenBackend, 'moss_image': MossBackend}

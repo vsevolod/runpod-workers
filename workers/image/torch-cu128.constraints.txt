@@ -1,0 +1,3 @@
+# Image models include MOSS, whose supported upstream stack starts at Torch 2.9.
+torch==2.9.1+cu128
+torchvision==0.24.1+cu128

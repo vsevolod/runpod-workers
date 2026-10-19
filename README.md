@@ -6,9 +6,10 @@ Custom RunPod serverless workers.
 
 | Path | Description |
 |---|---|
-| [`workers/image`](workers/image/) | One request-selected image worker: Krea 2 and Qwen Image 2.1 Base/Turbo |
+| [`workers/image`](workers/image/) | One request-selected image worker: Krea 2, Qwen Image 2.1 and MOSS SFT/Turbo |
 | [`workers/krea2`](workers/krea2/) | Krea inference backend, quantization and V2 edit adapters |
 | [`workers/qwen_image_21`](workers/qwen_image_21/) | Qwen inference backend, Base/Turbo and additional LoRAs |
+| [`workers/moss_image`](workers/moss_image/) | MOSS-Image-SFT generation backend, ordinary and eight-step DMD Turbo |
 | [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One captioning |
 | [`workers/minimax_h3_comfy`](workers/minimax_h3_comfy/) | MiniMax H3 headless ComfyUI worker |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CPU downloads of CivitAI adapters to the shared volume |
@@ -23,8 +24,9 @@ MiniMax H3 design/plan:
 ## Deploy
 
 Krea and Qwen share endpoint **`9zb0wyo61ck3wk`**, named `image-workers`.
-Select `input.model`: `krea2` or `qwen_image_21`. Omitting it selects Krea.
-Qwen Base/Turbo remains `model_options.variant`.
+Select `input.model`: `krea2`, `qwen_image_21` or `moss_image`. Omitting it selects Krea.
+Qwen and MOSS Base/Turbo use `model_options.variant`. MOSS requires deploying
+the candidate image with its backend; it supports generation only.
 The [shared API](workers/shared/api/README.md) documents common fields,
 model options and responses; the [image worker](workers/image/README.md)
 documents packaging and configuration.
@@ -34,7 +36,7 @@ documents packaging and configuration.
 - `ghcr.io/vsevolod/runpod-workers-image:<commit-sha>`
 - `ghcr.io/vsevolod/runpod-workers-joycaption:<commit-sha>`
 
-Changes to the image worker, either backend, shared code, bundled image clients
+Changes to the image worker, any image backend, shared code, bundled image clients
 or workflow on `master` trigger the build. A manual build uses:
 
 ```bash
@@ -55,7 +57,8 @@ The image imports the handler without choosing a checkpoint; the request starts
 only its selected model's downloads and loading. Switching models closes the
 old backend first. Downloaded checkpoints stay on container disk for reuse.
 
-Use a 200 GB container disk for Krea and both Qwen variants. Attach the existing
+Use a 200 GB container disk for Krea and both Qwen variants; allow roughly
+31 GB more cached data when adding MOSS SFT/Turbo. Attach the existing
 Global Volume at `/runpod-volume` for additional LoRAs. Model weights and the HF
 cache live under `/models`; selected adapters are staged in a local cache.
 The model/VRAM megapixel policy and its calibration procedure are documented in
@@ -72,14 +75,16 @@ All clients need `RUNPOD_API_KEY`.
 |---|---|---|
 | [`scripts/krea2_image.py`](scripts/krea2_image.py) | `9zb0wyo61ck3wk` | Krea generation/edit; sends `model=krea2` |
 | [`scripts/qwen_image_21.py`](scripts/qwen_image_21.py) | `9zb0wyo61ck3wk` | Qwen generation/edit; sends `model=qwen_image_21` |
+| [`scripts/moss_image.py`](scripts/moss_image.py) | `9zb0wyo61ck3wk` | MOSS SFT/Turbo generation; sends `model=moss_image` |
 | [`scripts/joycaption.py`](scripts/joycaption.py) | `yn0krhztuguxxm` | Caption images |
 | [`scripts/download_lora.py`](scripts/download_lora.py) | Set `ENDPOINT_ID` | Download adapters to the volume |
 
-`ENDPOINT_ID` overrides the default for either image client.
+`ENDPOINT_ID` overrides the default for any image client.
 
 ```bash
 python scripts/krea2_image.py --prompt "a red fox" --lora '' -o krea.png
 python scripts/qwen_image_21.py --prompt "a red fox" --variant turbo -o qwen.png
+python scripts/moss_image.py --prompt "a red fox" --variant turbo -o moss.png
 ```
 
 ## Tasks / plans

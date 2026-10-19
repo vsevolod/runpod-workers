@@ -1,0 +1,11 @@
+MOSS-Image standalone pipeline
+------------------------------
+Source: OpenMOSS-Team/MOSS-Image-SFT, pipeline_moss_image.py
+Revision: 2c7954437269461767f533b006823e8f85973a60
+https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/blob/2c7954437269461767f533b006823e8f85973a60/pipeline_moss_image.py
+The source is vendored unchanged under Apache-2.0; see LICENSES/MOSS-Image-APACHE-2.0.txt.
+
+Model weights are not included. MOSS-Image-SFT and the lodestones
+MOSS-Image-SFT-8-steps-dmd adapter are published under Apache-2.0.
+The unmerged adapter application in moss_image_infer/lora.py is a local
+implementation of the Kohya down/up/alpha format; no demo code is vendored.

@@ -5,6 +5,21 @@ import math
 from .contract import ModelAPI
 
 
+MOSS_API = ModelAPI(
+    name="moss_image", max_steps=200, guidance_default=1.,
+    samplers=("euler",), size_multiple=16, max_side=4096, max_refs=0,
+    standard_cfg=True, steps_by_variant={"base": 50, "turbo": 8},
+    options={
+        "variant": {"type": str, "default": "turbo", "constraints": lambda v: v in ("base", "turbo")},
+        "shift": {"type": float, "default": 5., "constraints": lambda v: math.isfinite(v) and v > 0},
+        "uncond_skip_layers": {"type": list, "default": None, "nullable": True,
+                               "constraints": lambda v: all(type(i) is int and 0 <= i < 42 for i in v)
+                               and len(v) == len(set(v))},
+    },
+    aliases={},
+)
+
+
 QWEN_API = ModelAPI(
     name="qwen_image_21", max_steps=200, guidance_default=1.,
     samplers=("euler", "heun", "er_sde"), size_multiple=32, max_side=2752, max_refs=10,

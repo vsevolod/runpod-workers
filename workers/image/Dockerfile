@@ -20,7 +20,7 @@ ENV PATH="/.venv/bin:${PATH}"
 RUN uv venv --python 3.12 /.venv
 
 WORKDIR /app
-COPY workers/shared/torch-cu128.constraints.txt /app/torch-constraints.txt
+COPY workers/image/torch-cu128.constraints.txt /app/torch-constraints.txt
 RUN uv pip install --no-cache -r /app/torch-constraints.txt \
     --index-url https://download.pytorch.org/whl/cu128
 COPY workers/image/requirements.txt /app/requirements.txt
@@ -31,14 +31,15 @@ RUN cd /.venv/lib/python3.12/site-packages && \
     git apply --check /app/patches/diffusers-native-references.patch && \
     git apply /app/patches/diffusers-native-references.patch
 
-# Preserve source layout so both model downloaders and test suites resolve paths.
+# Preserve source layout so all model downloaders and test suites resolve paths.
 COPY workers/shared /app/workers/shared
 COPY workers/krea2 /app/workers/krea2
 COPY workers/qwen_image_21 /app/workers/qwen_image_21
+COPY workers/moss_image /app/workers/moss_image
 COPY workers/image /app/workers/image
 COPY scripts /app/scripts
 
-ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/qwen_image_21 \
+ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/qwen_image_21:/app/workers/moss_image \
     KREA_MODEL_DIR=/models/krea2 \
     KREA_LORA_DIR=/runpod-volume/krea2/loras \
     KREA_DIT_QUANT=int8_convrot \
@@ -48,6 +49,8 @@ ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/q
     QWEN_VAE_DIR=/models/qwen_image_21_shared/texture_fix_vae \
     QWEN_DISABLE_MMAP=0 \
     QWEN_VAE=texture-fix \
+    MOSS_MODEL_DIR=/models/moss_image_sft \
+    MOSS_OFFLOAD=cpu \
     OFFLOAD=cpu \
     HF_HOME=/models/hf \
     LORA_CACHE_DIR=/models/lora_cache \

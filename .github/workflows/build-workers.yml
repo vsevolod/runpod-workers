@@ -8,10 +8,12 @@ on:
       - workers/shared/**
       - workers/image/**
       - workers/qwen_image_21/**
+      - workers/moss_image/**
       - workers/krea2/**
       - workers/joycaption/**
       - scripts/krea2_image.py
       - scripts/qwen_image_21.py
+      - scripts/moss_image.py
   workflow_dispatch:
     inputs:
       publish:
@@ -59,6 +61,8 @@ jobs:
           if [ "$WORKER" = image ]; then
             docker run --rm --entrypoint python "$IMAGE" -u /app/workers/krea2/download_weights.py --help
             docker run --rm --entrypoint python "$IMAGE" -u /app/workers/qwen_image_21/download_weights.py --help
+            docker run --rm --entrypoint python "$IMAGE" -u /app/workers/moss_image/download_weights.py --help
+            docker run --rm --entrypoint python "$IMAGE" -u /app/scripts/moss_image.py --help
           else
             docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
           fi
@@ -72,27 +76,32 @@ jobs:
         run: |
           docker run --rm --env WORKER --entrypoint python "$IMAGE" -c '
           import importlib, inspect, os, torch, torchvision
-          assert torch.__version__ == "2.8.0+cu128", torch.__version__
-          assert torchvision.__version__ == "0.23.0+cu128", torchvision.__version__
           assert torch.version.cuda == "12.8", torch.version.cuda
           worker = os.environ["WORKER"]
           if worker == "joycaption":
+              assert torch.__version__ == "2.8.0+cu128", torch.__version__
+              assert torchvision.__version__ == "0.23.0+cu128", torchvision.__version__
               import caption_utils, schemas
               from transformers import AutoProcessor, LlavaForConditionalGeneration
               compiled_arches = torch._C._cuda_getArchFlags().split()
               assert "sm_120" in compiled_arches, compiled_arches
           else:
+              assert torch.__version__ == "2.9.1+cu128", torch.__version__
+              assert torchvision.__version__ == "0.24.1+cu128", torchvision.__version__
               import runpy, runpod, transformers
               from image_worker.backends import REGISTRY
               from diffusers import AutoencoderKLQwenImage, QwenImage21Pipeline
               from transformers import Qwen3VLForConditionalGeneration
+              from moss_image_infer.pipeline import MOSSImagePipeline, MOSSImageTransformer
+              from transformers import Qwen3_5Model
+              assert set(REGISTRY) == {"krea2", "qwen_image_21", "moss_image"}
               assert transformers.__version__ == "5.20.1", transformers.__version__
               assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
               registered = []
               runpod.serverless.start = registered.append
               runpy.run_path("/app/workers/image/handler.py", run_name="image_startup_check")
               assert len(registered) == 1 and callable(registered[0]["handler"])
-              print("Both model backends and request-selected handler imported without weights")
+              print("All three model backends and request-selected handler imported without weights")
           print("Runtime imports OK; torch=" + torch.__version__ +
                 " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
@@ -103,16 +112,17 @@ jobs:
           docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" \
             --env PYTHONPATH=/src/workers/joycaption --entrypoint sh "$IMAGE" -c \
             'uv pip install --no-cache -c /app/torch-constraints.txt pytest && python -m pytest /src/workers/joycaption/tests -q'
-      - name: Check common worker and both model backends
+      - name: Check common worker and all model backends
         if: matrix.worker == 'image'
         shell: bash
         run: |
-          for suite in shared image krea2 qwen_image_21; do
+          for suite in shared image krea2 qwen_image_21 moss_image; do
             docker run --rm --entrypoint sh "$IMAGE" -c '
               # Model unit suites set generic paths in controlled fixtures.
               # Backend tests separately exercise the model-prefixed settings.
               unset QWEN_MODEL_DIR QWEN_BASE_MODEL_DIR QWEN_LORA_DIR QWEN_MODEL_ID QWEN_BASE_MODEL_ID
               unset KREA_MODEL_DIR KREA_LORA_DIR KREA_DIT_QUANT LORA_CACHE_DIR
+              unset MOSS_MODEL_DIR MOSS_OFFLOAD
               exec python -m unittest discover -s "/app/workers/$1/tests" -p "test_*.py"
             ' sh "$suite"
           done
