@@ -22,11 +22,12 @@ from qwen_image_21_infer.request import normalize_job_input as normalize_qwen
 from moss_image_infer.config import model_directory as moss_directory, offload_mode as moss_offload
 from moss_image_infer.lora import LoRAError as MossLoRAError
 from moss_image_infer.request import normalize_job_input as normalize_moss
+from moss_image_infer.model_store import prefetch_model as prefetch_moss_model
 
 
-def load_moss_pipeline(directory):
+def load_moss_pipeline(directory, *, turbo=False):
     from moss_image_infer.pipeline import load_pipeline
-    return load_pipeline(directory)
+    return load_pipeline(directory, turbo=turbo)
 
 
 def krea_quantization():
@@ -45,7 +46,7 @@ class KreaBackend:
     def normalize(values, *, raw_keys):
         return normalize_krea(values, raw_keys=raw_keys, quant_mode=krea_quantization())
 
-    def load(self):
+    def load(self, norm=None):
         directory = Path(os.environ.get('KREA_MODEL_DIR') or os.environ.get('MODEL_DIR') or '/models/krea2')
         loras = Path(os.environ.get('KREA_LORA_DIR') or os.environ.get('LORA_DIR') or '/runpod-volume/krea2/loras')
         quantization = krea_quantization()
@@ -72,7 +73,7 @@ class QwenBackend:
     def __init__(self):
         self.manager = None
 
-    def load(self):
+    def load(self, norm=None):
         self.manager = QwenModelManager()
 
     def infer(self, norm, seed, raw_loras):
@@ -93,16 +94,22 @@ class MossBackend:
     def __init__(self):
         self.runtime = None
 
-    def load(self):
+    def load(self, norm=None):
         moss_offload()  # Validate configuration before any transfer.
         directory = moss_directory()
-        command = [sys.executable, '-u', str(WORKERS / 'moss_image/download_weights.py'),
-                   '--output', str(directory)]
-        with PrefetchSession(command) as pending:
-            pending.wait('all')
-            self.runtime = load_moss_pipeline(directory)
+        turbo = norm is not None and norm.model_variant == 'turbo'
+        with prefetch_moss_model(directory, turbo=turbo) as pending:
+            self.runtime = load_moss_pipeline(directory, turbo=turbo)
+            if pending is not None:
+                pending.wait('all')
 
     def infer(self, norm, seed, raw_loras):
+        if norm.model_variant == 'turbo':
+            # Base -> Turbo on a resident SFT still uses the CPU-only downloader.
+            with prefetch_moss_model(moss_directory(), turbo=True, lora_only=True) as pending:
+                self.runtime.load_turbo()
+                if pending is not None:
+                    pending.wait('all')
         return self.runtime.run(norm, seed)
 
     def close(self):

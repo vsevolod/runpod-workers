@@ -46,7 +46,10 @@ copies and one shared Texture-Fix VAE. Each variant alone uses about 33 GB.
 
 Startup imports the handler without preselecting a model. The first request's
 `model_variant` chooses the checkpoint before a separate CPU-only downloader
-starts. Imports/probing overlap its transfers. Only that variant is downloaded;
+starts. Imports/probing overlap its transfers. Small pipeline/scheduler/processor
+metadata comes first, followed by transformer -> text encoder -> selected VAE.
+Each component is published separately through `shared.prefetch`; loading its
+weights overlaps downloading later components. Only that variant is downloaded;
 a first Base request never preloads Turbo. Files go to
 `/models/qwen_image_21_turbo` or `/models/qwen_image_21_base`.
 
@@ -72,8 +75,9 @@ interrupted transfer can resume in the same container.
 By default, the downloader skips the unused stock `vae/` and downloads only
 the Diffusers config and weights of `madebyollin/texture-fix-vae-for-qwen-image-2.1`
 into `QWEN_VAE_DIR` (default `/models/qwen_image_21_shared/texture_fix_vae`).
-It publishes the selected model as ready after
-both downloads complete. The loader supplies this VAE to `from_pretrained`
+The final `all` barrier verifies successful downloader completion after the
+individual components have started loading. The loader supplies this VAE and
+the already loaded transformer/text encoder to `from_pretrained`
 before CPU/GPU placement, preserving bf16, mmap and CPU offload. No runtime
 Hub access is needed with `LOCAL_FILES_ONLY=1`.
 

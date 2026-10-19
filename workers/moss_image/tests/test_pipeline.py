@@ -52,10 +52,11 @@ class PipelineTests(unittest.TestCase):
                  'diffusion_model.layers.0.proj.q.lora_up.weight': torch.ones(16, 1) * .05,
                  'diffusion_model.layers.0.proj.q.alpha': torch.tensor(1.)}
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / 'lora.safetensors'
+            path = Path(tmp) / 'turbo' / 'lora_latest.safetensors'
+            path.parent.mkdir()
             save_file(state, str(path))
             runtime = Runtime(pipe, Path(tmp))
-            with patch('moss_image_infer.pipeline.ensure_turbo_lora', return_value=path):
+            with patch('moss_image_infer.model_store.remote_files', side_effect=AssertionError('Inference must never contact the Hub')):
                 first = runtime.run(self.norm('base'), 0)
                 fast = runtime.run(self.norm('turbo'), 0)
                 last = runtime.run(self.norm('base'), 0)

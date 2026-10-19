@@ -32,12 +32,14 @@ def _read_manifest(root: Path):
         return None
 
 
-def snapshot_ready(directory, *, model_id, model_variant, profile=None):
+def snapshot_ready(directory, *, model_id, model_variant, profile=None, revision=None):
     root = Path(directory)
     data = _read_manifest(root)
     if data is None or any(data.get(key) != value for key, value in (
         ("model_id", model_id), ("model_variant", model_variant), ("profile", profile),
     )):
+        return False
+    if revision is not None and data.get('revision') != revision:
         return False
     try:
         return all(not (root / item["path"]).is_symlink()
@@ -46,6 +48,19 @@ def snapshot_ready(directory, *, model_id, model_variant, profile=None):
                    for item in data["files"])
     except OSError:
         return False
+
+
+def snapshot_revision(directory, *, model_id, model_variant, profile=None):
+    """Keep a repair/retry on the revision that produced the existing files."""
+    data = _read_manifest(Path(directory))
+    if data is None or any(data.get(key) != value for key, value in (
+        ('model_id', model_id), ('model_variant', model_variant), ('profile', profile),
+    )):
+        return None
+    revision = data.get('revision')
+    if isinstance(revision, str) and len(revision) == 40 and all(c in '0123456789abcdef' for c in revision):
+        return revision
+    return None
 
 
 def remove_incomplete_files(directory):

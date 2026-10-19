@@ -47,7 +47,7 @@ class ModelManager:
                 backend = factory()
                 logger.info('backend_load begin model=%s', model)
                 try:
-                    backend.load()
+                    backend.load(norm)
                 except BaseException:
                     try:
                         backend.close()

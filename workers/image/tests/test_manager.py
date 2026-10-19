@@ -11,6 +11,18 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 
 class ModelManagerTests(unittest.TestCase):
+    def test_selected_request_reaches_loader_so_only_required_accelerators_are_downloaded(self):
+        request = object()
+        class Backend:
+            def load(self, norm=None):
+                self.request = norm
+            def infer(self, norm, seed, raw_loras):
+                self_test.assertIs(self.request, request)
+                return seed
+        self_test = self
+        manager = self.manager({'moss_image': Backend})
+        self.assertEqual(manager.infer('moss_image', request, 7, []), 7)
+
     def manager(self, registry):
         try:
             from image_worker.manager import ModelManager
@@ -23,7 +35,7 @@ class ModelManagerTests(unittest.TestCase):
 
         def factory(name):
             class Backend:
-                def load(self):
+                def load(self, norm=None):
                     if references:
                         gc.collect()
                         self_ref = references[-1]
@@ -57,7 +69,7 @@ class ModelManagerTests(unittest.TestCase):
         events = []
 
         class Backend:
-            def load(self):
+            def load(self, norm=None):
                 events.append('load')
                 if events.count('load') == 1:
                     raise RuntimeError('interrupted checkpoint loading')
@@ -79,7 +91,7 @@ class ModelManagerTests(unittest.TestCase):
         events = []
 
         class Backend:
-            def load(self):
+            def load(self, norm=None):
                 events.append('load')
 
             def close(self):
@@ -100,7 +112,7 @@ class ModelManagerTests(unittest.TestCase):
         errors = []
 
         class First:
-            def load(self):
+            def load(self, norm=None):
                 pass
 
             def close(self):
@@ -112,7 +124,7 @@ class ModelManagerTests(unittest.TestCase):
                     raise TimeoutError('test inference was not released')
 
         class Second(First):
-            def load(self):
+            def load(self, norm=None):
                 second_loaded.set()
 
             def infer(self, *args):

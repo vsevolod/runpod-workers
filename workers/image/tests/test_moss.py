@@ -1,9 +1,11 @@
 """MOSS participates in routing and owns no resources until selected."""
 
 import importlib.util
+from contextlib import nullcontext
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +15,55 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 
 class MossIntegrationTests(unittest.TestCase):
+    def test_first_turbo_load_starts_prefetch_before_pipeline_and_waits_for_its_exit(self):
+        from image_worker import backends
+        events = []
+        from contextlib import contextmanager
+        @contextmanager
+        def prepare(directory, *, turbo=False):
+            self.assertTrue(turbo)
+            events.append('downloader_started')
+            yield SimpleNamespace(wait=lambda component: events.append(component))
+            events.append('downloader_closed')
+        def load(directory, *, turbo=False):
+            self.assertTrue(turbo)
+            self.assertEqual(events, ['downloader_started'])
+            events.append('pipeline_loaded')
+            return object()
+        with patch.object(backends, 'prefetch_moss_model', new=prepare), patch.object(
+            backends, 'load_moss_pipeline', new=load
+        ):
+            backend = backends.MossBackend()
+            backend.load(SimpleNamespace(model_variant='turbo'))
+        self.assertEqual(events, ['downloader_started', 'pipeline_loaded', 'all', 'downloader_closed'])
+
+    def test_warm_base_to_turbo_prepares_adapter_before_inference_and_propagates_download_failure(self):
+        from image_worker import backends
+        events = []
+        from contextlib import contextmanager
+        failed = False
+        @contextmanager
+        def prepare(directory, *, turbo, lora_only):
+            self.assertTrue(turbo and lora_only)
+            def wait(component):
+                if failed:
+                    raise RuntimeError('adapter download failed')
+                events.append(component)
+            yield SimpleNamespace(wait=wait)
+        runtime = SimpleNamespace(load_turbo=lambda: events.append('adapter_loaded'),
+                                  run=lambda *args: events.append('inference'))
+        with patch.object(backends, 'prefetch_moss_model', new=prepare):
+            backend = backends.MossBackend()
+            backend.runtime = runtime
+            norm = SimpleNamespace(model_variant='turbo')
+            backend.infer(norm, 0, [])
+            self.assertEqual(events, ['adapter_loaded', 'all', 'inference'])
+            events.clear()
+            failed = True
+            with self.assertRaisesRegex(RuntimeError, 'adapter download failed'):
+                backend.infer(norm, 0, [])
+            self.assertEqual(events, ['adapter_loaded'])
+
     def test_router_resolves_variant_defaults_and_rejects_edits_before_loading(self):
         from image_worker.backends import REGISTRY
         from image_worker.api import generate_image
@@ -46,12 +97,11 @@ class MossIntegrationTests(unittest.TestCase):
             def close(self):
                 self.closed = True
         runtime = Runtime()
-        with patch.object(backends, 'PrefetchSession') as prefetch, patch.object(
+        with patch.object(backends, 'prefetch_moss_model', return_value=nullcontext(None)) as prefetch, patch.object(
             backends, 'load_moss_pipeline', return_value=runtime
         ), patch.dict(os.environ, {'MOSS_MODEL_DIR': '/models/selected-moss'}):
             backend.load()
-            command = prefetch.call_args.args[0]
-            self.assertEqual(command[command.index('--output') + 1], '/models/selected-moss')
+            self.assertEqual(prefetch.call_args.args[0], Path('/models/selected-moss'))
             self.assertIs(backend.runtime, runtime)
         backend.close()
         backend.close()

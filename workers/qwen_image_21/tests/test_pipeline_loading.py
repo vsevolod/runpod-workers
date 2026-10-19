@@ -1,6 +1,7 @@
 """The mmap experiment must reach both loading libraries, not just the pipeline."""
 
 import importlib.util
+from contextlib import nullcontext
 import json
 import os
 import sys
@@ -15,7 +16,7 @@ from qwen_image_21_infer import pipeline, runtime_config
 
 
 class PipelineLoadingTests(unittest.TestCase):
-    def test_imports_overlap_prefetch_but_pipeline_never_loads_a_partial_snapshot(self):
+    def test_imports_overlap_prefetch_but_pipeline_waits_for_validated_metadata(self):
         sys.path.insert(0, str(Path(__file__).parents[2]))
         from shared.prefetch import PrefetchSession
         schedule = [1, .98, .95, .92, .89, .84, .70, .41]
@@ -37,6 +38,7 @@ while not (root / 'imports_done').exists():
 (root / 'model_index.json').write_text(json.dumps({'_class_name':'QwenImage21Pipeline','sample_sigmas':[1,.98,.95,.92,.89,.84,.70,.41]}))
 (root / 'complete').touch()
 ComponentPublisher(a.prefetch_state_dir).ready('all', root)
+ComponentPublisher(a.prefetch_state_dir).ready('config', root)
 ''')
             def load(*args, **kwargs):
                 self.assertTrue((root / "complete").is_file(), "Pipeline read an incomplete snapshot")
@@ -303,13 +305,14 @@ class RealPipelineLoadingTests(unittest.TestCase):
 
         import safetensors.torch
         import transformers.modeling_utils
-        from diffusers import DiffusionPipeline, QwenImage21Transformer2DModel
+        from diffusers import AutoencoderKLQwenImage21, DiffusionPipeline, QwenImage21Transformer2DModel
         from transformers import Qwen3VLConfig, Qwen3VLForConditionalGeneration
+        from shared.prefetch import PrefetchSession
 
         class TinyPipeline(DiffusionPipeline):
-            def __init__(self, text_encoder, transformer):
+            def __init__(self, text_encoder, transformer, vae):
                 super().__init__()
-                self.register_modules(text_encoder=text_encoder, transformer=transformer)
+                self.register_modules(text_encoder=text_encoder, transformer=transformer, vae=vae)
 
         config = Qwen3VLConfig(
             text_config=dict(
@@ -331,11 +334,32 @@ class RealPipelineLoadingTests(unittest.TestCase):
                 attention_head_dim=8, num_attention_heads=2, context_in_dim=16,
                 mlp_ratio=2, axes_dims_rope=(2, 2, 4),
             ).to(torch.bfloat16),
+            AutoencoderKLQwenImage21(
+                base_dim=4, decoder_base_dim=4, dim_mult=[1, 1, 1, 1, 1],
+                num_res_blocks=1, z_dim=4, latents_mean=[0.] * 4,
+                latents_std=[1.] * 4, in_channels=4, out_channels=4,
+                is_residual=True, temperal_downsample=[False, True, True, True],
+            ).to(torch.bfloat16),
         )
         with tempfile.TemporaryDirectory() as directory:
             original.save_pretrained(directory)
-            for disabled in (True, False):
-                with self.subTest(disable_mmap=disabled), patch.object(
+            script = Path(directory) / 'download.py'
+            script.write_text('''
+import argparse
+from pathlib import Path
+from shared.prefetch import ComponentPublisher
+p = argparse.ArgumentParser(); p.add_argument('--prefetch-state-dir'); a = p.parse_args()
+root = Path(__file__).parent
+publisher = ComponentPublisher(a.prefetch_state_dir)
+for name in ('transformer', 'text_encoder', 'vae'):
+    publisher.ready(name, root / name)
+publisher.ready('all', root)
+''')
+            for disabled, staged in ((True, False), (False, False), (True, True), (False, True)):
+                pending = (PrefetchSession([sys.executable, str(script)],
+                           env={**os.environ, 'PYTHONPATH': str(Path(__file__).parents[2])})
+                           if staged else nullcontext(None))
+                with self.subTest(disable_mmap=disabled, staged=staged), pending as session, patch.object(
                     safetensors.torch, "load_file", wraps=safetensors.torch.load_file
                 ) as file_loader, patch.object(
                     transformers.modeling_utils, "safe_open",
@@ -345,13 +369,15 @@ class RealPipelineLoadingTests(unittest.TestCase):
                         TinyPipeline, directory,
                         local_files_only=True, disable_mmap=disabled,
                     )
+                    if session is not None:
+                        session.wait('all', timeout=5)
                     self.assertEqual(file_loader.called, not disabled)
                     mmap_calls = [
                         call for call in encoder_loader.call_args_list
                         if call.kwargs.get("backend") == "mmap"
                     ]
                     self.assertEqual(bool(mmap_calls), not disabled)
-                    for component in ("text_encoder", "transformer"):
+                    for component in ("text_encoder", "transformer", "vae"):
                         actual = getattr(restored, component).state_dict()
                         for name, expected in getattr(original, component).state_dict().items():
                             torch.testing.assert_close(actual[name], expected, rtol=0, atol=0)

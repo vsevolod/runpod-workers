@@ -10,7 +10,7 @@ from pathlib import Path
 workers_dir = Path(__file__).resolve().parents[2]
 if (workers_dir / "shared").is_dir():
     sys.path.insert(0, str(workers_dir))
-from shared.prefetch import wait_for_component
+from shared.prefetch import wait_for_component, loading_component
 
 from .diagnostics import log_cuda_info, log_runtime_info, log_stage
 from .lora import LoRACatalog, LoRAManager
@@ -89,14 +89,15 @@ def load_pipeline(
     with log_stage("cuda_probe"):
         log_cuda_info(torch)
 
-    # Imports/probing run while the separate process fetches the snapshot.
-    # Preserve mmap and CPU offload; do not inspect a partial model directory.
-    wait_for_component("all")
+    # Metadata is small and comes first; each weight component has its own barrier.
+    staged = wait_for_component("config") is not None
     with log_stage("model_source"):
         source = resolve_model_source(model_dir, model_id, model_variant)
         local_files_only = parse_local_files_only()
         mode = resolve_offload(offload)
         disable_mmap = parse_disable_mmap()
+        if staged:
+            local_files_only = True
         vae_variant = resolve_vae_variant()
         directory = Path(
             model_dir if model_dir is not None else resolve_model_directory(model_variant)
@@ -136,6 +137,7 @@ def load_pipeline(
         if model_variant == "base":
             pipe.scheduler = base_scheduler(pipe.scheduler)
     pipe.set_progress_bar_config(disable=True)
+    wait_for_component('all')
 
     with log_stage(f"placement_{mode}"):
         if mode == "cpu":
@@ -162,6 +164,30 @@ def _load_base_pipeline(
     import torch
 
     components = {}
+    transformer_source = wait_for_component('transformer')
+    if transformer_source is not None:
+        from diffusers import QwenImage21Transformer2DModel
+        from transformers import Qwen3VLForConditionalGeneration
+
+        with loading_component('transformer'):
+            components['transformer'] = QwenImage21Transformer2DModel.from_pretrained(
+                str(transformer_source), torch_dtype=torch.bfloat16,
+                local_files_only=True, disable_mmap=disable_mmap,
+            )
+        encoder_source = wait_for_component('text_encoder')
+        with loading_component('text_encoder'):
+            components['text_encoder'] = Qwen3VLForConditionalGeneration.from_pretrained(
+                str(encoder_source), dtype=torch.bfloat16,
+                local_files_only=True, disable_mmap=disable_mmap,
+            )
+        vae_ready = wait_for_component('vae')
+        if vae is None:
+            from diffusers import AutoencoderKLQwenImage21
+            with loading_component('vae'):
+                vae = AutoencoderKLQwenImage21.from_pretrained(
+                    str(vae_ready), torch_dtype=torch.bfloat16,
+                    local_files_only=True, disable_mmap=disable_mmap,
+                )
     if vae is not None:
         components["vae"] = vae
     elif vae_source is not None:
@@ -175,7 +201,7 @@ def _load_base_pipeline(
                 local_files_only=local_files_only,
                 disable_mmap=disable_mmap,
             )
-    if disable_mmap:
+    if disable_mmap and 'text_encoder' not in components:
         from transformers import Qwen3VLForConditionalGeneration
 
         # Diffusers forwards disable_mmap only to ModelMixin components, not

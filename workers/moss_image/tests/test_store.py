@@ -11,6 +11,18 @@ sys.path[:0] = [str(Path(__file__).parents[2]), str(Path(__file__).parents[1])]
 
 
 class StoreTests(unittest.TestCase):
+    def test_prefetch_uses_shared_downloader_and_selects_only_requested_accelerator(self):
+        from moss_image_infer import model_store as store
+        with tempfile.TemporaryDirectory() as tmp, patch.object(store, 'PrefetchSession') as session:
+            for turbo, lora_only in ((False, False), (True, False), (True, True)):
+                with self.subTest(turbo=turbo, lora_only=lora_only):
+                    with store.prefetch_model(Path(tmp), turbo=turbo, lora_only=lora_only):
+                        pass
+                    command = session.call_args.args[0]
+                    self.assertEqual('--turbo' in command, turbo and not lora_only)
+                    self.assertEqual('--lora-only' in command, lora_only)
+                    self.assertEqual(command[command.index('--output') + 1], tmp)
+
     def test_complete_download_is_reused_and_truncated_files_are_repaired(self):
         from moss_image_infer import model_store as store
         from moss_image_infer.config import MODEL_ID, MODEL_REVISION

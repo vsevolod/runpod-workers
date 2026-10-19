@@ -81,6 +81,12 @@ record repository/revision/file sizes, reuse complete local snapshots, and
 repair missing/truncated files. SFT files total approximately 30 GB; Turbo's
 additional adapter is approximately 1.19 GB on disk. Both variants share weights.
 
+The shared CPU-only downloader publishes the transformer first, then the text
+encoder with its tokenizer, then the VAE with its scheduler. The worker loads
+each ready component while later transfers continue. A cold Turbo request
+includes DMD in that same downloader; inference never fetches weights from the Hub.
+Validated component manifests allow retries to retain already downloaded files.
+
 The DMD adapter downloads on the first Turbo request, under `turbo/` in the
 model directory. Its CPU cache is retained until MOSS unloads. Base requests
 do not download the accelerator. No data-space sampler, step embedder or

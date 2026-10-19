@@ -5,6 +5,14 @@ The model registry owns routing; each backend owns its existing inference.
 Requests are serialized so the old backend is closed before another loads.
 The worker does not download a checkpoint until a request selects a model.
 
+All image models use the shared CPU-only downloader and per-component readiness
+protocol in `shared.prefetch`. A ready component starts loading while subsequent
+components continue downloading. Krea consumes DiT -> VAE -> text encoder;
+Qwen consumes metadata -> transformer -> text encoder -> VAE; MOSS consumes
+transformer -> text encoder/tokenizer -> VAE/scheduler -> requested Turbo LoRA.
+The final `all` barrier verifies downloader success before inference. See the
+repository [agent rules](../../AGENTS.md) for this required loading contract.
+
 ## API
 
 Endpoint: `9zb0wyo61ck3wk` (`image-workers`).

@@ -17,12 +17,16 @@ def main(argv=None):
     add_download_arguments(parser, default_output=str(model_directory()))
     parser.set_defaults(output=str(model_directory()))
     parser.add_argument('--turbo', action='store_true', help='Also prefetch the pinned DMD LoRA')
+    parser.add_argument('--lora-only', action='store_true', help='Prepare Turbo on an already resident SFT pipeline')
     args = parser.parse_args(argv)
     root = Path(args.output).expanduser().resolve()
-    download_model(root, hf_home=args.hf_home, token=args.token)
-    if args.turbo:
-        ensure_turbo_lora(root, hf_home=args.hf_home, token=args.token)
-    ComponentPublisher(args.prefetch_state_dir).ready('all', root)
+    publisher = ComponentPublisher(args.prefetch_state_dir)
+    if not args.lora_only:
+        download_model(root, hf_home=args.hf_home, token=args.token, publisher=publisher)
+    if args.turbo or args.lora_only:
+        adapter = ensure_turbo_lora(root, hf_home=args.hf_home, token=args.token)
+        publisher.ready('turbo_lora', adapter)
+    publisher.ready('all', root)
     return 0
 
 
