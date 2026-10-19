@@ -8,11 +8,15 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Minimum nominal VRAM class in GB -> megapixels. The 48 GB entries are
-# calibrated on L40S with Identity Edit V2 (Krea) / Lenovo (Qwen); all other
-# entries remain 1 MP placeholders, not measured hardware limits.
+# Minimum nominal VRAM class in GB -> decimal megapixels.
+# Krea/Qwen: 48 GB calibrated on L40S with Identity Edit V2 / Lenovo.
+# MOSS Base/Turbo: 24 GB (RTX 4090) and 48 GB (L40S), one square output,
+# CPU offload, through the API ceiling of 2048**2 pixels = 4.194304 MP.
+# All other entries remain 1 MP placeholders, not measured hardware limits.
 # Protocol, raw measurements and scope: docs/benchmarks/image-megapixels.md.
 MEGAPIXEL_LIMITS = {
+    "moss_image.base": {0: 1., 8: 1., 12: 1., 16: 1., 24: 4.194304, 32: 1., 48: 4.194304, 64: 1., 80: 1., 96: 1., 192: 1.},
+    "moss_image.turbo": {0: 1., 8: 1., 12: 1., 16: 1., 24: 4.194304, 32: 1., 48: 4.194304, 64: 1., 80: 1., 96: 1., 192: 1.},
     "qwen_image_21.base": {0: 1., 8: 1., 12: 1., 16: 1., 24: 1., 32: 1., 48: 4., 64: 1., 80: 1., 96: 1., 192: 1.},
     "qwen_image_21.turbo": {0: 1., 8: 1., 12: 1., 16: 1., 24: 1., 32: 1., 48: 4., 64: 1., 80: 1., 96: 1., 192: 1.},
     "krea2.fp8": {0: 1., 8: 1., 12: 1., 16: 1., 24: 1., 32: 1., 48: 4., 64: 1., 80: 1., 96: 1., 192: 1.},

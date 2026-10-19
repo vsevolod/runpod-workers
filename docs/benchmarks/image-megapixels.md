@@ -8,9 +8,11 @@ and configuration together when adding a new image model or GPU tier.
 
 The nominal **48 GB** tier selects **4 MP** for `krea2.fp8`,
 `krea2.int8_convrot`, `qwen_image_21.base` and `qwen_image_21.turbo`.
-Other tiers remain **1 MP placeholders**, including 64 GB and above. They have
-not been calibrated on their corresponding hardware. The 4 MP ceiling was a
-product choice; the experiment did not find the maximum possible resolution.
+For `moss_image.base` and `moss_image.turbo`, the **24 and 48 GB** tiers select
+**4.194304 MP (2048x2048)**, measured on RTX 4090 and L40S with CPU offload.
+Other entries remain **1 MP placeholders**, including 64 GB and above. They
+have not been calibrated on their corresponding hardware. The tested ceilings
+are product/API limits; the experiments did not find the physical GPU maximum.
 
 CUDA reports binary GiB in diagnostics, whereas the table uses nominal GB
 classes. The resolver converts total bytes to decimal GB, rounds up the partial
@@ -41,8 +43,9 @@ prompt lengths, aspect ratios or GPU architectures. The run reached the API
 ceiling; it did not search beyond it for a physical GPU maximum.
 
 MOSS selects its generation canvas through explicit `width`/`height`;
-`reference_megapixels` does not control it. These measurements do not add
-a row to `MEGAPIXEL_LIMITS` or change the output-limit policy. See the report
+`reference_megapixels` does not control it. The follow-up table update records
+4.194304 MP for MOSS Base/Turbo at 24/48 GB and selects the variant's row for
+response budget metadata; it does not change output-limit behavior. See the report
 for raw events, shapes, pinned image/model revisions, package freezes,
 Global hash verification and Pod teardown evidence. Krea/Qwen were not run
 as part of this experiment.

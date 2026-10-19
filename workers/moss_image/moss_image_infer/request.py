@@ -24,7 +24,8 @@ def normalize_job_input(values, *, raw_keys):
     values = dict(values)
     if 'guidance_scale' not in raw_keys:
         values['guidance_scale'] = 1. if variant == 'turbo' else 3.
-    common = normalize_common_fields(values, MOSS_API, raw_keys=raw_keys)
+    common = normalize_common_fields(values, MOSS_API, raw_keys=raw_keys,
+                                     megapixel_model=f'moss_image.{variant}')
     skip = options['uncond_skip_layers']
     skip = tuple(skip) if skip is not None else (() if variant == 'turbo' else (22,))
     if variant == 'turbo' and (common.guidance_scale != 1. or common.negative_prompt or skip):

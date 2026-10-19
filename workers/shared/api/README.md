@@ -120,21 +120,25 @@ the request's seeded generator. Changing sampling options does not reload weight
 ### Shared megapixel budget
 
 `reference_megapixels` belongs at the **top level** of `input`, alongside
-`images` and `num_inference_steps`. Both workers accept a number or `"max"`
+`images` and `num_inference_steps`. All image backends accept a number or `"max"`
 (the default). Numeric values are finite, 0.001024..4.3008 MP, where 1 MP means
 1,000,000 pixels. Existing model canvas limits still apply.
 
 With `"max"`, the worker reads **total VRAM of the active CUDA device** and
 selects a budget from [`MEGAPIXEL_LIMITS`](../megapixels.py). There are separate
-rows for Qwen Base/Turbo and Krea FP8/INT8 ConvRot. Total CUDA memory is converted
+rows for MOSS Base/Turbo, Qwen Base/Turbo and Krea FP8/INT8 ConvRot. Total CUDA memory is converted
 from binary GiB to decimal GB and rounded up to the next whole GB before selecting
 the largest nominal GB tier not exceeding that capacity. For example, L40S
 reports 44.40 GiB / 47.68 GB and selects the 48 GB tier. Missing CUDA, unknown
 models and capacities below the table use the 1 MP fallback.
 
-**The 48 GB tier selects 4 MP** for all four profiles, calibrated on L40S with
-Krea Identity Edit V2 / Qwen Lenovo as fixed LoRA baselines. All other tiers
-remain 1 MP placeholders, including larger GPUs pending calibration.
+**The 48 GB tier selects 4 MP** for Krea/Qwen, calibrated on L40S with
+Krea Identity Edit V2 / Qwen Lenovo as fixed LoRA baselines. MOSS Base/Turbo
+select **4.194304 MP (2048x2048) at 24 and 48 GB**, calibrated on RTX 4090
+and L40S with one square output and CPU offload. Other entries remain 1 MP
+placeholders, including larger GPUs pending calibration. For MOSS the selected
+budget is returned as metadata; generation dimensions still come from
+`width`/`height`, not from `reference_megapixels`.
 See the [measurements, scope and repeatable procedure](../../../docs/benchmarks/image-megapixels.md).
 Additional LoRAs, reference counts, aspect ratios and CFG can change memory use;
 the current lookup only considers model and total VRAM. Explicit numbers bypass the table

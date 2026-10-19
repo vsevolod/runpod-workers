@@ -43,6 +43,10 @@ The [2026-10-19 capacity run](../../docs/benchmarks/2026-10-19-moss/README.md)
 confirmed single-image square generation through 2048x2048 in Base/Turbo on
 RTX 4090 24 GB and L40S 48 GB with CPU offload. Output-limit behavior still
 uses explicit dimensions rather than a shared reference-budget table row.
+The shared table records 4.194304 MP for `moss_image.base` and
+`moss_image.turbo` at the 24/48 GB tiers; other tiers retain 1 MP placeholders.
+With `reference_megapixels="max"`, MOSS selects its variant's row and returns
+that resolved budget in response metadata without resizing the output.
 
 Common `num_inference_steps` can override the default (1..200); Turbo counts
 other than 8 are experimental. Base accepts finite nonnegative CFG; exactly

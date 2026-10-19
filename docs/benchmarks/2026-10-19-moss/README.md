@@ -157,3 +157,8 @@ analysis environment with Matplotlib to run `summarize.py`.
 This experiment changes neither production inference nor the output-limit
 policy. MOSS uses explicit `width`/`height`; shared `reference_megapixels` does
 not select its generation canvas.
+
+The subsequent table update records the confirmed 4.194304 MP at the 24/48 GB
+tiers for `moss_image.base` and `moss_image.turbo`. Request normalization selects
+the corresponding row for resolved-budget metadata. This follow-up does not
+change the measured artifacts or the explicit generation canvas policy.
