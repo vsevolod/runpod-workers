@@ -1,4 +1,10 @@
-# RunPod worker — Krea 2 Turbo (FP8 / INT8 ConvRot)
+# Krea 2 Turbo inference backend
+
+This directory supplies the `krea2` backend of the
+[common image worker](../image/README.md). Deploy `workers/image/Dockerfile`
+and select `input.model="krea2"` on endpoint `9zb0wyo61ck3wk`.
+The model-specific reference below documents inference and manual tooling.
+
 
 Thin serverless worker: text-to-image **and** Identity/General Edit V2 via dual
 conditioning. No ComfyUI.
@@ -16,11 +22,10 @@ conditioning. No ComfyUI.
 
 ```
 workers/krea2/
-├── Dockerfile              # Dockerfile path for RunPod; see build context below
-├── handler.py              # RunPod entry + ModelHandler load-once
+├── handler.py              # reference adapter; release entry is ../image/handler.py
 ├── schemas.py
-├── download_weights.py     # startup download (not baked into image)
-├── start.sh                # shared bootstrap with overlapping downloads
+├── download_weights.py     # request-time download (not baked into image)
+├── start.sh                # manual backend bootstrap
 ├── test_input.json
 ├── requirements.txt
 └── krea2_infer/            # vendored krea-2 + FP8 / INT8 loaders
@@ -28,56 +33,24 @@ workers/krea2/
 
 ## Model storage and startup
 
-Hub transfers, cache/token setup and timing use the shared
-[`model_download` module](../shared/model_download.py), copied into the image.
-`download_weights.py` keeps Krea's FP8/INT8 selection and TE/VAE preparation.
+The common worker downloads and loads Krea only when a Krea request first
+selects it. A warm Krea request reuses the pipeline; switching to Qwen releases
+Krea. A later Krea request reuses files on container disk.
 
-Use an **80 GB container disk**. On each fresh worker, `start.sh` starts the
-shared bootstrap with a separate CPU-only downloader. ML imports run immediately
-with `LOCAL_FILES_ONLY=1`. The download order is DiT → clean Diffusers VAE → text
-encoder → Identity Edit V2 + General Edit V2. DiT files go to `/models/krea2`;
-HF snapshots go to `/models/hf`. Both edit adapters (~1.83 GB each) are downloaded
-to container disk and exposed under `$MODEL_DIR/edit_loras`.
+- `KREA_MODEL_DIR=/models/krea2`: DiT and built-in edit adapters.
+- `KREA_LORA_DIR=/runpod-volume/krea2/loras`: additional volume adapters.
+- `KREA_DIT_QUANT=int8_convrot`: common-image default; `fp8` is also supported.
+- `HF_HOME=/models/hf`: text encoder and clean VAE cache.
 
-The loader waits for each component immediately before loading it, so DiT can
-load into VRAM while VAE/encoder downloads continue. Each repo is pinned to one
-commit for the session, and the VAE/encoder loaders receive the exact local
-snapshot paths. Loading into VRAM remains sequential. No requests are accepted
-until all required components, including both V2 adapters, are ready and the downloader exits successfully.
-A failed transfer or model load aborts startup and reaps the downloader.
-New containers download again because their storage is temporary.
-
-The startup download skips the optional Comfy VAE single-file and uses the HF
-VAE cache. Additional LoRAs remain on the attached volume at
-`/runpod-volume/krea2/loras`. Logs distinguish `model_download`, `component_ready`,
-`wait_component` and `component_load`. Include the entire startup and first
-generation when comparing speed; overlapping stages must not be added together.
-
-Existing endpoint environment values override Dockerfile defaults. After
-publishing the new image, update the endpoint explicitly:
-
-```text
-MODEL_DIR=/models/krea2
-HF_HOME=/models/hf
-LORA_DIR=/runpod-volume/krea2/loras
-DIT_QUANT=int8_convrot
-```
-
-Keep your current `DIT_QUANT` selection (`int8_convrot` is used by the existing
-`krea2-workers` endpoint; new images still default to `fp8`). Remove or update
-any explicit `DIT_PATH` / `VAE_PATH` pointing at old remote weights. The entrypoint
-sets `LOCAL_FILES_ONLY=1` and waits for each required component; no pre-populated model volume
-is required.
-
-The endpoint's Docker start command must use the image's default `CMD` or
-`sh /app/start.sh`. Remove old commands that launch `handler.py` directly after
-the new image is active; see [startup command migration](../../README.md#existing-endpoint-startup-commands).
+Generic `MODEL_DIR`, `LORA_DIR` and `DIT_QUANT` remain fallbacks for manual
+backend tooling. Model-prefixed settings take precedence in the common worker.
+See the common worker's configuration table for the complete deployment env.
 
 ### Optional persistent snapshot
 
 The downloader can also bootstrap a volume manually. Regional network volumes
 must be in the same datacenter as the endpoint; Global Volumes are not tied to
-a datacenter. The default startup downloads directly to container disk.
+a datacenter. The first Krea request downloads directly to container disk.
 
 ### Disk budget (this worker, not Comfy)
 
@@ -141,14 +114,14 @@ python download_weights.py --output /runpod-volume/krea2 --hf-home /runpod-volum
 | `qwen_image_vae.safetensors` | Optional try; else clean HF VAE |
 | `qwen3vl_4b_fp8_scaled.safetensors` (~5.2 GB) | **No** — ComfyUI `text_encoders/` format |
 
-Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. The startup downloader warms its local HF cache before inference, honoring `TEXT_ENCODER_ID` when overridden.
+Text encoding follows **official krea-2**: `Qwen3VLForConditionalGeneration` from Hugging Face. That is larger on disk/VRAM than Comfy’s FP8 TE, but needs no Comfy graph or scaled-FP8 TE loader. The Krea downloader warms its local HF cache before inference, honoring `TEXT_ENCODER_ID` when overridden.
 
 ### DiT quant modes (`DIT_QUANT`)
 
 | `LORA_CACHE_DIR` | `$MODEL_DIR/lora_cache` | Local container-disk cache of requested adapters |
 | `DIT_QUANT` | DiT file (auto under `MODEL_DIR`) | Compute path |
 |-------------|-----------------------------------|--------------|
-| `fp8` (default / unset) | `krea2_turbo_fp8.safetensors` | FP8 storage, cast to bf16 on Linear forward (current production) |
+| `fp8` (standalone tooling default) | `krea2_turbo_fp8.safetensors` | FP8 storage, cast to bf16 on Linear forward |
 | `int8_convrot` (aliases: `int8`, `int8_tensorwise`) | `krea2_turbo_int8_convrot.safetensors` | int8_tensorwise + online ConvRot; CUDA `torch._int_mm` W8A8 when batch is large enough, else dequant fallback |
 
 Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fails fast. TE / VAE / API are shared.
@@ -173,48 +146,9 @@ Mode is fixed at worker start (FlashBoot-friendly). Mismatched file vs mode fail
 
 ## Deploy (RunPod)
 
-Repo may be **public or private** (connect GitHub in RunPod for private). Do not commit tokens or weights.
-
-1. Build through the **Build Runpod workers** GitHub Actions workflow, then use
-   **Serverless → New Endpoint → Import from Docker Registry**, or update the
-   existing endpoint's template while retaining its ID. The image is
-   `ghcr.io/vsevolod/runpod-workers-krea2:<commit-sha>`.
-2. Set **Container disk = 80 GB** and the local model/cache paths above. The worker
-   downloads its own base weights at startup.
-3. Attach a volume only if using additional LoRAs, preserving their `LORA_DIR`.
-
-### Build settings (monorepo)
-
-| Setting | Value | Notes |
-|---------|-------|--------|
-| **Branch** | `master` (this repo) | Not `main` unless you rename |
-| **Dockerfile path** | `workers/krea2/Dockerfile` | Path to the file only |
-| **Build context** | `.` | **Repo root** — required because Dockerfile does `COPY workers/krea2/...` |
-
-Wrong build context (e.g. `workers/krea2`) makes `COPY workers/krea2/...` fail during image build. Context does **not** control *when* a build starts; it only controls how Docker resolves paths.
-
-Other endpoint knobs:
-
-- GPU: **24 GB** class (A5000 / 3090 / 4090 / L4, etc.)
-- Attach a volume if needed for additional LoRAs
-- Container disk: **80 GB**
-- FlashBoot: on
-- Active workers: `0` (or `1` for warm)
-- Env: `MODEL_DIR=/models/krea2`, `HF_HOME=/models/hf`; preserve `DIT_QUANT` and the existing `LORA_DIR`
-
-### Updating the endpoint after code changes
-
-Worker changes pushed to `master` trigger the GitHub Actions build and GHCR
-publication. For a manual build:
-
-```bash
-gh workflow run build-workers.yml --ref master -f publish=true
-gh run list --workflow build-workers.yml
-```
-
-After the workflow succeeds, update the Runpod endpoint to the exact published
-image tag/digest and verify a GPU request. GitHub Actions does not automatically
-change the endpoint template. See the shared [deployment instructions](../../README.md#qwen-image-and-krea2-build-on-github-run-on-runpod).
+Use the [common image worker deployment](../image/README.md#deployment).
+This backend no longer publishes a separate Docker image. Its dependencies
+resolve through `../image/requirements.txt`.
 
 ## API
 
@@ -246,7 +180,7 @@ The common `sampler` field accepts only `"euler"` on Krea. Both `"lora"` and
 
 ```json
 {
-  "input": {
+  "input": {"model": "krea2",
     "type": "image_generate",
     "prompt": "a fox walking in the snow",
     "width": 1024,
@@ -283,7 +217,7 @@ krea2_identity_edit_v2   # restage a person while preserving likeness
 krea2_general_edit_v2    # remove, recolor, relight, backgrounds, objects, text, outfits
 ```
 
-Both are downloaded automatically at startup. Use one per task. Loading both
+Both are downloaded automatically on the first Krea request. Use one per task. Loading both
 at strength 1.0 produces noise; the author's optional blend is about 0.6 each.
 The API does not insert an adapter when `loras` is empty.
 
@@ -308,7 +242,7 @@ python scripts/krea2_image.py -i scene.jpg --edit-model general --prompt "Remove
 
 ```json
 {
-  "input": {
+  "input": {"model": "krea2",
     "type": "image_edit",
     "prompt": "recolor the car matte black, keep everything else unchanged",
     "images": ["data:image/png;base64,..."],
@@ -329,7 +263,7 @@ python scripts/krea2_image.py -i scene.jpg --edit-model general --prompt "Remove
 
 ```json
 {
-  "input": {
+  "input": {"model": "krea2",
     "type": "image_edit",
     "prompt": "create a photo of this person next to the tractor",
     "images": [
@@ -387,7 +321,7 @@ Optional `loras` (default `[]`, both modes):
   - `weight_diff` → **0.0..5.0** (community filter-bypass files often use **3–5**)
   - `0.0` skips that adapter
 - Declared `type` must match file contents (no silent auto-detect). No download-by-URL, no TE/VAE LoRA, no `list_loras` API.
-- Edit expects one selected V2 adapter; both are available locally after startup.
+- Edit expects one selected V2 adapter; both are available locally after the first Krea load.
 - Unknown names, type/content mismatch, or invalid shapes fail the job with a safe error (no `refresh_worker`).
 
 Each request copies only its nonzero-strength adapters from `LORA_DIR` to
@@ -451,13 +385,9 @@ curl -sS -X POST "https://api.runpod.ai/v2/${ENDPOINT_ID}/run" \
 
 ## Local image build
 
-From monorepo root (same as RunPod: context `.`, Dockerfile under `workers/krea2/`):
-
 ```bash
-docker build -f workers/krea2/Dockerfile -t runpod-krea2:latest .
+docker build -f workers/image/Dockerfile -t runpod-image .
 ```
-
-Generation needs a GPU and enough container disk for the startup downloads.
 
 ## Design notes
 

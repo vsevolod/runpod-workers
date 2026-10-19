@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import gc
-import os
 import sys
 from pathlib import Path
 
@@ -17,7 +16,6 @@ from .diagnostics import log_cuda_info, log_runtime_info, log_stage
 from .lora import LoRACatalog, LoRAManager
 from .request import NormalizedRequest, build_pipe_kwargs
 from .runtime_config import (
-    LORA_DIR_NAME,
     TEXTURE_FIX_VAE_ID,
     parse_disable_mmap,
     parse_local_files_only,
@@ -25,6 +23,7 @@ from .runtime_config import (
     resolve_offload,
     resolve_vae_variant,
     resolve_model_directory,
+    resolve_lora_directory,
     resolve_vae_directory,
     validate_sampling_config,
 )
@@ -110,7 +109,7 @@ def load_pipeline(
                 if local_files_only or (vae_directory / "config.json").is_file()
                 else TEXTURE_FIX_VAE_ID
             )
-        lora_directory = Path(os.environ.get("LORA_DIR") or resolve_model_directory("turbo") / LORA_DIR_NAME)
+        lora_directory = resolve_lora_directory()
     with log_stage("lora_catalog"):
         lora_catalog = LoRACatalog.scan(lora_directory)
     logger.info(

@@ -5,9 +5,11 @@ image decoding/delivery, response builder and error handling. Their model adapte
 own inference, model selection, reference geometry and LoRA compatibility.
 `profiles.py` declares defaults, limits and supported model options.
 
-Select the model through its existing RunPod endpoint. Qwen Base and Turbo share
-one Qwen endpoint; `model_options.variant` selects the checkpoint for that request.
-Krea remains a separate endpoint. This library does not route between endpoints.
+Both models share RunPod endpoint `9zb0wyo61ck3wk` (`image-workers`).
+Set `input.model` to `krea2` or `qwen_image_21`; omission defaults to Krea.
+Qwen Base/Turbo is selected with `model_options.variant` on the same endpoint.
+The response reports the selected model in `output.model`. Unknown model IDs
+are rejected before loading or unloading a model.
 
 ## Request
 
@@ -18,6 +20,7 @@ The returned request ID is polled at `/status/{REQUEST_ID}` by the bundled clien
 ```json
 {
   "input": {
+    "model": "qwen_image_21",
     "type": "image_generate",
     "prompt": "A photograph of a red fox in soft evening light",
     "negative_prompt": "blur, artifacts",
@@ -35,7 +38,7 @@ The returned request ID is polled at `/status/{REQUEST_ID}` by the bundled clien
 }
 ```
 
-This example targets the Qwen endpoint. `prompt` is required; all other fields
+This example selects the Qwen backend on the common endpoint. `prompt` is required; all other fields
 are optional. Unknown root fields and unknown model options are errors.
 
 | Common field | Type | Krea 2 | Qwen Image 2.1 |
@@ -220,7 +223,7 @@ The other edit options have no effect on text-to-image generation.
 }
 ```
 
-Krea downloads Identity Edit V2 and General Edit V2 at startup. Select
+Krea downloads Identity Edit V2 and General Edit V2 on its first request. Select
 `krea2_identity_edit_v2` for people/restaging or `krea2_general_edit_v2` for
 instruction edits. Use one at strength 1.0; combining both at 1.0 produces noise.
 The worker does not silently insert an adapter when `loras` is empty.

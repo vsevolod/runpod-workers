@@ -8,7 +8,7 @@ Modes:
 
 Env:
   RUNPOD_API_KEY   required
-  ENDPOINT_ID      required (no default endpoint yet)
+  ENDPOINT_ID      optional override of the common image endpoint
 
 Examples:
   python scripts/qwen_image_21.py --prompt "a red fox" -o out.png
@@ -43,6 +43,9 @@ SAMPLERS = ("euler", "heun", "er_sde")
 DEFAULT_GUIDANCE = 1.0
 DEFAULT_GEN_SIZE = 1024
 MAX_REFS = 10
+
+
+DEFAULT_ENDPOINT_ID = "9zb0wyo61ck3wk"
 
 
 def _require_env(name: str) -> str:
@@ -361,6 +364,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
         return 1
 
     job_input: dict[str, Any] = {
+        "model": "qwen_image_21",
         "model_options": _model_options(args),
         "reference_megapixels": args.reference_megapixels,
         "type": "image_edit",
@@ -398,6 +402,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
         print("error: prompt is required", file=sys.stderr)
         return 1
     job_input: dict[str, Any] = {
+        "model": "qwen_image_21",
         "model_options": _model_options(args),
         "reference_megapixels": args.reference_megapixels,
         "type": "image_generate",
@@ -428,7 +433,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
 
 def main() -> int:
     args = _build_parser().parse_args()
-    endpoint_id = _require_env("ENDPOINT_ID")
+    endpoint_id = os.environ.get("ENDPOINT_ID", "").strip() or DEFAULT_ENDPOINT_ID
     api_key = _require_env("RUNPOD_API_KEY")
     if args.request_id:
         if args.images:

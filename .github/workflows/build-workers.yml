@@ -6,9 +6,12 @@ on:
     paths:
       - .github/workflows/build-workers.yml
       - workers/shared/**
+      - workers/image/**
       - workers/qwen_image_21/**
       - workers/krea2/**
       - workers/joycaption/**
+      - scripts/krea2_image.py
+      - scripts/qwen_image_21.py
   workflow_dispatch:
     inputs:
       publish:
@@ -27,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        worker: [qwen_image_21, krea2, joycaption]
+        worker: [image, joycaption]
     env:
       WORKER: ${{ matrix.worker }}
     steps:
@@ -53,13 +56,17 @@ jobs:
         shell: bash
         run: |
           docker run --rm --entrypoint uv "$IMAGE" pip check --python /.venv/bin/python
-          docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
+          if [ "$WORKER" = image ]; then
+            docker run --rm --entrypoint python "$IMAGE" -u /app/workers/krea2/download_weights.py --help
+            docker run --rm --entrypoint python "$IMAGE" -u /app/workers/qwen_image_21/download_weights.py --help
+          else
+            docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
+          fi
       - name: Check image worker bootstrap and shared helpers
-        if: matrix.worker != 'joycaption'
+        if: matrix.worker == 'image'
         shell: bash
         run: |
-          docker run --rm --entrypoint python "$IMAGE" -u /app/shared/bootstrap.py --help
-          docker run --rm --entrypoint python "$IMAGE" -m unittest discover -s /app/shared/tests -p 'test_*.py'
+          docker run --rm --entrypoint python "$IMAGE" -u /app/workers/shared/bootstrap.py --help
       - name: Check model runtime imports without loading weights
         shell: bash
         run: |
@@ -74,14 +81,18 @@ jobs:
               from transformers import AutoProcessor, LlavaForConditionalGeneration
               compiled_arches = torch._C._cuda_getArchFlags().split()
               assert "sm_120" in compiled_arches, compiled_arches
-          elif worker == "qwen_image_21":
-              importlib.import_module(worker + "_infer.pipeline")
-              from diffusers import QwenImage21Pipeline
-              assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
           else:
-              importlib.import_module(worker + "_infer.pipeline")
-              from diffusers import AutoencoderKLQwenImage
+              import runpy, runpod, transformers
+              from image_worker.backends import REGISTRY
+              from diffusers import AutoencoderKLQwenImage, QwenImage21Pipeline
               from transformers import Qwen3VLForConditionalGeneration
+              assert transformers.__version__ == "5.20.1", transformers.__version__
+              assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
+              registered = []
+              runpod.serverless.start = registered.append
+              runpy.run_path("/app/workers/image/handler.py", run_name="image_startup_check")
+              assert len(registered) == 1 and callable(registered[0]["handler"])
+              print("Both model backends and request-selected handler imported without weights")
           print("Runtime imports OK; torch=" + torch.__version__ +
                 " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
@@ -92,29 +103,19 @@ jobs:
           docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" \
             --env PYTHONPATH=/src/workers/joycaption --entrypoint sh "$IMAGE" -c \
             'uv pip install --no-cache -c /app/torch-constraints.txt pytest && python -m pytest /src/workers/joycaption/tests -q'
-      - name: Check Qwen loading, LoRAs and reference preprocessing
-        if: matrix.worker == 'qwen_image_21'
+      - name: Check common worker and both model backends
+        if: matrix.worker == 'image'
         shell: bash
         run: |
-          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --entrypoint python "$IMAGE" -m unittest discover \
-            -s workers/qwen_image_21/tests -p test_pipeline_loading.py
-          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --entrypoint python "$IMAGE" -m unittest discover \
-            -s workers/qwen_image_21/tests -p test_lora_loading.py
-          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --entrypoint python "$IMAGE" -m unittest discover \
-            -s workers/qwen_image_21/tests -p test_reference_megapixels.py
-          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --entrypoint python "$IMAGE" -m unittest discover \
-            -s workers/qwen_image_21/tests -p test_native_resolution.py
-      - name: Check Krea V2 edit runtime and downloads
-        if: matrix.worker == 'krea2'
-        shell: bash
-        run: |
-          docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" --workdir /src \
-            --entrypoint python "$IMAGE" -m unittest discover \
-            -s workers/krea2/tests -p 'test_*.py'
+          for suite in shared image krea2 qwen_image_21; do
+            docker run --rm --entrypoint sh "$IMAGE" -c '
+              # Model unit suites set generic paths in controlled fixtures.
+              # Backend tests separately exercise the model-prefixed settings.
+              unset QWEN_MODEL_DIR QWEN_BASE_MODEL_DIR QWEN_LORA_DIR QWEN_MODEL_ID QWEN_BASE_MODEL_ID
+              unset KREA_MODEL_DIR KREA_LORA_DIR KREA_DIT_QUANT LORA_CACHE_DIR
+              exec python -m unittest discover -s "/app/workers/$1/tests" -p "test_*.py"
+            ' sh "$suite"
+          done
       - name: Publish validated image
         if: github.event_name == 'push' || inputs.publish
         shell: bash

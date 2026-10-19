@@ -1,0 +1,92 @@
+# Common image worker
+
+One RunPod image and endpoint serve Krea 2 and Qwen Image 2.1.
+The model registry owns routing; each backend owns its existing inference.
+Requests are serialized so the old backend is closed before another loads.
+The worker does not download a checkpoint until a request selects a model.
+
+## API
+
+Endpoint: `9zb0wyo61ck3wk` (`image-workers`).
+The full request and response contract is in the [shared API](../shared/api/README.md).
+
+```json
+{
+  "input": {
+    "model": "qwen_image_21",
+    "type": "image_generate",
+    "prompt": "A red fox in a forest",
+    "model_options": {"variant": "turbo"},
+    "seed": 42
+  }
+}
+```
+
+`model` accepts `krea2` and `qwen_image_21`. Omission selects Krea for existing
+clients. The response includes `model`. Qwen Base uses `variant: "base"`.
+Each model retains its own options, reference limits and compatible LoRAs.
+Additional adapters remain under separate model directories on the volume.
+
+Both bundled clients select the model explicitly and use the same endpoint:
+
+```bash
+python scripts/krea2_image.py --prompt "a red fox" --lora '' -o krea.png
+python scripts/qwen_image_21.py --prompt "a red fox" --variant base -o qwen.png
+```
+
+## Configuration
+
+| Variable | Image default | Purpose |
+|---|---|---|
+| `KREA_MODEL_DIR` | `/models/krea2` | Krea checkpoint and built-in adapters |
+| `KREA_DIT_QUANT` | `int8_convrot` | Krea DiT quantization; also supports `fp8` |
+| `KREA_LORA_DIR` | `/runpod-volume/krea2/loras` | Additional Krea LoRAs |
+| `QWEN_MODEL_DIR` | `/models/qwen_image_21_turbo` | Qwen Turbo checkpoint |
+| `QWEN_BASE_MODEL_DIR` | `/models/qwen_image_21_base` | Qwen Base checkpoint |
+| `QWEN_LORA_DIR` | `/runpod-volume/qwen_image_21_turbo/loras` | Qwen LoRAs |
+| `QWEN_MODEL_ID`, `QWEN_BASE_MODEL_ID` | Official Qwen model IDs | Optional checkpoint sources |
+| `QWEN_VAE_DIR` | `/models/qwen_image_21_shared/texture_fix_vae` | Shared Qwen VAE files |
+| `QWEN_VAE` | `texture-fix` | Qwen VAE profile |
+| `QWEN_DISABLE_MMAP` | `0` | Keep memory mapping enabled |
+| `OFFLOAD` | `cpu` | Qwen component offload for 24 GB GPUs |
+| `HF_HOME` | `/models/hf` | Shared local HF cache |
+| `LORA_CACHE_DIR` | `/models/lora_cache` | Local staging of selected volume adapters |
+| `HF_TOKEN` | Endpoint secret | HF access where required |
+
+The model-prefixed paths override generic legacy `MODEL_DIR`, `BASE_MODEL_DIR`
+and `LORA_DIR`. The local adapter cache separates source files by their
+absolute paths and tracks their size/timestamps. Checkpoints remain on local
+disk across model switches within the container lifetime.
+
+Krea switches release its DiT, encoder, VAE and adapter manager. Leaving Qwen
+also closes its Base/Turbo manager and retained VAE. Within Qwen, the existing
+variant manager reuses the shared VAE and repairs incomplete snapshots.
+
+## Deployment
+
+- Dockerfile: `workers/image/Dockerfile`; context: repository root.
+- Image: `ghcr.io/vsevolod/runpod-workers-image:<commit-sha>`.
+- Use an immutable digest after CI passes.
+- Container disk: 200 GB for all three checkpoint caches.
+- GPU: current 24 GB Ampere/Ada profile; CUDA 12.8 or newer.
+- Global Volume: existing model-adapter volume mounted at `/runpod-volume`.
+- Preserve min=0/max=1 and idle timeout 10 seconds.
+- Leave the start command empty, or use `sh /app/workers/image/start.sh`.
+
+CI builds this image and JoyCaption. It checks dependencies, both backend
+imports, handler registration without weights, shared helpers, common-worker
+tests and both complete model suites. The model-specific folders contain
+runtime implementations and reference adapters rather than release Dockerfiles.
+
+## Adding a model
+
+Implement a backend with a shared API profile, request normalizer and client
+error types, plus `load()`, `infer(norm, seed, raw_loras)` and `close()`.
+Constructors must not load weights. Register it in `image_worker.backends.REGISTRY`
+and include its code/dependencies in the common image. The ownership manager,
+request parsing and image delivery remain shared.
+
+## Attribution
+
+Model source notices and licenses remain in `../krea2/NOTICE`,
+`../krea2/LICENSES/` and `../qwen_image_21/LICENSES/`, and are included in the image.

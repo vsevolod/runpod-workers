@@ -25,6 +25,28 @@ class RuntimeConfigTests(unittest.TestCase):
     def setUpClass(cls):
         cls.mod = _load()
 
+    def test_qwen_paths_and_ids_override_generic_settings_from_krea_endpoint(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {
+            'MODEL_DIR': '/models/krea2', 'LORA_DIR': '/volume/krea2/loras',
+            'MODEL_ID': 'other/model', 'BASE_MODEL_DIR': '/other/base',
+            'QWEN_MODEL_DIR': '/models/qwen-turbo', 'QWEN_BASE_MODEL_DIR': '/models/qwen-base',
+            'QWEN_LORA_DIR': '/volume/qwen/loras', 'QWEN_MODEL_ID': 'qwen/turbo',
+            'QWEN_BASE_MODEL_ID': 'qwen/base',
+        }, clear=True):
+            self.assertEqual(self.mod.resolve_model_directory('turbo'), Path('/models/qwen-turbo'))
+            self.assertEqual(self.mod.resolve_model_directory('base'), Path('/models/qwen-base'))
+            self.assertEqual(self.mod.resolve_lora_directory(), Path('/volume/qwen/loras'))
+            self.assertEqual(self.mod.resolve_model_id('turbo'), 'qwen/turbo')
+            self.assertEqual(self.mod.resolve_model_id('base'), 'qwen/base')
+
+    def test_lora_directory_keeps_generic_and_model_local_fallbacks(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'LORA_DIR': '/volume/styles'}, clear=True):
+            self.assertEqual(self.mod.resolve_lora_directory(), Path('/volume/styles'))
+        with patch.dict(os.environ, {'QWEN_MODEL_DIR': '/models/selected'}, clear=True):
+            self.assertEqual(self.mod.resolve_lora_directory(), Path('/models/selected/loras'))
+
     def test_missing_snapshot_falls_back_to_hub_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = self.mod.resolve_model_source(tmp, "Qwen/Qwen-Image-2.1-Turbo")

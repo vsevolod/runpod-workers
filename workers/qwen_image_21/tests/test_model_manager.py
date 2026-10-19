@@ -14,6 +14,42 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 
 class ModelManagerTests(unittest.TestCase):
+    def test_close_releases_retained_vae_and_reopens_without_old_modules(self):
+        references, reused = [], []
+
+        class VAE:
+            pass
+
+        class Runtime:
+            def __init__(self):
+                self.pipe = SimpleNamespace(vae=VAE())
+                references.append(weakref.ref(self.pipe.vae))
+
+            def run(self, *args, **kwargs):
+                return ['image']
+
+            def close(self):
+                self.pipe = None
+
+        def load(**kwargs):
+            reused.append(kwargs.get('vae'))
+            return Runtime()
+
+        @contextmanager
+        def prepare(variant):
+            yield None
+
+        manager = self.manager_class()(loader=load, prepare=prepare)
+        manager.run(SimpleNamespace(model_variant='turbo'), seed=0)
+        self.assertIsNotNone(references[0]())
+        self.assertTrue(callable(getattr(manager, 'close', None)), 'The Qwen backend needs a public close lifecycle')
+        manager.close()
+        manager.close()
+        gc.collect()
+        self.assertIsNone(references[0](), 'The shared VAE must not survive leaving the Qwen backend')
+        manager.run(SimpleNamespace(model_variant='base'), seed=0)
+        self.assertEqual(reused, [None, None])
+
     def manager_class(self):
         try:
             from qwen_image_21_infer.model_manager import ModelManager

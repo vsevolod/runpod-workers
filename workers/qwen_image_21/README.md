@@ -1,4 +1,10 @@
-# Runpod worker — Qwen-Image-2.1 Base / Turbo
+# Qwen Image 2.1 Base/Turbo inference backend
+
+This directory supplies the `qwen_image_21` backend of the
+[common image worker](../image/README.md). Deploy `workers/image/Dockerfile`
+and select `input.model="qwen_image_21"` on endpoint `9zb0wyo61ck3wk`.
+The model-specific reference below documents inference and manual tooling.
+
 
 Thin serverless worker: text-to-image and multi-reference edit through
 Diffusers `QwenImage21Pipeline`. No ComfyUI. Same handler shape as
@@ -34,8 +40,8 @@ Hub transfers, cache/token setup and timing use the shared
 [`model_download` module](../shared/model_download.py), copied into the image.
 `download_weights.py` keeps Qwen's model selection and variant-specific validation.
 
-Use a **120 GB container disk** to keep both snapshots, shared VAE, image/runtime
-and requested LoRAs. The model weights use about 65 GB with separate text-encoder
+The common worker uses a **200 GB container disk** for Krea, both Qwen
+snapshots, shared VAE, image/runtime and requested LoRAs. The model weights use about 65 GB with separate text-encoder
 copies and one shared Texture-Fix VAE. Each variant alone uses about 33 GB.
 
 Startup imports the handler without preselecting a model. The first request's
@@ -216,23 +222,9 @@ RunPod's container exit reason as well.
 
 ## Deploy (RunPod)
 
-| Setting | Value |
-|---------|--------|
-| **Dockerfile path** | `workers/qwen_image_21/Dockerfile` |
-| **Build context** | `.` (repo root) |
-| **GPU** | 24 GB class with `OFFLOAD=cpu`; 48 GB+ if you set `OFFLOAD=none` and generate at 2048 |
-| **Volume** | Optional for additional LoRAs; base weights download to container disk |
-| **Container disk** | 120 GB for both variants and LoRAs |
-
-Push worker changes to `master` and wait for the **Build Runpod workers** GitHub
-Actions workflow to publish `ghcr.io/vsevolod/runpod-workers-qwen_image_21:<commit-sha>`.
-Configure Runpod to use that exact image tag/digest, preserving the endpoint ID
-and existing GPU/LoRA settings. See the shared [deployment instructions](../../README.md#qwen-image-and-krea2-build-on-github-run-on-runpod).
-Verify that the intended image is active before running a GPU smoke request.
-Use the image's default Docker start command or `sh /app/start.sh`; the older
-`download_weights.py && handler.py` override bypasses the shared bootstrap.
-While the old image is active, use the compatible command documented in
-[startup command migration](../../README.md#existing-endpoint-startup-commands).
+Use the [common image worker deployment](../image/README.md#deployment).
+This backend no longer publishes a separate Docker image. Its dependencies
+resolve through `../image/requirements.txt`.
 
 ## API
 
@@ -311,7 +303,7 @@ without an immediate OOM. Pass an official size when the GPU has room.
 
 ```json
 {
-  "input": {
+  "input": {"model": "qwen_image_21",
     "type": "image_generate",
     "prompt": "a fox walking in the snow",
     "width": 1024,
@@ -329,7 +321,7 @@ without an immediate OOM. Pass an official size when the GPU has room.
 
 ```json
 {
-  "input": {
+  "input": {"model": "qwen_image_21",
     "type": "image_edit",
     "prompt": "these three characters sit around a campfire",
     "images": ["data:image/png;base64,..."],

@@ -33,19 +33,24 @@ def resolve_model_variant(value: str = "turbo") -> str:
 
 def resolve_model_directory(model_variant: str = "turbo") -> Path:
     variant = resolve_model_variant(model_variant)
-    turbo = Path(os.environ.get("MODEL_DIR", DEFAULT_MODEL_DIR))
+    turbo = Path(os.environ.get("QWEN_MODEL_DIR") or os.environ.get("MODEL_DIR") or DEFAULT_MODEL_DIR)
     if variant == "turbo":
         return turbo
-    base = Path(os.environ.get("BASE_MODEL_DIR", str(turbo.parent / "qwen_image_21_base")))
+    base = Path(os.environ.get("QWEN_BASE_MODEL_DIR") or os.environ.get("BASE_MODEL_DIR") or turbo.parent / "qwen_image_21_base")
     if base.resolve() == turbo.resolve():
         raise ValueError("BASE_MODEL_DIR and MODEL_DIR must be different directories")
     return base
 
 
+def resolve_lora_directory() -> Path:
+    return Path(os.environ.get("QWEN_LORA_DIR") or os.environ.get("LORA_DIR") or
+                resolve_model_directory("turbo") / LORA_DIR_NAME)
+
+
 def resolve_model_id(model_variant: str = "turbo") -> str:
     variant = resolve_model_variant(model_variant)
     key = "MODEL_ID" if variant == "turbo" else "BASE_MODEL_ID"
-    return os.environ.get(key) or MODEL_IDS[variant]
+    return os.environ.get("QWEN_" + key) or os.environ.get(key) or MODEL_IDS[variant]
 
 
 def resolve_vae_directory() -> Path:

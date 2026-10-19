@@ -2,12 +2,11 @@
 
 import gc
 import logging
-import os
 from threading import RLock
 
 from .diagnostics import log_stage, startup_diagnostics
 from .lora import LoRACatalog
-from .runtime_config import LORA_DIR_NAME, resolve_model_directory, resolve_vae_variant
+from .runtime_config import resolve_lora_directory, resolve_vae_variant
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,13 @@ class ModelManager:
     def normalize_loras(self, raw):
         if not raw:
             return () if raw is None or raw == [] else LoRACatalog({}).normalize(raw)
-        directory = os.environ.get("LORA_DIR") or resolve_model_directory("turbo") / LORA_DIR_NAME
-        return LoRACatalog.scan(directory).normalize(raw)
+        return LoRACatalog.scan(resolve_lora_directory()).normalize(raw)
+
+    def close(self):
+        """Release all Qwen components before another image model loads."""
+        with self._lock:
+            self._vae = None
+            self._unload()
 
     def _unload(self):
         runtime, self._runtime = self._runtime, None

@@ -12,12 +12,12 @@ import os
 import runpod
 import torch
 
+from qwen_image_21_infer.api import infer as infer_with_model
 from qwen_image_21_infer.diagnostics import log_stage
 from qwen_image_21_infer.lora import LoRAError
 from qwen_image_21_infer.model_manager import ModelManager
 from qwen_image_21_infer.request import normalize_job_input
-from qwen_image_21_infer.runtime_config import resolve_model_id
-from shared.api import GenerationResult, QWEN_API, handle_job
+from shared.api import QWEN_API, handle_job
 from shared.api.images import save_and_upload_images as _save_and_upload_images
 
 logging.basicConfig(
@@ -31,15 +31,7 @@ MODELS = ModelManager()
 
 
 def _infer(norm, seed, raw_loras):
-    loras = MODELS.normalize_loras(raw_loras)
-    logger.info("LoRA request: %s", ",".join(f"{item.name}@{item.strength:g}" for item in loras) or "none")
-    images = MODELS.run(norm, seed=seed, loras=loras)
-    return GenerationResult(
-        images, loras,
-        {"variant": norm.model_variant, "output_resolution": norm.requested_output_resolution},
-        {"model_variant": norm.model_variant, "model_id": resolve_model_id(norm.model_variant),
-         "scheduler": norm.scheduler, "output_resolution": norm.output_resolution},
-    )
+    return infer_with_model(MODELS, norm, seed, raw_loras)
 
 
 def _oom_cleanup():

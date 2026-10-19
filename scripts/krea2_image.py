@@ -502,6 +502,7 @@ def _run_edit(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -> in
     ref_position = args.ref_position or ("beside" if args.edit_model == "identity" else "aligned")
 
     job_input: dict[str, Any] = {
+        "model": "krea2",
         "type": "image_edit",
         "prompt": prompt,
         "images": [data_url],
@@ -573,6 +574,7 @@ def _run_generate(args: argparse.Namespace, *, endpoint_id: str, api_key: str) -
     loras = _parse_lora(lora_raw)
 
     job_input: dict[str, Any] = {
+        "model": "krea2",
         "prompt": prompt,
         "width": width,
         "height": height,

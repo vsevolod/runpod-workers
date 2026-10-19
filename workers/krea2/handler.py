@@ -13,10 +13,11 @@ import runpod
 import torch
 
 from krea2_infer import load_pipeline
+from krea2_infer.api import infer as infer_with_model
 from krea2_infer.diagnostics import log_stage
 from krea2_infer.lora import LoRAError
 from krea2_infer.request import normalize_job_input
-from shared.api import GenerationResult, KREA_API, handle_job
+from shared.api import KREA_API, handle_job
 from shared.api.images import save_and_upload_images as _save_and_upload_images
 
 logging.basicConfig(
@@ -53,31 +54,7 @@ MODELS = ModelHandler()
 
 
 def _infer(norm, seed, raw_loras):
-    loras = MODELS.pipe.loras.normalize(raw_loras)
-    logger.info("LoRA request: %s", ",".join(f"{item.name}@{item.strength:g}:{item.type}" for item in loras) or "none")
-    kwargs = dict(
-        prompt=norm.prompt, width=norm.width, height=norm.height,
-        steps=norm.num_inference_steps, guidance=norm.guidance_scale,
-        seed=seed, mu=norm.mu, negative_prompt=norm.negative_prompt, loras=loras,
-    )
-    effective_mu = norm.mu
-    if norm.type == "image_edit":
-        if not loras:
-            logger.warning("image_edit without loras; identity edit quality will be poor")
-        effective_mu = 1.15 if norm.mu is None else norm.mu
-        kwargs.update(sources=norm.images, mu=effective_mu, grounding_px=norm.grounding_px,
-                      ref_boost=norm.ref_boost, ref_boost_a=norm.ref_boost_a,
-                      ref_position=norm.ref_position, ref_position_a=norm.ref_position_a,
-                      fit_mode=norm.fit_mode)
-        images = MODELS.pipe.edit(**kwargs)
-    else:
-        images = MODELS.pipe.generate(**kwargs, num_images=norm.num_images)
-    options = {"mu": effective_mu, "grounding_px": norm.grounding_px,
-               "ref_boost": norm.ref_boost, "ref_boost_a": norm.ref_boost_a,
-               "ref_position": norm.ref_position, "ref_position_a": norm.ref_position_a,
-               "fit_mode": norm.fit_mode}
-    legacy = {name: options[name] for name in ("grounding_px", "ref_boost", "fit_mode")} if norm.type == "image_edit" else {}
-    return GenerationResult(images, loras, options, legacy)
+    return infer_with_model(MODELS.pipe, norm, seed, raw_loras)
 
 
 def _oom_cleanup():
