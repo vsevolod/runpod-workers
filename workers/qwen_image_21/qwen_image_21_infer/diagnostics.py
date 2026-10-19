@@ -9,6 +9,7 @@ import os
 import platform
 import sys
 import time
+from threading import Event, Thread, TIMEOUT_MAX
 from contextlib import contextmanager
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -90,23 +91,44 @@ def startup_diagnostics():
     except ValueError:
         logger.warning("Invalid QWEN_STARTUP_TRACE_INTERVAL=%r; using 60 seconds", raw)
         interval = 60.0
-    armed = False
+    cancelled = Event()
+    watchdog = None
     if interval:
         try:
-            faulthandler.dump_traceback_later(interval, repeat=True, file=sys.stderr)
-            armed = True
+            # The native faulthandler timer walks frames without the GIL and
+            # can race with frame destruction on Python 3.12. Call the direct
+            # dump API from a Python thread, which holds the GIL while dumping.
+            if sys.stderr is None:
+                raise RuntimeError("stderr is unavailable")
+            descriptor = sys.stderr.fileno()
+            if interval > TIMEOUT_MAX:
+                raise OverflowError("Stack dump interval exceeds thread timeout")
+
+            def dump_stacks():
+                while not cancelled.wait(interval):
+                    try:
+                        os.write(descriptor, f"Timeout (startup, {interval:g}s)!\n".encode())
+                        faulthandler.dump_traceback(file=descriptor, all_threads=True)
+                    except (OSError, ValueError, RuntimeError):
+                        logger.warning("Could not dump startup stacks", exc_info=True)
+                        return
+
+            watchdog = Thread(target=dump_stacks, name="qwen-startup-stacks", daemon=True)
             logger.info(
                 "Startup stack dump every %gs until loading completes; dumps do not stop the worker",
                 interval,
             )
+            watchdog.start()
         except (OSError, ValueError, RuntimeError, OverflowError):
+            watchdog = None
             logger.warning("Could not enable startup stack dumps", exc_info=True)
     try:
         with log_stage("startup"):
             yield
     finally:
-        if armed:
-            faulthandler.cancel_dump_traceback_later()
+        cancelled.set()
+        if watchdog is not None:
+            watchdog.join()
 
 
 def log_runtime_info(torch) -> None:

@@ -78,7 +78,7 @@ time.sleep(0.16)
         with patch.dict(os.environ, {"QWEN_STARTUP_TRACE_INTERVAL": "0"}):
             with patch.object(
                 diagnostics.faulthandler,
-                "dump_traceback_later",
+                "dump_traceback",
                 side_effect=AssertionError("watchdog must stay disabled"),
             ):
                 with diagnostics.startup_diagnostics():
@@ -97,12 +97,14 @@ time.sleep(0.16)
 
     def test_unavailable_stderr_descriptor_does_not_interrupt_startup(self):
         diagnostics = self.diagnostics()
-        with patch.object(sys, "stderr", StringIO()):
-            with self.assertLogs(diagnostics.logger, level="INFO") as logs:
-                with diagnostics.startup_diagnostics():
-                    pass
-        self.assertIn("Could not enable startup stack dumps", logs.output[0])
-        self.assertIn("stage=startup done", logs.output[-1])
+        for stderr in (StringIO(), None):
+            with self.subTest(stderr=stderr):
+                with patch.object(sys, "stderr", stderr):
+                    with self.assertLogs(diagnostics.logger, level="INFO") as logs:
+                        with diagnostics.startup_diagnostics():
+                            pass
+                self.assertIn("Could not enable startup stack dumps", logs.output[0])
+                self.assertIn("stage=startup done", logs.output[-1])
 
 
 if __name__ == "__main__":

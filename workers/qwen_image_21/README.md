@@ -213,10 +213,11 @@ and placement on GPU or CPU offload. Inference and image delivery also have
 timings. The last `begin` without a matching `done` identifies the unfinished
 stage. No prompts or image contents are logged by these diagnostics.
 
-During startup, thread stacks go to stderr every 60 seconds by default,
-including when native loading code holds the Python GIL. Faulthandler labels
-these dumps `Timeout`; this is a diagnostic timer and does **not** terminate
-the worker. Dumps stop on successful loading or an exception. A process killed
+During startup, a Python watchdog thread dumps stacks to stderr every 60
+seconds by default. Dumps acquire the GIL to avoid native timer/frame-destruction
+races; native loading code that holds the GIL can delay them. The `Timeout`
+label is diagnostic and does **not** terminate the worker. Dumps stop on
+successful loading or an exception. A process killed
 externally (such as SIGKILL/OOM) cannot log its own termination reason; check
 RunPod's container exit reason as well.
 
