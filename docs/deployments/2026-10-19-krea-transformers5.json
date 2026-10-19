@@ -1,0 +1,450 @@
+{
+  "verified_at_utc": "2026-10-19T10:55:30.834647+00:00",
+  "release": {
+    "source_commit": "2e1a8736f47307f10fc5f66a31225356f77ceda8",
+    "build_ci": "https://github.com/vsevolod/runpod-workers/actions/runs/39238702825",
+    "transformers": "5.20.1",
+    "diffusers_commit": "da1d3829cf08d4f329b526d89e17cc035c049d8d",
+    "ci_krea_conclusion": "success",
+    "ci_krea_job": "https://github.com/vsevolod/runpod-workers/actions/runs/39238702825/job/118013988518",
+    "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+    "image_created": "2026-10-19T10:39:34.2672848Z"
+  },
+  "ci_conclusion": "success",
+  "checks": {
+    "candidate_image_torch": "2.8.0+cu128",
+    "candidate_image_torchvision": "0.23.0+cu128",
+    "candidate_image_cuda": "12.8",
+    "candidate_image_transformers": "5.20.1",
+    "krea_unit_tests": 187,
+    "shared_unit_tests": 41,
+    "candidate_image_dependency_check": "passed",
+    "candidate_image_runtime_imports": "passed",
+    "local_cpu_encoder_probe": {
+      "torch": "2.14.1+cpu",
+      "transformers": "5.20.1",
+      "diffusers": "0.41.0.dev0",
+      "scope": "CPU tiny random Qwen3-VL weights; actual production tokenizer and processor; Krea conditioner methods unchanged",
+      "cases": [
+        {
+          "case": "text",
+          "hidden_shape": [
+            1,
+            64,
+            3,
+            32
+          ],
+          "mask_shape": [
+            1,
+            64
+          ]
+        },
+        {
+          "case": "edit",
+          "refs": 1,
+          "hidden_shape": [
+            1,
+            17,
+            3,
+            32
+          ],
+          "mask_shape": [
+            1,
+            17
+          ]
+        },
+        {
+          "case": "edit",
+          "refs": 2,
+          "hidden_shape": [
+            1,
+            23,
+            3,
+            32
+          ],
+          "mask_shape": [
+            1,
+            23
+          ]
+        }
+      ]
+    }
+  },
+  "configuration": {
+    "endpoint": "9zb0wyo61ck3wk",
+    "version": 47,
+    "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+    "workersMin": 0,
+    "workersMax": 1,
+    "idleTimeout": 10,
+    "qwen_unchanged": true
+  },
+  "smoke_configuration_version": 47,
+  "smoke_workers": [
+    {
+      "dataCenterId": "EU-SE-1",
+      "gpuCount": 1,
+      "gpuTypeId": "NVIDIA RTX A5000",
+      "id": "tq9m3epr96kwdu",
+      "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+      "isStale": false,
+      "startedAt": "2026-10-19T10:49:42.849Z",
+      "status": "RUNNING",
+      "uptimeSeconds": 295,
+      "version": 47
+    }
+  ],
+  "production_api_smoke": [
+    {
+      "delayTime": 300042,
+      "executionTime": 49779,
+      "id": "6dfaddad-b3d0-47b2-ad78-a08ebf581df6-e1",
+      "status": "COMPLETED",
+      "workerId": "tq9m3epr96kwdu",
+      "output": {
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [],
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "text",
+      "verified": true,
+      "image_sha256": "4ea43c7e677f8f6ec0c1c9c20de9dbbf8551cabbfad0f8703d449fada5b2ca78",
+      "image_bytes": 729927,
+      "channel_stddev": [
+        66.14224388857671,
+        84.31627696663995,
+        85.66717133125009
+      ]
+    },
+    {
+      "delayTime": 350280,
+      "executionTime": 98747,
+      "id": "45a36c56-6c09-4299-a2ad-716f1dd2dce5-e2",
+      "status": "COMPLETED",
+      "workerId": "tq9m3epr96kwdu",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 2,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "identity",
+      "verified": true,
+      "image_sha256": "5a0c6b841ef3d487b8d50ff25a44c55ff9a423c0e790fe4258f662e4ff595cd3",
+      "image_bytes": 683922,
+      "channel_stddev": [
+        81.70069348877657,
+        75.06929002341961,
+        68.16974992182462
+      ]
+    },
+    {
+      "delayTime": 449608,
+      "executionTime": 73946,
+      "id": "f80ce270-e6ee-4330-b543-733ecd1bc789-e1",
+      "status": "COMPLETED",
+      "workerId": "tq9m3epr96kwdu",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_general_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 1,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "general",
+      "verified": true,
+      "image_sha256": "59b44121241dabe3c32e7cd6667c025e556f932e28d5509d3c8080f8e6c8545c",
+      "image_bytes": 700995,
+      "channel_stddev": [
+        85.90911998891168,
+        76.79474796393707,
+        68.31692259824757
+      ]
+    }
+  ],
+  "observed_runtime_log_events": [
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "stage=component_load done component=text_encoder elapsed_s=2.09",
+      "ts": "2026-10-19T10:50:54.234668476Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "handler.py          :45   2026-10-19 10:50:58,271 Krea2 pipeline ready (quant_mode=int8_convrot)",
+      "ts": "2026-10-19T10:50:58.272432336Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "handler.py          :57   2026-10-19 10:51:00,064 LoRA request: none",
+      "ts": "2026-10-19T10:51:00.064944539Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:51:13,895 stage=text_encode done elapsed_s=0.44 batch=1 cfg=False",
+      "ts": "2026-10-19T10:51:13.895593551Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:51:49,298 stage=inference done elapsed_s=49.23 ",
+      "ts": "2026-10-19T10:51:49.299137718Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "{\"requestId\": \"6dfaddad-b3d0-47b2-ad78-a08ebf581df6-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T10:51:49.764401673Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:51:49,298 stage=inference done elapsed_s=49.23",
+      "ts": "2026-10-19T10:51:49.299137718Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "handler.py          :57   2026-10-19 10:51:50,983 LoRA request: krea2_identity_edit_v2@1:lora",
+      "ts": "2026-10-19T10:51:50.983210688Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:52:01,246 stage=grounded_encode done elapsed_s=1.55 refs=2 cfg=False",
+      "ts": "2026-10-19T10:52:01.246956808Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:53:29,244 stage=inference done elapsed_s=98.26 ",
+      "ts": "2026-10-19T10:53:29.244444693Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "{\"requestId\": \"45a36c56-6c09-4299-a2ad-716f1dd2dce5-e2\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T10:53:29.686148252Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:53:29,244 stage=inference done elapsed_s=98.26",
+      "ts": "2026-10-19T10:53:29.244444693Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "handler.py          :57   2026-10-19 10:53:31,328 LoRA request: krea2_general_edit_v2@1:lora",
+      "ts": "2026-10-19T10:53:31.328506666Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:53:43,499 stage=grounded_encode done elapsed_s=0.11 refs=1 cfg=False",
+      "ts": "2026-10-19T10:53:43.500235813Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "diagnostics.py      :32   2026-10-19 10:54:44,393 stage=inference done elapsed_s=73.50",
+      "ts": "2026-10-19T10:54:44.394228794Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "{\"requestId\": \"f80ce270-e6ee-4330-b543-733ecd1bc789-e1\", \"message\": \"Finished.\", \"level\": \"INFO\"}",
+      "ts": "2026-10-19T10:54:44.798223142Z"
+    }
+  ],
+  "final_worker_readback": {
+    "endpointVersion": 47,
+    "summary": {
+      "idle": 3,
+      "initializing": 0,
+      "running": 0,
+      "throttled": 0,
+      "total": 3,
+      "unhealthy": 0
+    },
+    "workers": [
+      {
+        "dataCenterId": "EU-SE-1",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA RTX A5000",
+        "id": "tq9m3epr96kwdu",
+        "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+        "isStale": false,
+        "startedAt": "2026-10-19T10:49:42.849Z",
+        "status": "IDLE",
+        "uptimeSeconds": 382,
+        "version": 47
+      },
+      {
+        "dataCenterId": "US-IL-1",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "d9li1id4n0if6w",
+        "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+        "isStale": false,
+        "startedAt": "2026-10-19T10:50:04.82Z",
+        "status": "IDLE",
+        "version": 47
+      },
+      {
+        "dataCenterId": "US-IL-1",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "zv3mytg4hrsy2i",
+        "image": "ghcr.io/vsevolod/runpod-workers-krea2@sha256:26a6413dadd77ef93fab60d83485dbe8e86c6e7359559bd7730f237e21eeefea",
+        "isStale": false,
+        "startedAt": "2026-10-19T10:50:59.916Z",
+        "status": "IDLE",
+        "version": 47
+      }
+    ]
+  },
+  "final_job_counts": {
+    "completed": 1098,
+    "failed": 15,
+    "inProgress": 0,
+    "inQueue": 0,
+    "retried": 3
+  },
+  "smoke_inputs": {
+    "text": {
+      "type": "image_generate",
+      "prompt": "A studio photograph of a red ceramic teapot on a wooden table, soft window light, realistic texture.",
+      "width": 768,
+      "height": 1024,
+      "num_inference_steps": 8,
+      "guidance_scale": 0.0,
+      "seed": 42,
+      "reference_megapixels": "max"
+    },
+    "identity": {
+      "type": "image_edit",
+      "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+      "width": 768,
+      "height": 1024,
+      "num_inference_steps": 8,
+      "guidance_scale": 0.0,
+      "seed": 42,
+      "reference_megapixels": "max",
+      "images": [
+        "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+        "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+      ],
+      "loras": [
+        {
+          "name": "krea2_identity_edit_v2",
+          "strength": 1.0
+        }
+      ]
+    },
+    "general": {
+      "type": "image_edit",
+      "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+      "width": 768,
+      "height": 1024,
+      "num_inference_steps": 8,
+      "guidance_scale": 0.0,
+      "seed": 42,
+      "reference_megapixels": "max",
+      "images": [
+        "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+      ],
+      "loras": [
+        {
+          "name": "krea2_general_edit_v2",
+          "strength": 1.0
+        }
+      ]
+    }
+  },
+  "observed_adapter_load_events": [
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "lora_runtime.py     :322  2026-10-19 10:52:08,376 Loaded LoRA krea2_identity_edit_v2 type=lora strength=1.000 layers=256",
+      "ts": "2026-10-19T10:52:08.377071188Z"
+    },
+    {
+      "workerId": "tq9m3epr96kwdu",
+      "source": "container",
+      "line": "lora_runtime.py     :322  2026-10-19 10:53:51,959 Loaded LoRA krea2_general_edit_v2 type=lora strength=1.000 layers=256",
+      "ts": "2026-10-19T10:53:51.960022071Z"
+    }
+  ]
+}
