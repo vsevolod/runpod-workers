@@ -74,7 +74,7 @@ adapters. See [MOSS settings and pinned sources](../moss_image/README.md).
 - Image: `ghcr.io/vsevolod/runpod-workers-image:<commit-sha>`.
 - Use an immutable digest after CI passes.
 - Container disk: existing 200 GB profile; allow roughly 31 GB extra for MOSS SFT/Turbo files.
-- GPU: existing 24 GB Ampere/Ada profile; CUDA 12.8 or newer. MOSS fit is uncalibrated.
+- GPU: existing 24 GB Ampere/Ada profile; CUDA 12.8 or newer. MOSS 1024x1024 was smoke-tested on RTX 4090; capacity is uncalibrated.
 - Global Volume: existing model-adapter volume mounted at `/runpod-volume`.
 - Preserve min=0/max=1 and idle timeout 10 seconds.
 - Leave the start command empty, or use `sh /app/workers/image/start.sh`.
@@ -82,7 +82,9 @@ adapters. See [MOSS settings and pinned sources](../moss_image/README.md).
 The image worker uses Torch 2.9.1/cu128 and torchvision 0.24.1, constrained
 separately from JoyCaption's Torch 2.8 stack. MOSS availability on an existing
 endpoint requires deploying this candidate image; code registration alone
-does not change the deployed endpoint.
+does not change the deployed endpoint. The
+[2026-10-19 MOSS deployment](../../docs/deployments/2026-10-19-moss-image.md)
+records the published digest and eight completed GPU requests.
 
 CI builds this image and JoyCaption. It checks dependencies, all backend
 imports, handler registration without weights, shared helpers, common-worker

@@ -44,3 +44,12 @@
   and verify the actual image when the branch is published/integrated.
 - At implementation handoff no deployment, calibration, commit or push had been performed.
   The user subsequently authorized publication, deployment and real-generation checks.
+
+## Deployment follow-through
+
+The user subsequently requested deployment and real generations. See
+[the deployment report](../../deployments/2026-10-19-moss-image.md): source
+`d95b30908773c9d0d5d49ad69ede571ad1caffe5`, successful CUDA image CI with
+392 tests, endpoint version 51, and 8/8 completed GPU API cases on one RTX
+4090. Base/Turbo repeats remained byte-identical after mode/family switches.
+The original GPU selector and min=0/max=1, idle timeout 10s were restored.

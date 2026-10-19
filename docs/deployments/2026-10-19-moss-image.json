@@ -1,0 +1,814 @@
+{
+  "release": {
+    "source_commit": "d95b30908773c9d0d5d49ad69ede571ad1caffe5",
+    "branch": "feat/moss-image",
+    "endpoint": "9zb0wyo61ck3wk",
+    "ci_run": 39272476342,
+    "ci_url": "https://github.com/vsevolod/runpod-workers/actions/runs/39272476342",
+    "ci_image_conclusion": "success",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+    "image_created": "2026-10-19T14:52:26.279997954Z",
+    "compressed_bytes": 7182945060,
+    "anonymous_pull": true,
+    "cuda_image_test_count": 392,
+    "ci_conclusion": "success"
+  },
+  "final_configuration": {
+    "id": "9zb0wyo61ck3wk",
+    "name": "image-workers",
+    "version": 51,
+    "workersMin": 0,
+    "workersMax": 1,
+    "idleTimeout": 10,
+    "gpuIds": "AMPERE_24,ADA_24,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+    "allowedCudaVersions": "12.8,12.9,13.0,13.1,13.2,13.3,13.4",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+    "containerDiskInGb": 200
+  },
+  "worker": {
+    "dataCenterId": "EUR-IS-2",
+    "gpuCount": 1,
+    "gpuTypeId": "NVIDIA GeForce RTX 4090",
+    "id": "ysi6f1pyi48b9x",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+    "isStale": false,
+    "startedAt": "2026-10-19T15:09:08.713Z",
+    "status": "RUNNING",
+    "uptimeSeconds": 869,
+    "version": 50
+  },
+  "scope": "1024x1024 MOSS generation and 768x1024 Krea/Qwen edit smoke checks; not a resolution/capacity benchmark.",
+  "cases": [
+    {
+      "delayTime": 555726,
+      "executionTime": 215423,
+      "id": "b9f022ca-829f-4555-85f2-e8296eaf0d44-e1",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "moss-base-cold",
+      "output": {
+        "guidance_scale": 3,
+        "height": 1024,
+        "lora_revision": null,
+        "loras": [],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 50,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "ddc227b4cec55f45fb864cd9051efb66f1f4743372b88ae99d9a1e85cbf88480",
+      "image_bytes": 1115392,
+      "channel_stddev": [
+        56.12040513628768,
+        76.30341089347377,
+        70.12288442160448
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "base"
+        },
+        "num_inference_steps": 50,
+        "guidance_scale": 3.0
+      }
+    },
+    {
+      "delayTime": 93,
+      "executionTime": 35108,
+      "id": "62a856b6-17dd-4d37-8960-64c9280de4ef-e1",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "moss-turbo-first",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    },
+    {
+      "delayTime": 96,
+      "executionTime": 27310,
+      "id": "c4dffff0-1bb6-40ed-a115-6799244ce8fa-e2",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "moss-turbo-warm",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    },
+    {
+      "delayTime": 99,
+      "executionTime": 67804,
+      "id": "3574128f-43c2-40a4-96d3-bbf9c5e4266b-e2",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "moss-base-after-turbo",
+      "output": {
+        "guidance_scale": 3,
+        "height": 1024,
+        "lora_revision": null,
+        "loras": [],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 50,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "ddc227b4cec55f45fb864cd9051efb66f1f4743372b88ae99d9a1e85cbf88480",
+      "image_bytes": 1115392,
+      "channel_stddev": [
+        56.12040513628768,
+        76.30341089347377,
+        70.12288442160448
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "base"
+        },
+        "num_inference_steps": 50,
+        "guidance_scale": 3.0
+      }
+    },
+    {
+      "delayTime": 100,
+      "executionTime": 143477,
+      "id": "6881fbd8-5881-46ea-8a55-7e4268db84f0-e1",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "krea-identity",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "krea2",
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 2,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "b5cd2399d7764532d7e1db44e3a5a40af6eda2e187c9c50e4591f5762da648cf",
+      "image_bytes": 700573,
+      "channel_stddev": [
+        82.17730626760356,
+        75.4678788832624,
+        68.54070322887247
+      ],
+      "input": {
+        "model": "krea2",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 8,
+        "guidance_scale": 0.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "delayTime": 102,
+      "executionTime": 100739,
+      "id": "401ab7f6-8715-4bd8-bab5-9fa15ac57e7d-e1",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "qwen-turbo",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1-Turbo",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "turbo"
+        },
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "checkpoint",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "76c3d281e8f5e9d0628a5ddb3c55a2bc4ad67f25c15dc9cba61dd8b81e8e5aaf",
+      "image_bytes": 904214,
+      "channel_stddev": [
+        80.3955927290054,
+        75.83862854726783,
+        66.68657808282805
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "turbo"
+        }
+      }
+    },
+    {
+      "delayTime": 102,
+      "executionTime": 109817,
+      "id": "10fe7bdb-a6b1-424f-a5e6-d827e083d3f7-e1",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "qwen-base",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "base"
+        },
+        "model_variant": "base",
+        "num_inference_steps": 40,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.5164794921875,
+        "width": 768
+      },
+      "verified": true,
+      "image_sha256": "67e50d8e95498770f419310f7412ba1b90b3171353075e7269df9cf985761e15",
+      "image_bytes": 948596,
+      "channel_stddev": [
+        78.22902746501244,
+        73.86765798730575,
+        64.78833720259367
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "seed": 42,
+        "num_inference_steps": 40,
+        "guidance_scale": 1.0,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "base"
+        }
+      }
+    },
+    {
+      "delayTime": 98,
+      "executionTime": 40237,
+      "id": "47b496bb-7455-4ec3-a170-e831ad2e58a4-e2",
+      "status": "COMPLETED",
+      "workerId": "ysi6f1pyi48b9x",
+      "case": "moss-turbo-return",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.5164794921875,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "2f36899898fc54093e00ba6c02970fc4d694da7949167670b4ff5fc1fff76ce2",
+      "image_bytes": 850331,
+      "channel_stddev": [
+        51.5266856824997,
+        68.37583518057694,
+        66.90281553093246
+      ],
+      "input": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "prompt": "A professional studio photograph of a red ceramic teapot and one blue ceramic cup on a pale wooden table. A small white card next to the teapot reads \"MOSS\" in clear black letters. Soft morning light, simple uncluttered background, realistic materials.",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "model_options": {
+          "variant": "turbo"
+        },
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0
+      }
+    }
+  ],
+  "comparisons": {
+    "base_before_after_turbo": {
+      "identical": true,
+      "mean_absolute_channel_difference": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "turbo_first_warm": {
+      "identical": true,
+      "mean_absolute_channel_difference": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "turbo_before_after_model_switch": {
+      "identical": true,
+      "mean_absolute_channel_difference": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "runtime_events": [
+    {
+      "source": "container",
+      "line": "handler.py          :17   2026-10-19 15:09:32,888 Image worker ready; models=krea2,qwen_image_21,moss_image torch=2.9.1+cu128 cuda=12.8 transformers=5.20.1 diffusers=0.41.0.dev0",
+      "ts": "2026-10-19T15:09:32.889146440Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 15:09:35,012 backend_load begin model=moss_image",
+      "ts": "2026-10-19T15:09:35.012860283Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 15:11:59,330 backend_load done model=moss_image",
+      "ts": "2026-10-19T15:11:59.330739355Z"
+    },
+    {
+      "source": "container",
+      "line": "pipeline.py         :48   2026-10-19 15:11:59,330 MOSS variant=base steps=50 cfg=3.0 shift=5.0 lora=none strength=0.0",
+      "ts": "2026-10-19T15:11:59.331072694Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:13:09,469 stage=inference done elapsed_s=214.46",
+      "ts": "2026-10-19T15:13:09.469398166Z"
+    },
+    {
+      "source": "container",
+      "line": "pipeline.py         :48   2026-10-19 15:13:28,625 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+      "ts": "2026-10-19T15:13:28.625855453Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:13:57,442 stage=inference done elapsed_s=34.26",
+      "ts": "2026-10-19T15:13:57.442445338Z"
+    },
+    {
+      "source": "container",
+      "line": "pipeline.py         :48   2026-10-19 15:14:10,788 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+      "ts": "2026-10-19T15:14:10.788850684Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:14:37,218 stage=inference done elapsed_s=26.43",
+      "ts": "2026-10-19T15:14:37.218525230Z"
+    },
+    {
+      "source": "container",
+      "line": "pipeline.py         :48   2026-10-19 15:14:53,700 MOSS variant=base steps=50 cfg=3.0 shift=5.0 lora=none strength=0.0",
+      "ts": "2026-10-19T15:14:53.700367913Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:16:00,566 stage=inference done elapsed_s=66.87",
+      "ts": "2026-10-19T15:16:00.566697367Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :32   2026-10-19 15:16:19,721 model_unload begin model=moss_image",
+      "ts": "2026-10-19T15:16:19.721605278Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :38   2026-10-19 15:16:22,552 model_unload done model=moss_image cuda_allocated_bytes=9568256",
+      "ts": "2026-10-19T15:16:22.552463157Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 15:16:22,552 backend_load begin model=krea2",
+      "ts": "2026-10-19T15:16:22.552491767Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 15:17:27,080 backend_load done model=krea2",
+      "ts": "2026-10-19T15:17:27.080807109Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :12   2026-10-19 15:17:27,082 LoRA request: krea2_identity_edit_v2@1:lora",
+      "ts": "2026-10-19T15:17:27.082862394Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:18:42,421 stage=inference done elapsed_s=142.70",
+      "ts": "2026-10-19T15:18:42.421514306Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :32   2026-10-19 15:18:50,970 model_unload begin model=krea2",
+      "ts": "2026-10-19T15:18:50.971009247Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :38   2026-10-19 15:18:52,467 model_unload done model=krea2 cuda_allocated_bytes=9699328",
+      "ts": "2026-10-19T15:18:52.468087870Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 15:18:52,467 backend_load begin model=qwen_image_21",
+      "ts": "2026-10-19T15:18:52.468156460Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 15:18:52,471 backend_load done model=qwen_image_21",
+      "ts": "2026-10-19T15:18:52.471753860Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :13   2026-10-19 15:18:53,094 LoRA request: lenovo_qwen21@1",
+      "ts": "2026-10-19T15:18:53.095033083Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :159  2026-10-19 15:18:53,130 GPU index=0 name=NVIDIA GeForce RTX 4090 capability=sm_89 total_bytes=25250627584",
+      "ts": "2026-10-19T15:18:53.130529778Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:20:30,800 stage=inference done elapsed_s=99.83",
+      "ts": "2026-10-19T15:20:30.800308234Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :13   2026-10-19 15:20:43,406 LoRA request: lenovo_qwen21@1",
+      "ts": "2026-10-19T15:20:43.406717572Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :64   2026-10-19 15:20:43,409 stage=model_unload begin pid=51 rss_kib=41284652 cgroup_used_bytes=99993235456 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=22277718016 cuda_total_bytes=25250627584 cuda_allocated_bytes=14418432 cuda_reserved_bytes=2468347904",
+      "ts": "2026-10-19T15:20:43.409989693Z"
+    },
+    {
+      "source": "container",
+      "line": "\rFetching 22 files:   5%|\u258d         | 1/22 [00:00<00:04,  4.86it/s]\rFetching 22 files:   9%|\u2589         | 2/22 [00:00<00:03,  6.30it/s]\rFetching 22 files:  27%|\u2588\u2588\u258b       | 6/22 [00:00<00:01, 13.04it/s]\rFetching 22 files:  41%|\u2588\u2588\u2588\u2588      | 9/22 [00:00<00:01, 12.42it/s]\rFetching 22 files:  55%|\u2588\u2588\u2588\u2588\u2588\u258d    | 12/22 [00:00<00:00, 13.36it/s]diagnostics.py      :76   2026-10-19 15:20:47,055 stage=model_unload done elapsed_s=3.64 pid=51 rss_kib=13247720 cgroup_used_bytes=71736324096 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24699928576 cuda_total_bytes=25250627584 cuda_allocated_bytes=9699328 cuda_reserved_bytes=46137344",
+      "ts": "2026-10-19T15:20:47.055306046Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :159  2026-10-19 15:20:47,062 GPU index=0 name=NVIDIA GeForce RTX 4090 capability=sm_89 total_bytes=25250627584",
+      "ts": "2026-10-19T15:20:47.062824526Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:22:32,034 stage=inference done elapsed_s=108.86",
+      "ts": "2026-10-19T15:22:32.035126197Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :32   2026-10-19 15:22:53,712 model_unload begin model=qwen_image_21",
+      "ts": "2026-10-19T15:22:53.712252043Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :64   2026-10-19 15:22:53,713 stage=model_unload begin pid=51 rss_kib=41054784 cgroup_used_bytes=99997466624 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=22277718016 cuda_total_bytes=25250627584 cuda_allocated_bytes=14418432 cuda_reserved_bytes=2468347904",
+      "ts": "2026-10-19T15:22:53.713833969Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :76   2026-10-19 15:22:57,295 stage=model_unload done elapsed_s=3.58 pid=51 rss_kib=13253104 cgroup_used_bytes=71472893952 cgroup_limit_bytes=99999997952 cgroup_events=0 cuda_free_bytes=24699928576 cuda_total_bytes=25250627584 cuda_allocated_bytes=9699328 cuda_reserved_bytes=46137344",
+      "ts": "2026-10-19T15:22:57.295909383Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :38   2026-10-19 15:22:57,474 model_unload done model=qwen_image_21 cuda_allocated_bytes=9699328",
+      "ts": "2026-10-19T15:22:57.474360293Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 15:22:57,474 backend_load begin model=moss_image",
+      "ts": "2026-10-19T15:22:57.474402092Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 15:22:59,669 backend_load done model=moss_image",
+      "ts": "2026-10-19T15:22:59.669275688Z"
+    },
+    {
+      "source": "container",
+      "line": "pipeline.py         :48   2026-10-19 15:23:00,271 MOSS variant=turbo steps=8 cfg=1.0 shift=5.0 lora=lodestones/MOSS-Image-SFT-8-steps-dmd strength=0.7",
+      "ts": "2026-10-19T15:23:00.271622748Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :26   2026-10-19 15:23:33,121 stage=inference done elapsed_s=39.41",
+      "ts": "2026-10-19T15:23:33.121528457Z"
+    }
+  ],
+  "observed_unloads": [
+    {
+      "model": "moss_image",
+      "cuda_allocated_bytes": 9568256
+    },
+    {
+      "model": "krea2",
+      "cuda_allocated_bytes": 9699328
+    },
+    {
+      "model": "qwen_image_21",
+      "cuda_allocated_bytes": 9699328
+    }
+  ],
+  "temporary_gpu_exclusion": {
+    "version": 50,
+    "gpuIds": "AMPERE_24,ADA_24,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb,-NVIDIA L4",
+    "reason": "Existing L4 attempts stayed THROTTLED without container logs; temporarily exclude L4 for verification."
+  },
+  "final_health": {
+    "jobs": {
+      "completed": 1114,
+      "failed": 15,
+      "inProgress": 0,
+      "inQueue": 0,
+      "retried": 3
+    },
+    "workers": {
+      "idle": 0,
+      "initializing": 0,
+      "ready": 0,
+      "running": 1,
+      "throttled": 0,
+      "unhealthy": 0
+    }
+  },
+  "final_worker_readback": {
+    "endpointVersion": 51,
+    "summary": {
+      "idle": 1,
+      "initializing": 0,
+      "running": 0,
+      "throttled": 0,
+      "total": 1,
+      "unhealthy": 0
+    },
+    "workers": [
+      {
+        "dataCenterId": "EUR-IS-2",
+        "gpuCount": 1,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "id": "ysi6f1pyi48b9x",
+        "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:fbe62a59c6fbc9099c1f48fa49529eddb34446ecd7b52cb0830f1850ab35b7a9",
+        "isStale": true,
+        "startedAt": "2026-10-19T15:09:08.713Z",
+        "status": "IDLE",
+        "uptimeSeconds": 959,
+        "version": 50
+      }
+    ]
+  }
+}

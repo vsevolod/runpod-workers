@@ -103,6 +103,16 @@ model switching. Validate the exact CUDA image and follow the preserved
 [calibration procedure](../../docs/benchmarks/image-megapixels.md) before
 claiming supported capacities.
 
+## Verified deployment
+
+The [2026-10-19 deployment](../../docs/deployments/2026-10-19-moss-image.md)
+completed eight API requests on one RTX 4090 24 GB using the exact published
+CUDA image: MOSS Base/Turbo and repeats, Krea Identity V2, Qwen Turbo/Base,
+and MOSS Turbo after reloading. MOSS outputs were 1024x1024; warm API times
+were 67.8s for Base and 27.3s for Turbo. Repeated MOSS outputs matched their
+respective first outputs byte-for-byte, including after family switches.
+This is a smoke check, not a resolution or capacity calibration.
+
 ## Sources and licenses
 
 - [SFT model and pipeline](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT).
