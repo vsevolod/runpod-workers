@@ -47,4 +47,3 @@ class LoRATests(unittest.TestCase):
                 with activate_lora(model, state, strength=.7):
                     self.fail('Invalid LoRA reached inference')
             self.assertIs(model[0], original)
-

@@ -113,4 +113,3 @@ class PipelineTests(unittest.TestCase):
             result = runtime.run(self.norm('base'), 0)
             self.assertEqual(result.images[0].size, (256, 256))
             runtime.close()
-

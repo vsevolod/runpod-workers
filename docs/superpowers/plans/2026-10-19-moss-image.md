@@ -42,4 +42,5 @@
   The local filesystem had about 15 GB free after test setup; no existing images,
   volumes or unrelated files were removed to make room. CI is configured to build
   and verify the actual image when the branch is published/integrated.
-- No production deployment, capacity calibration, commit or push performed.
+- At implementation handoff no deployment, calibration, commit or push had been performed.
+  The user subsequently authorized publication, deployment and real-generation checks.

@@ -77,4 +77,3 @@ class StoreTests(unittest.TestCase):
             path.write_bytes(b'x')
             store.ensure_turbo_lora(Path(tmp))
             self.assertEqual(len(fetched), 2)
-
