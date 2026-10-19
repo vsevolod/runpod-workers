@@ -102,21 +102,21 @@ Files: `workers/image/{Dockerfile,requirements.txt,start.sh,README.md}`,
   worker and both model suites plus runtime import/dependency checks in `image`.
 - [x] Make the shared API and root README describe one endpoint and model
   routing. Model README pages identify runtime backends and link common deploy.
-- [ ] Complete review, commit/push, and await successful image CI.
+- [x] Complete review, commit/push, and await successful image CI.
   Dependency resolution, all 378 affected tests and whitespace checks passed locally.
 
 ## Task 5: Deploy, exercise switches, rename, retire old endpoint
 
-- [ ] Save private before snapshots of both endpoints. Resolve and verify OCI
+- [x] Save private before snapshots of both endpoints. Resolve and verify OCI
   source revision/digest and successful CI for the exact candidate.
-- [ ] Wait for a clear retained-endpoint queue; deploy common image with scoped
+- [x] Wait for a clear retained-endpoint queue; deploy common image with scoped
   paths, original Global Volume/GPU selectors, 200 GB disk and temporary idle
   timeout. Verify full provider readback against intended changes.
-- [ ] Submit Krea Identity -> Qwen Turbo -> Qwen Base -> Krea General through
+- [x] Submit Krea Identity -> Qwen Turbo -> Qwen Base -> Krea General through
   the same endpoint. Require one worker, correct model/variant/LoRA metadata,
   completed outputs, valid decoded images/hashes and matching unload/load logs.
-- [ ] Inspect outputs visually; restore original idle timeout. Rename retained
+- [x] Inspect outputs visually; restore original idle timeout. Rename retained
   endpoint `image-workers`, then stop old Qwen with min=0/max=0 after its queue
   clears. Preserve its previous configuration as a private snapshot.
-- [ ] Save sanitized deployment evidence and commands in repository docs,
+- [x] Save sanitized deployment evidence and commands in repository docs,
   commit/push, verify final provider state and report exact test/deploy scope.

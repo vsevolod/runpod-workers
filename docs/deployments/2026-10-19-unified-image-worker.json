@@ -1,0 +1,466 @@
+{
+  "release": {
+    "source_commit": "0c19602ec6bfd0c1c88620c41b0faa51aa38d3b9",
+    "local_tests": {
+      "shared": 41,
+      "image": 15,
+      "krea2": 187,
+      "qwen_image_21": 135
+    },
+    "local_runtime": "Python3.12, torch2.14.1+cpu",
+    "review": "No Critical/Important findings; minor README entry fixed",
+    "ci_run": 39246996756,
+    "ci_url": "https://github.com/vsevolod/runpod-workers/actions/runs/39246996756",
+    "failed_ci_run": 39245778693,
+    "watchdog_repeated_tests": 20,
+    "ci_image_conclusion": "success",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:997a5fde6341f518b0a7e61c220edcc9597bcbb88a6ccefb94fffb35beccb469",
+    "image_created": "2026-10-19T11:49:49.139217087Z",
+    "ci_runtime": "Python3.12, torch2.8.0+cu128, torchvision0.23.0+cu128, CUDA12.8",
+    "anonymous_image_pull_verified": true
+  },
+  "final_configuration": {
+    "endpoint": "9zb0wyo61ck3wk",
+    "name": "image-workers",
+    "version": 48,
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:997a5fde6341f518b0a7e61c220edcc9597bcbb88a6ccefb94fffb35beccb469",
+    "idleTimeout": 10,
+    "workersMin": 0,
+    "workersMax": 1,
+    "containerDiskInGb": 200,
+    "retired_endpoint": {
+      "id": "b1zzsd2eqqdrvp",
+      "version": 30,
+      "workersMin": 0,
+      "workersMax": 0
+    }
+  },
+  "worker": {
+    "id": "566ra881ejo33l",
+    "gpuTypeId": "NVIDIA RTX A5000"
+  },
+  "fixture": "One portrait fixture repeated for each reference; not a multi-identity quality benchmark.",
+  "cases": [
+    {
+      "delayTime": 293721,
+      "executionTime": 133637,
+      "id": "94a69e82-389f-4aae-be9c-e3a68da58912-e1",
+      "status": "COMPLETED",
+      "workerId": "566ra881ejo33l",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "krea2",
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 2,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "krea-identity",
+      "verified": true,
+      "image_sha256": "5a0c6b841ef3d487b8d50ff25a44c55ff9a423c0e790fe4258f662e4ff595cd3",
+      "image_bytes": 683922,
+      "channel_stddev": [
+        81.70069348877657,
+        75.06929002341961,
+        68.16974992182462
+      ],
+      "input": {
+        "model": "krea2",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "num_inference_steps": 8,
+        "guidance_scale": 0.0,
+        "seed": 42,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "krea2_identity_edit_v2",
+            "strength": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "delayTime": 427777,
+      "executionTime": 60958,
+      "id": "421cb895-a935-452f-ab95-83d0e951f0f6-e1",
+      "status": "COMPLETED",
+      "workerId": "566ra881ejo33l",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1-Turbo",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "turbo"
+        },
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "checkpoint",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "qwen-turbo",
+      "verified": true,
+      "image_sha256": "a9e17fedc92b8202527557ddd3216934f91538025d70c89dfed4d905aa83c4b8",
+      "image_bytes": 906506,
+      "channel_stddev": [
+        78.63695891544269,
+        73.7767184223245,
+        65.02916904760043
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0,
+        "seed": 42,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "turbo"
+        }
+      }
+    },
+    {
+      "delayTime": 489150,
+      "executionTime": 83432,
+      "id": "a44d7b74-a50e-47cf-9ba1-9bb22c9e1cd6-e1",
+      "status": "COMPLETED",
+      "workerId": "566ra881ejo33l",
+      "output": {
+        "guidance_scale": 1,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "qwen_image_21",
+        "model_id": "Qwen/Qwen-Image-2.1",
+        "model_options": {
+          "output_resolution": null,
+          "variant": "base"
+        },
+        "model_variant": "base",
+        "num_inference_steps": 40,
+        "num_refs": 3,
+        "output_resolution": 887,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "scheduler": "simple",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "qwen-base",
+      "verified": true,
+      "image_sha256": "8b6dc6f06e9d2a7d758e7a13aa00d7bc711ed835e74cd7fb404f60a71f1a7ed8",
+      "image_bytes": 955806,
+      "channel_stddev": [
+        76.09772354270613,
+        71.23831070918823,
+        62.5867346515546
+      ],
+      "input": {
+        "model": "qwen_image_21",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac",
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "num_inference_steps": 40,
+        "guidance_scale": 1.0,
+        "seed": 42,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "lenovo_qwen21",
+            "strength": 1.0
+          }
+        ],
+        "model_options": {
+          "variant": "base"
+        }
+      }
+    },
+    {
+      "delayTime": 571022,
+      "executionTime": 81824,
+      "id": "7236c1d2-ab5e-4f9f-9d90-148b658acb35-e2",
+      "status": "COMPLETED",
+      "workerId": "566ra881ejo33l",
+      "output": {
+        "fit_mode": "fit",
+        "grounding_px": 768,
+        "guidance_scale": 0,
+        "height": 1024,
+        "loras": [
+          {
+            "name": "krea2_general_edit_v2",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "krea2",
+        "model_options": {
+          "fit_mode": "fit",
+          "grounding_px": 768,
+          "mu": 1.15,
+          "ref_boost": 1,
+          "ref_boost_a": 1,
+          "ref_position": "aligned",
+          "ref_position_a": "aligned"
+        },
+        "num_inference_steps": 8,
+        "num_refs": 1,
+        "ref_boost": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 1,
+        "sampler": "euler",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.55682373046875,
+        "width": 768
+      },
+      "case": "krea-general",
+      "verified": true,
+      "image_sha256": "59b44121241dabe3c32e7cd6667c025e556f932e28d5509d3c8080f8e6c8545c",
+      "image_bytes": 700995,
+      "channel_stddev": [
+        85.90911998891168,
+        76.79474796393707,
+        68.31692259824757
+      ],
+      "input": {
+        "model": "krea2",
+        "type": "image_edit",
+        "images": [
+          "fixture_sha256:053655f70dd5c1d305fee3b240ffa192a37c605dbc9fb22f047cfe500d5142ac"
+        ],
+        "prompt": "Change the jacket to a blue jacket. Preserve the person, face, pose, composition and natural lighting.",
+        "width": 768,
+        "height": 1024,
+        "num_inference_steps": 8,
+        "guidance_scale": 0.0,
+        "seed": 42,
+        "reference_megapixels": "max",
+        "loras": [
+          {
+            "name": "krea2_general_edit_v2",
+            "strength": 1.0
+          }
+        ]
+      }
+    }
+  ],
+  "runtime_events": [
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 12:02:17,820 backend_load begin model=krea2",
+      "ts": "2026-10-19T12:02:17.820683259Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 12:02:49,003 backend_load done model=krea2",
+      "ts": "2026-10-19T12:02:49.004012860Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :12   2026-10-19 12:02:49,004 LoRA request: krea2_identity_edit_v2@1:lora",
+      "ts": "2026-10-19T12:02:49.004965925Z"
+    },
+    {
+      "source": "container",
+      "line": "lora_runtime.py     :322  2026-10-19 12:03:09,230 Loaded LoRA krea2_identity_edit_v2 type=lora strength=1.000 layers=256",
+      "ts": "2026-10-19T12:03:09.230241737Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :32   2026-10-19 12:04:32,403 model_unload begin model=krea2",
+      "ts": "2026-10-19T12:04:32.403842038Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :38   2026-10-19 12:04:33,660 model_unload done model=krea2 cuda_allocated_bytes=8650752",
+      "ts": "2026-10-19T12:04:33.660680557Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 12:04:33,660 backend_load begin model=qwen_image_21",
+      "ts": "2026-10-19T12:04:33.660724387Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 12:04:33,665 backend_load done model=qwen_image_21",
+      "ts": "2026-10-19T12:04:33.665464384Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :13   2026-10-19 12:04:34,024 LoRA request: lenovo_qwen21@1",
+      "ts": "2026-10-19T12:04:34.024498202Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :141  2026-10-19 12:04:34,085 Runtime python=3.12.15 torch=2.8.0+cu128 cuda_build=12.8 torch_threads=48 cpu_count=96 diffusers=0.41.0.dev0 transformers=5.20.1 peft=0.21.2 accelerate=1.15.0 runpod=1.12.0",
+      "ts": "2026-10-19T12:04:34.085893931Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :159  2026-10-19 12:04:34,086 GPU index=0 name=NVIDIA RTX A5000 capability=sm_86 total_bytes=25293946880",
+      "ts": "2026-10-19T12:04:34.086809046Z"
+    },
+    {
+      "source": "container",
+      "line": "lora.py             :324  2026-10-19 12:04:56,329 Converted 32 fused MLP LoRA target(s) for lenovo_qwen21",
+      "ts": "2026-10-19T12:04:56.329428607Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :13   2026-10-19 12:05:34,486 LoRA request: lenovo_qwen21@1",
+      "ts": "2026-10-19T12:05:34.486536848Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :64   2026-10-19 12:05:34,488 stage=model_unload begin pid=50 rss_kib=34420796 cgroup_used_bytes=49997570048 cgroup_limit_bytes=49999998976 cgroup_events=0 cuda_free_bytes=22545694720 cuda_total_bytes=25293946880 cuda_allocated_bytes=13369856 cuda_reserved_bytes=2470445056",
+      "ts": "2026-10-19T12:05:34.488949181Z"
+    },
+    {
+      "source": "container",
+      "line": "\rFetching 22 files:  14%|\u2588\u258e        | 3/22 [00:00<00:00, 22.60it/s]\rFetching 22 files:  32%|\u2588\u2588\u2588\u258f      | 7/22 [00:00<00:00, 29.31it/s]\rFetching 22 files:  59%|\u2588\u2588\u2588\u2588\u2588\u2589    | 13/22 [00:00<00:00, 18.17it/s]diagnostics.py      :76   2026-10-19 12:05:37,059 stage=model_unload done elapsed_s=2.57 pid=50 rss_kib=5339104 cgroup_used_bytes=21045600256 cgroup_limit_bytes=49999998976 cgroup_events=0 cuda_free_bytes=24972099584 cuda_total_bytes=25293946880 cuda_allocated_bytes=8650752 cuda_reserved_bytes=44040192",
+      "ts": "2026-10-19T12:05:37.059756353Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :141  2026-10-19 12:05:37,069 Runtime python=3.12.15 torch=2.8.0+cu128 cuda_build=12.8 torch_threads=48 cpu_count=96 diffusers=0.41.0.dev0 transformers=5.20.1 peft=0.21.2 accelerate=1.15.0 runpod=1.12.0",
+      "ts": "2026-10-19T12:05:37.069788519Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :159  2026-10-19 12:05:37,070 GPU index=0 name=NVIDIA RTX A5000 capability=sm_86 total_bytes=25293946880",
+      "ts": "2026-10-19T12:05:37.070588830Z"
+    },
+    {
+      "source": "container",
+      "line": "lora.py             :324  2026-10-19 12:05:51,288 Converted 32 fused MLP LoRA target(s) for lenovo_qwen21",
+      "ts": "2026-10-19T12:05:51.289232977Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :32   2026-10-19 12:06:58,913 model_unload begin model=qwen_image_21",
+      "ts": "2026-10-19T12:06:58.913943808Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :64   2026-10-19 12:06:58,917 stage=model_unload begin pid=50 rss_kib=34247200 cgroup_used_bytes=49997537280 cgroup_limit_bytes=49999998976 cgroup_events=0 cuda_free_bytes=22547791872 cuda_total_bytes=25293946880 cuda_allocated_bytes=13369856 cuda_reserved_bytes=2468347904",
+      "ts": "2026-10-19T12:06:58.917518963Z"
+    },
+    {
+      "source": "container",
+      "line": "diagnostics.py      :76   2026-10-19 12:07:00,977 stage=model_unload done elapsed_s=2.06 pid=50 rss_kib=5110348 cgroup_used_bytes=20100841472 cgroup_limit_bytes=49999998976 cgroup_events=0 cuda_free_bytes=24972099584 cuda_total_bytes=25293946880 cuda_allocated_bytes=8650752 cuda_reserved_bytes=44040192",
+      "ts": "2026-10-19T12:07:00.978166522Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :38   2026-10-19 12:07:01,133 model_unload done model=qwen_image_21 cuda_allocated_bytes=8650752",
+      "ts": "2026-10-19T12:07:01.133291890Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :48   2026-10-19 12:07:01,133 backend_load begin model=krea2",
+      "ts": "2026-10-19T12:07:01.133354693Z"
+    },
+    {
+      "source": "container",
+      "line": "manager.py          :61   2026-10-19 12:07:08,557 backend_load done model=krea2",
+      "ts": "2026-10-19T12:07:08.557950160Z"
+    },
+    {
+      "source": "container",
+      "line": "api.py              :12   2026-10-19 12:07:08,558 LoRA request: krea2_general_edit_v2@1:lora",
+      "ts": "2026-10-19T12:07:08.558907840Z"
+    },
+    {
+      "source": "container",
+      "line": "lora_runtime.py     :322  2026-10-19 12:07:26,992 Loaded LoRA krea2_general_edit_v2 type=lora strength=1.000 layers=256",
+      "ts": "2026-10-19T12:07:26.992328482Z"
+    }
+  ],
+  "observed_unloads": [
+    {
+      "model": "krea2",
+      "cuda_allocated_bytes": 8650752
+    },
+    {
+      "model": "qwen_image_21",
+      "cuda_allocated_bytes": 8650752
+    }
+  ]
+}
