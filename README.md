@@ -10,7 +10,7 @@ Custom RunPod serverless workers.
 | [`workers/krea2`](workers/krea2/) | Krea inference backend, quantization and V2 edit adapters |
 | [`workers/qwen_image_21`](workers/qwen_image_21/) | Qwen inference backend, Base/Turbo and additional LoRAs |
 | [`workers/moss_image`](workers/moss_image/) | MOSS-Image-SFT generation backend, ordinary and eight-step DMD Turbo |
-| [`workers/joycaption`](workers/joycaption/) | JoyCaption Beta One captioning |
+| [`workers/joycaption`](workers/joycaption/) | Gliese Qwen3.5 9B captioning; existing caption API/image name |
 | [`workers/minimax_h3_comfy`](workers/minimax_h3_comfy/) | MiniMax H3 headless ComfyUI worker |
 | [`workers/lora_downloader`](workers/lora_downloader/) | CPU downloads of CivitAI adapters to the shared volume |
 | [`workers/shared`](workers/shared/) | Common API, downloads, adapter cache and megapixel policy |

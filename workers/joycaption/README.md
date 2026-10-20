@@ -1,155 +1,126 @@
-# RunPod worker — JoyCaption Beta One
+# Gliese Qwen3.5 9B image caption worker
 
-Thin serverless worker: **image → English descriptive caption**. No ComfyUI, no vLLM.
+Replaces JoyCaption Beta One with
+[prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption](https://huggingface.co/prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption).
+The `workers/joycaption` directory, GHCR image name and client name are retained
+for the existing RunPod endpoint integration. There is one caption model.
 
-| | |
-|--|--|
-| **Model** | [fancyfeast/llama-joycaption-beta-one-hf-llava](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava) |
-| **Upstream** | [fpgaminer/joycaption](https://github.com/fpgaminer/joycaption) |
-| **GPU** | **24 GB** class (bf16 model ≈ **17 GB** VRAM) |
-| **Dtype** | `bfloat16` (native) |
-| **Runtime** | PyTorch `2.8.0+cu128`, torchvision `0.23.0+cu128`, CUDA 12.8.1; shared constraints also apply to requirements installation |
-| **Template patterns** | [worker-sdxl](https://github.com/runpod-workers/worker-sdxl), monorepo `workers/krea2` |
+## Model and runtime
 
-## Layout
+- Model revision: `ead05a2ba36c2e68cc03669414210bde75988185`.
+- Native BF16 weights: three shards, about **18.82 GB** total. No quantization or CPU offload.
+- `Qwen3_5ForConditionalGeneration`, Transformers **5.20.1**, Accelerate **1.15.0**.
+- Torch **2.8.0+cu128**, torchvision **0.23.0+cu128**, CUDA **12.8.1** with Blackwell support.
+- Use a 24 GB or larger GPU. Actual GPU headroom, speed and image quality still
+  require validation of this candidate image; the old JoyCaption measurements
+  do not describe Gliese.
 
-```
-workers/joycaption/
-├── Dockerfile
-├── handler.py
-├── caption_utils.py        # base64 / prompt / pixel limits (unit-tested)
-├── schemas.py
-├── download_weights.py
-├── test_input.json
-├── requirements.txt
-├── NOTICE
-├── LICENSES/
-└── tests/
-```
+The model's own expert-caption chat template supplies the system instruction.
+The user message contains an image slot and the caption instruction.
+`enable_thinking=False` requests caption output without a reasoning section.
 
-## Network volume
+## Download and startup
 
-Use a **separate** volume from krea2 (same datacenter as the endpoint).
+The worker starts a **CPU-only subprocess** through `shared.prefetch` before
+importing Torch, Transformers and Accelerate. `shared.model_download` stages
+only the selected pinned metadata and Safetensors shards on **container disk**.
+GGUF and alternative templates are not downloaded.
 
-| Component | ~size |
-|-----------|------:|
-| HF snapshot (4× safetensors + tokenizer/processor) | **~16 GB** |
-| Recommended volume | **≥ 25 GB** (30–40 GB with headroom) |
+1. Processor, tokenizer, config, chat template, generation config and shard
+   index are downloaded and size-validated together.
+2. The processor loads while weight downloads continue. Model construction
+   uses Accelerate's empty-weight context instead of allocating a CPU copy.
+3. Each shard is published individually. Immediately before loading that
+   shard, the worker waits for its readiness and loads it directly to GPU.
+   Later shards can download concurrently.
+4. The final `all` barrier verifies successful downloader exit before the
+   worker begins accepting requests. A later download failure fails startup;
+   a loading failure releases the partial model and terminates/reaps the child.
 
-```text
-/runpod-volume/joycaption/
-  config.json
-  model-00001-of-00004.safetensors
-  ...
-  tokenizer.json
-  preprocessor_config.json
-```
+An atomic manifest records the immutable revision, expected sizes and completed
+files. Warm startup reuses validated files without Hub access. Missing or
+truncated files are repaired; retries retain the same pinned revision.
+Caption inference makes no Hub requests. Completed files survive for the
+lifetime of that container disk; a fresh worker may need to download them again.
 
-Bootstrap on a **Pod** with the volume attached:
+Optional offline prefetch, using the same downloader:
 
-```bash
-pip install huggingface-hub hf_transfer
-export HF_TOKEN=hf_...   # if needed
-python download_weights.py --output /runpod-volume/joycaption
+```sh
+python workers/joycaption/download_weights.py --output /models/gliese_qwen35_9b
 ```
 
-Then set `LOCAL_FILES_ONLY=1` on the endpoint. The worker **explicitly** passes
-`local_files_only=True` into both `from_pretrained` calls (Transformers does
-**not** honor that env by itself).
+## Endpoint configuration
 
-## Endpoint env
-
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `MODEL_DIR` | `/runpod-volume/joycaption` | Local snapshot path |
-| `MODEL_ID` | `fancyfeast/llama-joycaption-beta-one-hf-llava` | Provenance + fallback id |
-| `LOCAL_FILES_ONLY` | unset | `1`/`true`/`yes` → offline load kwargs |
-| `MAX_IMAGE_PIXELS` | `25000000` | Max `width * height` after decode |
+| Variable | Default | Purpose |
+|---|---|---|
+| `MODEL_DIR` | `/models/gliese_qwen35_9b` | Local pinned checkpoint and manifest |
+| `HF_HOME` | `/models/hf` in the image | Local Hub transfer cache |
+| `CAPTION_MAX_PIXELS` | `1048576` | Internal processor image-area cap; allowed 65536..4194304 |
+| `MAX_IMAGE_PIXELS` | `25000000` | Maximum decoded source image area |
 | `LOG_LEVEL` | `INFO` | Logging |
-| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (Dockerfile) | Allocator |
+
+The processor resizes to an area between 65536 and `CAPTION_MAX_PIXELS` pixels.
+The 1 MP default limits image-token/activation memory on 24 GB GPUs while still
+accepting larger source images within the decode limit.
+
+For deployment on the existing caption endpoint:
+
+- Build and validate the immutable `runpod-workers-joycaption` image.
+- Set `MODEL_DIR=/models/gliese_qwen35_9b` and `HF_HOME=/models/hf`; remove the
+  previous JoyCaption `MODEL_ID` / `LOCAL_FILES_ONLY` environment entries.
+- Allow enough container disk for weights, metadata and Hub transfer temporary
+  files (at least 40 GB recommended). The previous network-volume snapshot is
+  not used by this worker.
+- Keep the image's `CMD`; any endpoint start-command override must be cleared.
+- Update the existing endpoint only after a real GPU smoke check of the candidate.
+  Source/tests and a successful image build do not prove deployed behavior.
 
 ## API
 
-### Input
-
-| Field | Required | Default | Notes |
-|-------|:--------:|---------|-------|
-| `image` | yes | — | Raw base64 or `data:image/...;base64,...` |
-| `prompt` | no | formal long descriptive (EN) | Full override if non-empty |
-| `max_new_tokens` | no | `512` | 1…1024 |
-| `temperature` | no | `0.6` | JoyCaption sample default |
-| `top_p` | no | `0.9` | JoyCaption sample default |
-
-`top_k` is always `None` in `generate()` (official sample); not exposed in API.
-
-Default user prompt:
-
-```text
-Write a long descriptive caption for this image in a formal tone.
-```
-
-### Success
+The existing client remains `python scripts/joycaption.py -i photo.jpg`.
+Input remains a single base64 image or data URL:
 
 ```json
 {
-  "caption": "...",
-  "prompt": "Write a long descriptive caption for this image in a formal tone.",
-  "model": "fancyfeast/llama-joycaption-beta-one-hf-llava"
+  "input": {
+    "image": "data:image/png;base64,...",
+    "prompt": "Write a detailed descriptive caption for this image.",
+    "max_new_tokens": 512,
+    "temperature": 0.6,
+    "top_p": 0.9
+  }
 }
 ```
 
-### Error
+`prompt` is optional. The existing default is a long formal English description.
+`max_new_tokens` accepts 1..1024; it is an output cap. `temperature=0` selects
+non-sampling generation. The existing successful response fields are preserved:
 
 ```json
-{ "error": "human-readable message" }
+{
+  "caption": "A detailed description...",
+  "prompt": "Write a detailed descriptive caption for this image.",
+  "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+  "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"
+}
 ```
 
-### Payload size (RunPod)
+Errors return `error`; generation failures also request a worker refresh.
+Caption duration is logged separately from processor/shard loading timings.
+The client reports RunPod's `delayTime` and `executionTime` separately.
 
-Base64 inflates size by ~4/3. Platform limits:
+## Verification
 
-| Endpoint | Payload limit | Practical raw image (approx.) |
-|----------|---------------|-------------------------------|
-| `/run` (async) | **10 MB** | **~7.5 MB** before base64 |
-| `/runsync` | **20 MB** | **~15 MB** before base64 |
-
-Stay under these limits on the client. After decode, `MAX_IMAGE_PIXELS` still
-rejects huge decompressed dimensions (decompression bombs).
-
-Video is **not** supported (image-only VLM).
-
-## Deploy (RunPod)
-
-1. Network Volume **≥ 25 GB** in the endpoint datacenter.
-2. Pod + volume → `download_weights.py --output /runpod-volume/joycaption`.
-3. Build CI publishes the validated image as
-   `ghcr.io/vsevolod/runpod-workers-joycaption:<commit SHA>`; deploy its immutable
-   digest after GPU validation. The Dockerfile uses **repository root** context.
-4. Mount volume at `/runpod-volume`.
-5. GPU: **24 GB**, host CUDA **12.8+**. CUDA 12.8 Torch includes Blackwell
-   `sm_120`; older CUDA builds can load weights but fail the first GPU operation.
-6. Env: `MODEL_DIR=/runpod-volume/joycaption`, `LOCAL_FILES_ONLY=1`.
-7. Smoke with `test_input.json` (tiny PNG; well under 10 MB payload).
-
-## Local unit tests (no GPU)
-
-```bash
-cd workers/joycaption
-pip install pillow pytest
-PYTHONPATH=. pytest tests/ -v
+```sh
+PYTHONPATH=workers:workers/joycaption python -m pytest workers/joycaption/tests -q
 ```
 
-## Design notes
+Tests cover the caption API, image input, non-thinking template arguments,
+output-token trimming, sampling controls, cache repair/retry and revision
+provenance. With runtime dependencies installed, a tiny real Qwen3.5 model
+loads from Safetensors shards while a controlled downloader subprocess blocks
+publication of its later shard until the first shard is loaded. The same tests
+cover later-download failure and child cleanup after a loading failure.
+They use CPU only and do not download production weights.
 
-- **VRAM:** official JoyCaption bf16 ≈ 17 GB; comfortable on 24 GB+.
-- **Inference:** `LlavaForConditionalGeneration` + official chat/processor path.
-- **Language:** English captions by design; translate in another pipeline step.
-- **Not in MVP:** vLLM, quantization, URL input, multi-image, video, mode enum.
-
-## License
-
-- Third-party notices: [`NOTICE`](NOTICE).
-- Portions adapted from RunPod `worker-sdxl`: [MIT](LICENSES/RUNPOD-WORKER-SDXL-MIT.txt).
-- Model weights are not included. Llama 3.1 / SigLIP2 / JoyCaption weights are
-  governed by upstream licenses (see HF model card; snapshot may include
-  `LLAMA_LICENSE` and `LLAMA_USE_POLICY.md`).
+Model card license: Apache-2.0. See `NOTICE` and the pinned upstream repository.

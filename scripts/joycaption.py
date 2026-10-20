@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RunPod JoyCaption client: image → caption (or fetch by Request ID).
+"""RunPod caption client: image → caption (or fetch by Request ID).
 
 Modes (auto-detected):
   1) Fetch:    --request-id <id>  → status (poll if needed) → caption text

@@ -1,5 +1,6 @@
-# JoyCaption Beta One — thin RunPod serverless worker
-# Weights live on Network Volume (MODEL_DIR), not in this image.
+# Gliese Qwen3.5 9B — RunPod image captioning worker.
+# The joycaption package/image name preserves the existing endpoint integration.
+# Pinned weights are downloaded to container disk, not baked into this image.
 #
 # RunPod GitHub Integration:
 #   Dockerfile path:  workers/joycaption/Dockerfile
@@ -8,8 +9,7 @@
 # Local build from monorepo root:
 #   docker build -f workers/joycaption/Dockerfile -t runpod-joycaption .
 #
-# Keep JoyCaption's Transformers/processor pins while using the shared CUDA
-# Torch pair, which includes Blackwell sm_120 support.
+# The shared CUDA Torch pair includes Blackwell sm_120 support.
 
 FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04@sha256:17e2934e1fa96152b14f78078bfbafd0f00f391df995dc6c641a720fce1202bb
 
@@ -52,17 +52,21 @@ RUN uv pip install --no-cache -c /app/torch-constraints.txt -r /app/requirements
 
 COPY workers/joycaption/schemas.py \
      workers/joycaption/handler.py \
+     workers/joycaption/caption_runtime.py \
      workers/joycaption/caption_utils.py \
+     workers/joycaption/model_store.py \
      workers/joycaption/download_weights.py \
      workers/joycaption/test_input.json \
      workers/joycaption/NOTICE \
      /app/
 COPY workers/joycaption/LICENSES /app/LICENSES
+COPY workers/shared /app/workers/shared
 
-ENV MODEL_DIR=/runpod-volume/joycaption \
-    MODEL_ID=fancyfeast/llama-joycaption-beta-one-hf-llava \
-    PYTHONPATH=/app \
+ENV MODEL_DIR=/models/gliese_qwen35_9b \
+    HF_HOME=/models/hf \
+    CAPTION_MAX_PIXELS=1048576 \
+    PYTHONPATH=/app:/app/workers \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# No weight download at build time — mount Network Volume at runtime.
+# CPU prefetch starts before heavy runtime imports; each shard has its own barrier.
 CMD ["python", "-u", "/app/handler.py"]

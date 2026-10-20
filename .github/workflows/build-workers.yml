@@ -81,8 +81,11 @@ jobs:
           if worker == "joycaption":
               assert torch.__version__ == "2.8.0+cu128", torch.__version__
               assert torchvision.__version__ == "0.23.0+cu128", torchvision.__version__
-              import caption_utils, schemas
-              from transformers import AutoProcessor, LlavaForConditionalGeneration
+              import caption_utils, schemas, caption_runtime, model_store, handler
+              import transformers
+              from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration
+              assert handler.MODELS is None
+              assert transformers.__version__ == "5.20.1", transformers.__version__
               compiled_arches = torch._C._cuda_getArchFlags().split()
               assert "sm_120" in compiled_arches, compiled_arches
           else:
@@ -105,12 +108,12 @@ jobs:
           print("Runtime imports OK; torch=" + torch.__version__ +
                 " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
-      - name: Check JoyCaption image decoding and prompt helpers
+      - name: Check caption API, pinned cache and staged shard loading
         if: matrix.worker == 'joycaption'
         shell: bash
         run: |
           docker run --rm --volume "$GITHUB_WORKSPACE:/src:ro" \
-            --env PYTHONPATH=/src/workers/joycaption --entrypoint sh "$IMAGE" -c \
+            --env PYTHONPATH=/src/workers/joycaption:/src/workers --entrypoint sh "$IMAGE" -c \
             'uv pip install --no-cache -c /app/torch-constraints.txt pytest && python -m pytest /src/workers/joycaption/tests -q'
       - name: Check common worker and all model backends
         if: matrix.worker == 'image'

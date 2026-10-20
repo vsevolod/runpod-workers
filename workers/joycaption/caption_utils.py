@@ -11,7 +11,7 @@ from typing import Mapping
 
 from PIL import Image, UnidentifiedImageError
 
-DEFAULT_MODEL_ID = "fancyfeast/llama-joycaption-beta-one-hf-llava"
+DEFAULT_MODEL_ID = "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption"
 DEFAULT_PROMPT = (
     "Write a long descriptive caption for this image in a formal tone."
 )

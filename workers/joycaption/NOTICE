@@ -14,26 +14,19 @@ Copyright (c) 2025 RunPod
 The adapted portions are licensed under the MIT License. A copy of that
 license is provided in LICENSES/RUNPOD-WORKER-SDXL-MIT.txt.
 
-JoyCaption / model weights
---------------------------
+Gliese Qwen3.5 caption model
+----------------------------
 
-Model weights are NOT included in this repository. They must be downloaded
-separately onto a Network Volume (see download_weights.py / README).
+Model weights are NOT included in this repository or the container image.
+The downloader stages the pinned model on container disk.
 
-Upstream project:
+  prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption
+  https://huggingface.co/prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption
+  revision ead05a2ba36c2e68cc03669414210bde75988185
 
-  fpgaminer/joycaption
-  https://github.com/fpgaminer/joycaption
-
-Model:
-
-  fancyfeast/llama-joycaption-beta-one-hf-llava
-  https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava
-
-The HF snapshot includes LLAMA_LICENSE and LLAMA_USE_POLICY.md (Llama 3.1).
-The model is built on Meta Llama 3.1 and google/siglip2-so400m-patch14-384
-components. Use of the weights is governed by those upstream licenses and the
-model card on Hugging Face — not by this repository.
+The model card declares Apache-2.0. Its base is Qwen/Qwen3.5-9B via
+huihui-ai/Huihui-Qwen3.5-9B-abliterated. The model's own caption chat template
+is read from the pinned downloaded checkpoint.
 
 These third-party notices do not grant a license to the original code in this
 repository beyond what is stated in the project root license (if any).
