@@ -1,0 +1,61 @@
+{
+  "args": "{}",
+  "createdAt": "2026-07-26T10:20:05.857Z",
+  "dataCenterIds": [],
+  "disk": 60,
+  "env": {
+    "CAPTION_MAX_PIXELS": "1048576",
+    "HF_HOME": "/models/hf",
+    "MODEL_DIR": "/models/gliese_qwen35_9b"
+  },
+  "flashboot": "FLASHBOOT",
+  "gpu": {
+    "allowedCudaVersions": [
+      "12.8",
+      "12.9",
+      "13.0",
+      "13.1",
+      "13.2",
+      "13.3",
+      "13.4"
+    ],
+    "count": 1,
+    "minCudaVersion": "12.8",
+    "pools": [
+      "AMPERE_24"
+    ]
+  },
+  "id": "yn0krhztuguxxm",
+  "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:252a9232c88911e4b9bba6bd041750acd89d1cee15dacfc55bf93aaff1c96e9c",
+  "mounts": {
+    "global": [
+      {
+        "volumeId": "cmv1ht9mt000007lb00es0w9n"
+      }
+    ],
+    "network": []
+  },
+  "name": "joycaption-workers",
+  "networkVolumes": [],
+  "requestUrls": {
+    "cancel": "https://api.runpod.ai/v2/yn0krhztuguxxm/cancel/{job_id}",
+    "health": "https://api.runpod.ai/v2/yn0krhztuguxxm/health",
+    "purgeQueue": "https://api.runpod.ai/v2/yn0krhztuguxxm/purge-queue",
+    "retry": "https://api.runpod.ai/v2/yn0krhztuguxxm/retry/{job_id}",
+    "run": "https://api.runpod.ai/v2/yn0krhztuguxxm/run",
+    "runSync": "https://api.runpod.ai/v2/yn0krhztuguxxm/runsync",
+    "status": "https://api.runpod.ai/v2/yn0krhztuguxxm/status/{job_id}",
+    "stream": "https://api.runpod.ai/v2/yn0krhztuguxxm/stream/{job_id}"
+  },
+  "scaling": {
+    "queueDelay": 4,
+    "type": "QUEUE_DELAY"
+  },
+  "timeout": 600000,
+  "type": "QUEUE",
+  "workers": {
+    "idleTimeout": 5,
+    "max": 1,
+    "min": 0
+  }
+}

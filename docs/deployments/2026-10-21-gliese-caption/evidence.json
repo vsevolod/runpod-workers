@@ -46,7 +46,7 @@
     "pod_terminate_response": null,
     "verified_absent_from_pods": true
   },
-  "production_endpoint_updated": false,
+  "production_endpoint_updated": true,
   "comparison_with_sequential_loader_measured": false,
   "artifact_sha256": {
     "gpu_smoke.py": "6029c4c2e95f290dc9db764031554277c9f41500006c6a8fbcee4f1715f8173a",
@@ -54,7 +54,39 @@
     "gpu_smoke.log": "86b36b4a2bac919f634d6b7ec5f4d77df98e19951af3b3b732560b187eb7d1e6",
     "remote-SHA256SUMS": "737a42eac4c13ac0db7bc4dc7da056c9d341e10e12c1bfbc3ab62641e239e6c3",
     "runtime.json": "f9f2e6dd30ceb931bcb7659cc0d048626911b65ff748e543ae5546381dee46f7",
+    "production-worker.json": "4002569bc31117b36391aaaa85626237f158b5a7be29d586f4374f9e740fea11",
+    "production-api-smoke.json": "24b4db56dd252852a926c42c1fe3e5c8b2da394d7a120717cdde89714635e6ab",
+    "production-fitness-checks.json": "01335296a7794cef6b72cd14a10350c541d2818f2afe06bc1a929f659efc4592",
+    "production-config.json": "ee65e6885aa22636f6e6db131df7eccd2d772e5199eaa01c2559df32ce65aae4",
     "fixture.png": "3d344eaa92b95a1bc6ae6c690be3a07245ac860dc07ea3a34046b30d56a21029",
     "results.json": "143b3559378744c3c0b23040aef6f16f51b554872a36334e7f9b64ec619b6580"
+  },
+  "production_deployment": {
+    "endpoint_id": "yn0krhztuguxxm",
+    "endpoint_version": 44,
+    "template_id": "a43mtcplw0",
+    "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:252a9232c88911e4b9bba6bd041750acd89d1cee15dacfc55bf93aaff1c96e9c",
+    "container_disk_gb": 60,
+    "worker": {
+      "dataCenterId": "US-WA-1",
+      "gpuCount": 1,
+      "gpuTypeId": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+      "id": "mhkj48luwhoiyg",
+      "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:252a9232c88911e4b9bba6bd041750acd89d1cee15dacfc55bf93aaff1c96e9c",
+      "isStale": false,
+      "startedAt": "2026-10-20T21:14:40.343Z",
+      "status": "RUNNING",
+      "uptimeSeconds": 66,
+      "version": 44
+    },
+    "successful_api_requests": 2,
+    "fitness_checks_passed": 7,
+    "request_ids": [
+      "051190da-2f81-4bfc-9b56-e280e7381140-e2",
+      "a174c48d-33ad-463a-a53c-e8604f29bac9-e2"
+    ],
+    "configuration_evidence": "production-config.json",
+    "api_evidence": "production-api-smoke.json",
+    "fitness_evidence": "production-fitness-checks.json"
   }
 }

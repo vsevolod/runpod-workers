@@ -1,0 +1,43 @@
+{
+  "endpoint": "yn0krhztuguxxm",
+  "cases": [
+    {
+      "case": 0,
+      "max_new_tokens": 128,
+      "prompt_override": "Describe this image briefly in English. Mention the colors and shapes.",
+      "wall_s": 211.77116888493765,
+      "response": {
+        "delayTime": 198408,
+        "executionTime": 8286,
+        "id": "051190da-2f81-4bfc-9b56-e280e7381140-e2",
+        "output": {
+          "caption": "A bold, minimalist composition features a perfectly centered, vibrant red square set against a deep, electric blue background. The red square, occupying roughly the central third of the frame, is a solid, flat block of color with sharp, precise edges that create a clean, geometric focal point. It is surrounded by a uniform, wide border of the intense blue, which fills the remaining space and provides a striking, high-contrast backdrop. The lighting is even and flat, devoid of shadows or gradients, suggesting a digital or vector origin. The overall effect is one of pure, graphic simplicity and visual tension, where the warm, energetic red aggressively contrasts",
+          "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+          "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185",
+          "prompt": "Describe this image briefly in English. Mention the colors and shapes."
+        },
+        "status": "COMPLETED",
+        "workerId": "mhkj48luwhoiyg"
+      }
+    },
+    {
+      "case": 1,
+      "max_new_tokens": 512,
+      "prompt_override": null,
+      "wall_s": 18.87215676694177,
+      "response": {
+        "delayTime": 260,
+        "executionTime": 17775,
+        "id": "a174c48d-33ad-463a-a53c-e8604f29bac9-e2",
+        "output": {
+          "caption": "A bold, geometric composition is defined by a vibrant, saturated red square positioned squarely in the center of the frame, creating a striking focal point against a vast, uniform field of electric blue. The red square, appearing as a solid block of pure chromatic energy, possesses perfectly straight edges and sharp, crisp corners that suggest a digital or vector origin, with a flat, matte finish that absorbs light without significant reflection. It occupies approximately the central third of the visual field, establishing a sense of balance and symmetry. Surrounding this central element is an expansive, unbroken expanse of deep, royal blue that fills the remaining canvas, acting as a cool, calming counterpoint to the warm intensity of the red. The blue background is consistent in tone, devoid of gradients or texture, which emphasizes the singular, graphic nature of the red form. The lighting is even and diffuse, ensuring that the colors are rendered with maximum purity and contrast, resulting in a high-impact, minimalist aesthetic. The overall mood is one of modern simplicity and graphic clarity, where the interplay between the two primary colors creates a dynamic tension. The composition feels deliberate and precise, evoking a sense of order and visual harmony. The medium appears to be a clean, digital rendering or a high-quality print, characterized by its sharp definition and lack of atmospheric softness. There are no other elements to distract the eye, forcing the viewer's attention entirely onto the relationship between the contained red square and the enveloping blue void. The result is a timeless, abstract image that relies on the fundamental power of color and shape to create a memorable visual statement.",
+          "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+          "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185",
+          "prompt": "Write a long descriptive caption for this image in a formal tone."
+        },
+        "status": "COMPLETED",
+        "workerId": "mhkj48luwhoiyg"
+      }
+    }
+  ]
+}

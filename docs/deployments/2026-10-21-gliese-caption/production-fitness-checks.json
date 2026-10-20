@@ -1,0 +1,47 @@
+[
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"Running 7 fitness check(s)...\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:08.874597515Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"GPU binary test passed: 1 GPU(s) healthy (CUDA 13.0)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.088136910Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"Memory check passed: 1301.35GB available (of 1511.43GB total)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.088337171Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"Disk space check passed: 42.37GB free (70.6% available)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.088365323Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"Network connectivity passed: Connected to 8.8.8.8 (1ms)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.089251396Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"CUDA version check passed: 13.0 (minimum: 11.8)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.253057984Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"CUDA initialization passed: 1 device(s) initialized successfully\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.415327991Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"GPU compute benchmark passed: Matrix multiply completed in 63ms\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.641297390Z"
+  },
+  {
+    "source": "container",
+    "line": "{\"requestId\": null, \"message\": \"All fitness checks passed. (766.65ms)\", \"level\": \"INFO\"}",
+    "ts": "2026-10-20T21:16:09.641428517Z"
+  }
+]

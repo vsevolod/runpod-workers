@@ -1,0 +1,12 @@
+{
+  "dataCenterId": "US-WA-1",
+  "gpuCount": 1,
+  "gpuTypeId": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+  "id": "mhkj48luwhoiyg",
+  "image": "ghcr.io/vsevolod/runpod-workers-joycaption@sha256:252a9232c88911e4b9bba6bd041750acd89d1cee15dacfc55bf93aaff1c96e9c",
+  "isStale": false,
+  "startedAt": "2026-10-20T21:14:40.343Z",
+  "status": "RUNNING",
+  "uptimeSeconds": 66,
+  "version": 44
+}

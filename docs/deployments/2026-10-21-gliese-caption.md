@@ -4,7 +4,8 @@ The caption worker now uses `prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption
 at revision `ead05a2ba36c2e68cc03669414210bde75988185` instead of JoyCaption.
 The existing request and response fields, endpoint/client names and directory
 are retained. The successful response also includes `model_revision`.
-This report records a validated candidate; the production endpoint was not updated.
+The validated image is deployed on the existing production endpoint, version 44.
+The production API checks are recorded below.
 
 ## Source, tests and image
 
@@ -82,9 +83,46 @@ The [executed harness](2026-10-21-gliese-caption/gpu_smoke.py),
 Artifacts were SHA-256 verified against the Pod copies, and process exit was 0.
 
 Test Pod `h6xjzzp4vc3vuv` was terminated after saving results; a subsequent account
-Pod listing was empty. The production caption endpoint remains unchanged.
+Pod listing was empty. The production rollout followed this standalone GPU check; see below.
 
 The cancelled local build was replaced by the GitHub build. Its build cache,
 the temporary CPU environment and downloaded metadata were removed; the uv cache
 was also cleared. Local free disk increased from approximately 5 to 20 GiB.
 Running containers, volumes and workspace files were preserved.
+
+
+## Production rollout and API verification
+
+The existing endpoint `yn0krhztuguxxm` (`joycaption-workers`) now uses the same
+immutable Gliese image, at **version 44**, with template `a43mtcplw0`.
+Container disk increased from 5 to **60 GB** for the 18.82 GB checkpoint and
+transfer files. `MODEL_DIR=/models/gliese_qwen35_9b`, `HF_HOME=/models/hf` and
+`CAPTION_MAX_PIXELS=1048576` replace the former JoyCaption environment entries.
+The template uses the image's default entrypoint/CMD. Native Git auto-build
+remains detached (`repo=null`).
+
+The API endpoint ID/URLs, `AMPERE_24` GPU pool, one GPU, 0–1 worker scaling,
+5-second idle timeout, queue-delay scaler, 600-second execution timeout, CUDA
+requirements and existing Global volume binding were preserved. Weights are
+staged on container disk, independently of that existing volume.
+
+Two real requests completed on worker `mhkj48luwhoiyg`, a Blackwell MIG 24 GB
+in US-WA-1. Provider worker readback matched version 44 and the immutable image,
+with `isStale=false`. All seven SDK fitness checks passed, including CUDA
+initialization and GPU matrix multiplication.
+
+| Request | Settings | API delay | API execution |
+|---|---|---:|---:|
+| `051190da-2f81-4bfc-9b56-e280e7381140-e2` | Custom brief prompt, 128-token cap, temperature 0 | 198.408 s | 8.286 s |
+| `a174c48d-33ad-463a-a53c-e8604f29bac9-e2` | Default prompt, 512-token cap, temperature 0 | 0.260 s | 17.775 s |
+
+Both responses identified the red square and blue background and reported the
+new model ID and pinned revision. The first delay includes worker allocation,
+image pull and model startup. The second request reused the same loaded worker.
+These are observations for this fixture and GPU, rather than a general latency
+or quality guarantee.
+
+Preserved evidence: [API responses](2026-10-21-gliese-caption/production-api-smoke.json),
+[configuration](2026-10-21-gliese-caption/production-config.json),
+[worker image/version](2026-10-21-gliese-caption/production-worker.json) and
+[SDK fitness checks](2026-10-21-gliese-caption/production-fitness-checks.json).

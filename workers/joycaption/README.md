@@ -17,6 +17,9 @@ for the existing RunPod endpoint integration. There is one caption model.
   See the [GPU check and evidence](../../docs/deployments/2026-10-21-gliese-caption.md);
   old JoyCaption measurements do not describe Gliese.
 
+The existing production endpoint `yn0krhztuguxxm` uses this image at version 44.
+Two real API requests and all SDK fitness checks passed; see the report above.
+
 The model's own expert-caption chat template supplies the system instruction.
 The user message contains an image slot and the caption instruction.
 `enable_thinking=False` requests caption output without a reasoning section.
