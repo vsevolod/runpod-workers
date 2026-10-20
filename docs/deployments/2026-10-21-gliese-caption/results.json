@@ -1,0 +1,83 @@
+{
+  "runtime": {
+    "python": "3.12.15",
+    "torch": "2.8.0+cu128",
+    "torchvision": "0.23.0+cu128",
+    "transformers": "5.20.1",
+    "accelerate": "1.15.0",
+    "cuda": "12.8",
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+    "capability": [
+      12,
+      0
+    ],
+    "total_vram_bytes": 25367150592,
+    "pipeline_load_s": 55.46079102065414,
+    "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+    "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185",
+    "checkpoint_bytes": 18819721232
+  },
+  "fixture_sha256": "3d344eaa92b95a1bc6ae6c690be3a07245ac860dc07ea3a34046b30d56a21029",
+  "cases": [
+    {
+      "index": 0,
+      "temperature": 0.0,
+      "max_new_tokens": 64,
+      "elapsed_s": 6.044861060101539,
+      "result": {
+        "caption": "A perfectly centered, vibrant red square dominates the composition, its edges sharp and precise against a boundless, electric blue background that extends to the very frame of the image. The red square, appearing as a solid block of pure, saturated crimson, sits squarely in the middle, creating a striking geometric focal point that commands immediate",
+        "prompt": "Describe the image in English, including its colors and shapes.",
+        "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+        "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"
+      },
+      "peak_allocated_bytes": 19490506240,
+      "peak_reserved_bytes": 19549650944,
+      "max_host_rss_bytes": 12884037632
+    },
+    {
+      "index": 1,
+      "temperature": 0.6,
+      "max_new_tokens": 256,
+      "elapsed_s": 14.582994699012488,
+      "result": {
+        "caption": "A vibrant, digitally rendered composition presents a bold, perfectly centered red square set against a deep, uniform royal blue background. The red square, occupying roughly the central third of the frame, displays a flat, saturated crimson hue with no discernible gradient or texture, creating a sense of solid, flat color. It is positioned precisely in the middle, establishing a strong focal point that immediately draws the eye inward. Surrounding this central element is a wide, continuous border of intense, electric blue that fills the remaining space, extending to the very edges of the frame. The blue possesses a similar flat, matte finish, suggesting a vector graphic or a clean digital illustration style. The composition is defined by the stark, high-contrast interplay between the warm, fiery red and the cool, commanding blue, creating a dynamic and visually arresting balance. The edges where the red meets the blue are crisp and sharp, emphasizing the geometric precision of the forms. There is no shadow, reflection, or atmospheric depth to suggest a physical environment; instead, the scene exists as a pure study in color and shape, evoking a mood of simple, graphic elegance and modern minimalism. The overall effect is one of boldness and clarity, where the fundamental elements of color and geometry are pushed to their most",
+        "prompt": "Describe the image in English, including its colors and shapes.",
+        "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+        "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"
+      },
+      "peak_allocated_bytes": 19490506240,
+      "peak_reserved_bytes": 19551748096,
+      "max_host_rss_bytes": 12884037632
+    },
+    {
+      "index": 2,
+      "temperature": 0.6,
+      "max_new_tokens": 512,
+      "elapsed_s": 14.941374436020851,
+      "result": {
+        "caption": "A vibrant, digitally rendered composition presents a bold, perfectly centered red square set against a deep, uniform royal blue background. The red square, occupying roughly the central third of the frame, displays a flat, saturated crimson hue with no discernible gradient or texture, creating a sense of solid, flat color. It is positioned precisely in the middle, establishing a strong focal point that immediately draws the eye inward. Surrounding this central element is a wide, continuous border of intense, electric blue that fills the remaining space, extending to the very edges of the frame. The blue possesses a similar flat, matte finish, suggesting a vector graphic or a clean digital illustration style. The composition is defined by the stark, high-contrast interplay between the warm, fiery red and the cool, commanding blue, creating a dynamic and visually arresting balance. The edges where the red meets the blue are crisp and sharp, emphasizing the geometric precision of the forms. There is no shadow, reflection, or atmospheric depth to suggest a physical environment; instead, the scene exists as a pure study in color and shape, evoking a mood of simple, graphic elegance and modern minimalism. The overall effect is one of boldness and clarity, where the fundamental elements of color and geometry are pushed to their most expressive potential.",
+        "prompt": "Describe the image in English, including its colors and shapes.",
+        "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+        "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"
+      },
+      "peak_allocated_bytes": 19490506240,
+      "peak_reserved_bytes": 19551748096,
+      "max_host_rss_bytes": 12884037632
+    },
+    {
+      "index": 3,
+      "temperature": 0.0,
+      "max_new_tokens": 64,
+      "elapsed_s": 4.723847663961351,
+      "result": {
+        "caption": "A perfectly centered, vibrant red square dominates the composition, its edges sharp and precise against a boundless, electric blue background that extends to the very frame of the image. The red square, appearing as a solid block of pure, saturated crimson, sits squarely in the middle, creating a striking geometric focal point that commands immediate",
+        "prompt": "Describe the image in English, including its colors and shapes.",
+        "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+        "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"
+      },
+      "peak_allocated_bytes": 19490506240,
+      "peak_reserved_bytes": 19551748096,
+      "max_host_rss_bytes": 12884037632
+    }
+  ]
+}

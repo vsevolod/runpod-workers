@@ -1,0 +1,72 @@
+/.venv/lib/python3.12/site-packages/huggingface_hub/constants.py:302: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+HF_HOME=/models/hf
+stage=model_download begin path=/models/gliese_qwen35_9b
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/config.json …
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  -> /models/gliese_qwen35_9b/config.json
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/processor_config.json …
+  -> /models/gliese_qwen35_9b/processor_config.json
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/tokenizer_config.json …
+  -> /models/gliese_qwen35_9b/tokenizer_config.json
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/tokenizer.json …
+  -> /models/gliese_qwen35_9b/tokenizer.json
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/chat_template.jinja …
+  -> /models/gliese_qwen35_9b/chat_template.jinja
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/generation_config.json …
+  -> /models/gliese_qwen35_9b/generation_config.json
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/model.safetensors.index.json …
+  -> /models/gliese_qwen35_9b/model.safetensors.index.json
+stage=component_ready component=processor path=/models/gliese_qwen35_9b
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/model-00001-of-00003.safetensors …
+/.venv/lib/python3.12/site-packages/huggingface_hub/constants.py:302: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+stage=wait_component begin component=processor
+stage=wait_component done component=processor elapsed_s=0.00
+stage=component_load begin component=processor
+stage=component_load done component=processor elapsed_s=1.03
+stage=component_load begin component=model_init
+stage=component_load done component=model_init elapsed_s=0.09
+stage=wait_component begin component=shard_00000
+  -> /models/gliese_qwen35_9b/model-00001-of-00003.safetensors
+stage=component_ready component=shard_00000 path=/models/gliese_qwen35_9b/model-00001-of-00003.safetensors
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/model-00002-of-00003.safetensors …
+stage=wait_component done component=shard_00000 elapsed_s=19.16
+stage=component_load begin component=shard_00000
+stage=component_load done component=shard_00000 elapsed_s=2.19
+stage=wait_component begin component=shard_00001
+  -> /models/gliese_qwen35_9b/model-00002-of-00003.safetensors
+stage=component_ready component=shard_00001 path=/models/gliese_qwen35_9b/model-00002-of-00003.safetensors
+Downloading prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption/model-00003-of-00003.safetensors …
+stage=wait_component done component=shard_00001 elapsed_s=23.31
+stage=component_load begin component=shard_00001
+stage=component_load done component=shard_00001 elapsed_s=1.61
+stage=wait_component begin component=shard_00002
+  -> /models/gliese_qwen35_9b/model-00003-of-00003.safetensors
+stage=component_ready component=shard_00002 path=/models/gliese_qwen35_9b/model-00003-of-00003.safetensors
+stage=model_download done elapsed_s=54.52
+stage=component_ready component=all path=/models/gliese_qwen35_9b
+stage=wait_component done component=shard_00002 elapsed_s=0.86
+stage=component_load begin component=shard_00002
+stage=component_load done component=shard_00002 elapsed_s=0.22
+stage=wait_component begin component=all
+stage=wait_component done component=all elapsed_s=0.26
+caption_runtime.py  :63   2026-10-20 21:03:16,611 Gliese ready model=prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption revision=ead05a2ba36c2e68cc03669414210bde75988185 max_pixels=1048576
+{"phase": "ready", "python": "3.12.15", "torch": "2.8.0+cu128", "torchvision": "0.23.0+cu128", "transformers": "5.20.1", "accelerate": "1.15.0", "cuda": "12.8", "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb", "capability": [12, 0], "total_vram_bytes": 25367150592, "pipeline_load_s": 55.46079102065414, "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption", "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185", "checkpoint_bytes": 18819721232}
+handler.py          :68   2026-10-20 21:03:16,769 caption begin job=gliese-smoke-0 image=1024x1024 max_new_tokens=64
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `chunk_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+[transformers] `causal_conv1d_update` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `fused_recurrent_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+handler.py          :83   2026-10-20 21:03:22,805 caption done job=gliese-smoke-0 elapsed_s=6.04 chars=352
+{"phase": "caption", "index": 0, "temperature": 0.0, "max_new_tokens": 64, "elapsed_s": 6.044861060101539, "result": {"caption": "A perfectly centered, vibrant red square dominates the composition, its edges sharp and precise against a boundless, electric blue background that extends to the very frame of the image. The red square, appearing as a solid block of pure, saturated crimson, sits squarely in the middle, creating a striking geometric focal point that commands immediate", "prompt": "Describe the image in English, including its colors and shapes.", "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption", "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"}, "peak_allocated_bytes": 19490506240, "peak_reserved_bytes": 19549650944, "max_host_rss_bytes": 12884037632}
+handler.py          :68   2026-10-20 21:03:22,815 caption begin job=gliese-smoke-1 image=1024x1024 max_new_tokens=256
+handler.py          :83   2026-10-20 21:03:37,389 caption done job=gliese-smoke-1 elapsed_s=14.57 chars=1347
+{"phase": "caption", "index": 1, "temperature": 0.6, "max_new_tokens": 256, "elapsed_s": 14.582994699012488, "result": {"caption": "A vibrant, digitally rendered composition presents a bold, perfectly centered red square set against a deep, uniform royal blue background. The red square, occupying roughly the central third of the frame, displays a flat, saturated crimson hue with no discernible gradient or texture, creating a sense of solid, flat color. It is positioned precisely in the middle, establishing a strong focal point that immediately draws the eye inward. Surrounding this central element is a wide, continuous border of intense, electric blue that fills the remaining space, extending to the very edges of the frame. The blue possesses a similar flat, matte finish, suggesting a vector graphic or a clean digital illustration style. The composition is defined by the stark, high-contrast interplay between the warm, fiery red and the cool, commanding blue, creating a dynamic and visually arresting balance. The edges where the red meets the blue are crisp and sharp, emphasizing the geometric precision of the forms. There is no shadow, reflection, or atmospheric depth to suggest a physical environment; instead, the scene exists as a pure study in color and shape, evoking a mood of simple, graphic elegance and modern minimalism. The overall effect is one of boldness and clarity, where the fundamental elements of color and geometry are pushed to their most", "prompt": "Describe the image in English, including its colors and shapes.", "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption", "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"}, "peak_allocated_bytes": 19490506240, "peak_reserved_bytes": 19551748096, "max_host_rss_bytes": 12884037632}
+handler.py          :68   2026-10-20 21:03:37,399 caption begin job=gliese-smoke-2 image=1024x1024 max_new_tokens=512
+handler.py          :83   2026-10-20 21:03:52,332 caption done job=gliese-smoke-2 elapsed_s=14.93 chars=1369
+{"phase": "caption", "index": 2, "temperature": 0.6, "max_new_tokens": 512, "elapsed_s": 14.941374436020851, "result": {"caption": "A vibrant, digitally rendered composition presents a bold, perfectly centered red square set against a deep, uniform royal blue background. The red square, occupying roughly the central third of the frame, displays a flat, saturated crimson hue with no discernible gradient or texture, creating a sense of solid, flat color. It is positioned precisely in the middle, establishing a strong focal point that immediately draws the eye inward. Surrounding this central element is a wide, continuous border of intense, electric blue that fills the remaining space, extending to the very edges of the frame. The blue possesses a similar flat, matte finish, suggesting a vector graphic or a clean digital illustration style. The composition is defined by the stark, high-contrast interplay between the warm, fiery red and the cool, commanding blue, creating a dynamic and visually arresting balance. The edges where the red meets the blue are crisp and sharp, emphasizing the geometric precision of the forms. There is no shadow, reflection, or atmospheric depth to suggest a physical environment; instead, the scene exists as a pure study in color and shape, evoking a mood of simple, graphic elegance and modern minimalism. The overall effect is one of boldness and clarity, where the fundamental elements of color and geometry are pushed to their most expressive potential.", "prompt": "Describe the image in English, including its colors and shapes.", "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption", "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"}, "peak_allocated_bytes": 19490506240, "peak_reserved_bytes": 19551748096, "max_host_rss_bytes": 12884037632}
+handler.py          :68   2026-10-20 21:03:52,341 caption begin job=gliese-smoke-3 image=1024x1024 max_new_tokens=64
+handler.py          :83   2026-10-20 21:03:57,057 caption done job=gliese-smoke-3 elapsed_s=4.72 chars=352
+{"phase": "caption", "index": 3, "temperature": 0.0, "max_new_tokens": 64, "elapsed_s": 4.723847663961351, "result": {"caption": "A perfectly centered, vibrant red square dominates the composition, its edges sharp and precise against a boundless, electric blue background that extends to the very frame of the image. The red square, appearing as a solid block of pure, saturated crimson, sits squarely in the middle, creating a striking geometric focal point that commands immediate", "prompt": "Describe the image in English, including its colors and shapes.", "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption", "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185"}, "peak_allocated_bytes": 19490506240, "peak_reserved_bytes": 19551748096, "max_host_rss_bytes": 12884037632}
+GLIESE_SMOKE_OK

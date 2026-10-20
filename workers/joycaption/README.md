@@ -11,9 +11,11 @@ for the existing RunPod endpoint integration. There is one caption model.
 - Native BF16 weights: three shards, about **18.82 GB** total. No quantization or CPU offload.
 - `Qwen3_5ForConditionalGeneration`, Transformers **5.20.1**, Accelerate **1.15.0**.
 - Torch **2.8.0+cu128**, torchvision **0.23.0+cu128**, CUDA **12.8.1** with Blackwell support.
-- Use a 24 GB or larger GPU. Actual GPU headroom, speed and image quality still
-  require validation of this candidate image; the old JoyCaption measurements
-  do not describe Gliese.
+- Use a 24 GB or larger GPU. The candidate passed four caption requests on
+  Blackwell MIG 24 GB with a 1024x1024 fixture, peaking at 18.152 GiB Torch
+  allocation. Other images, settings and GPUs require their own validation.
+  See the [GPU check and evidence](../../docs/deployments/2026-10-21-gliese-caption.md);
+  old JoyCaption measurements do not describe Gliese.
 
 The model's own expert-caption chat template supplies the system instruction.
 The user message contains an image slot and the caption instruction.

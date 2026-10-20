@@ -1,0 +1,18 @@
+{
+  "python": "3.12.15",
+  "torch": "2.8.0+cu128",
+  "torchvision": "0.23.0+cu128",
+  "transformers": "5.20.1",
+  "accelerate": "1.15.0",
+  "cuda": "12.8",
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+  "capability": [
+    12,
+    0
+  ],
+  "total_vram_bytes": 25367150592,
+  "pipeline_load_s": 55.46079102065414,
+  "model": "prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+  "model_revision": "ead05a2ba36c2e68cc03669414210bde75988185",
+  "checkpoint_bytes": 18819721232
+}
