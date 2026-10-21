@@ -131,6 +131,13 @@ class ModelDownloadTests(unittest.TestCase):
         self.assertEqual(args.hf_home, "/models/hf")
         self.assertEqual(args.token, "legacy-token")
 
+    def test_cli_accepts_hugging_face_token_alias_and_explicit_override(self):
+        with patch.dict(os.environ, {'HUGGING_FACE_TOKEN': 'alias-token'}, clear=True):
+            parser = argparse.ArgumentParser()
+            self.mod.add_download_arguments(parser, default_output='./models')
+            self.assertEqual(parser.parse_args([]).token, 'alias-token')
+            self.assertEqual(parser.parse_args(['--token', 'explicit-token']).token, 'explicit-token')
+
     def test_prefetch_pins_one_revision_per_repo_for_all_transfers(self):
         hub = types.ModuleType("huggingface_hub")
         revisions = []

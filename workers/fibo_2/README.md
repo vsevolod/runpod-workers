@@ -2,7 +2,7 @@
 
 Fibo uses the common image worker and endpoint `9zb0wyo61ck3wk`.
 Select `input.model: "fibo_2"`. Availability requires an image containing this
-backend and an `HF_TOKEN` authorized to download both gated Bria checkpoints.
+backend and an `HF_TOKEN` / `HUGGING_FACE_TOKEN` authorized to download both gated Bria checkpoints.
 No model weights or VGL conversion service are bundled.
 
 | API variant | Upstream checkpoint | Capabilities | Default steps / CFG |

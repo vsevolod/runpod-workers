@@ -24,8 +24,8 @@ def add_download_arguments(parser: argparse.ArgumentParser, *, default_output: s
         help="Optional local HF cache root; otherwise use the default HF cache.",
     )
     parser.add_argument(
-        "--token", default=os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"),
-        help="Hugging Face token (or set HF_TOKEN)",
+        "--token", default=os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"),
+        help="Hugging Face token (or set HF_TOKEN / HUGGING_FACE_TOKEN)",
     )
 
 

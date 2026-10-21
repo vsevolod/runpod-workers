@@ -66,7 +66,7 @@ python scripts/fibo_2.py --prompt-file scene.json -o fibo.png
 | `FIBO_OFFLOAD` | `cpu` | Fibo component offload; also supports `none` |
 | `HF_HOME` | `/models/hf` | Shared local HF cache |
 | `LORA_CACHE_DIR` | `/models/lora_cache` | Local staging of selected volume adapters |
-| `HF_TOKEN` | Endpoint secret | HF access where required |
+| `HF_TOKEN` / `HUGGING_FACE_TOKEN` | Endpoint secret | HF access where required; `HF_TOKEN` takes precedence |
 
 The model-prefixed paths override generic legacy `MODEL_DIR`, `BASE_MODEL_DIR`
 and `LORA_DIR`. The local adapter cache separates source files by their
