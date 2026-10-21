@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 # All other entries remain 1 MP placeholders, not measured hardware limits.
 # Protocol, raw measurements and scope: docs/benchmarks/image-megapixels.md.
 MEGAPIXEL_LIMITS = {
+    # Fibo native 1024-square default; no GPU capacity calibration yet.
+    "fibo_2.base": {0: 1.048576},
+    "fibo_2.turbo": {0: 1.048576},
     "moss_image.base": {0: 1., 8: 1., 12: 1., 16: 1., 24: 4.194304, 32: 1., 48: 4.194304, 64: 1., 80: 1., 96: 1., 192: 1.},
     "moss_image.turbo": {0: 1., 8: 1., 12: 1., 16: 1., 24: 4.194304, 32: 1., 48: 4.194304, 64: 1., 80: 1., 96: 1., 192: 1.},
     "qwen_image_21.base": {0: 1., 8: 1., 12: 1., 16: 1., 24: 1., 32: 1., 48: 4., 64: 1., 80: 1., 96: 1., 192: 1.},

@@ -1,4 +1,4 @@
-# Image worker API: Krea 2, Qwen Image 2.1 and MOSS-Image
+# Image worker API: Krea 2, Qwen Image 2.1, MOSS-Image and Fibo-2
 
 All image backends use this shared request parser, common request fields, seed selection,
 image decoding/delivery, response builder and error handling. Their model adapters
@@ -6,8 +6,8 @@ own inference, model selection, reference geometry and LoRA compatibility.
 `profiles.py` declares defaults, limits and supported model options.
 
 The common RunPod endpoint is `9zb0wyo61ck3wk` (`image-workers`).
-Set `input.model` to `krea2`, `qwen_image_21` or `moss_image`; omission defaults to Krea.
-Qwen and MOSS Base/Turbo are selected with `model_options.variant` on the same endpoint.
+Set `input.model` to `krea2`, `qwen_image_21`, `moss_image` or `fibo_2`; omission defaults to Krea.
+Qwen, MOSS and Fibo Base/Turbo are selected with `model_options.variant` on the same endpoint.
 MOSS requires a worker image including its backend; see its section below.
 The response reports the selected model in `output.model`. Unknown model IDs
 are rejected before loading or unloading a model.
@@ -95,6 +95,41 @@ MOSS's generation canvas or establish a calibrated capacity. Plain prose,
 tags and serialized JSON layouts go directly into `prompt`.
 See [MOSS runtime and examples](../../moss_image/README.md).
 
+### Fibo-2 structured generation/edit contract
+
+Fibo uses a **JSON object** for `prompt`, and optionally `negative_prompt`.
+Text strings (including serialized JSON strings) are rejected. Other models
+continue to require text. The worker makes no LLM conversion call.
+
+- `model_options.variant`: `base` (default, upstream Dev, generation/editing,
+  30 steps / CFG 5) or `turbo` (Edit Turbo, editing only, 4 steps / CFG 1).
+- Generation requires `prompt.short_description`, or a nested
+  `prompt.structured_caption.short_description`.
+- Editing requires `prompt.edit_instruction`, with 1..4 ordered references.
+  An optional target caption may be nested under `structured_caption`.
+- Base's omitted/null negative prompt retains the native null caption.
+  Turbo requires CFG exactly 1 and no negative prompt.
+- No user LoRAs; only native Euler. Steps 1..200. Generate 1..4 images, edit 1.
+- Dimensions: both or neither; multiples of 16 in 256..4096, area <= 4,194,304.
+  Generation defaults to 1024x1024. Automatic edit canvas uses the first
+  reference's aspect and the shared megapixel budget.
+- `reference_megapixels: "max"` resolves to 1.048576 MP for Fibo, an
+  **uncalibrated native default on every GPU**. Multiple references share the
+  budget equally. A single reference uses the native canvas-aligned crop, so
+  its output canvas must fit the reference budget too.
+
+```json
+{"input": {"model": "fibo_2", "type": "image_generate", "prompt": {"short_description": "A red fox in snow."}, "model_options": {"variant": "base"}, "seed": 0}}
+```
+
+```json
+{"input": {"model": "fibo_2", "type": "image_edit", "prompt": {"edit_instruction": "Make the fox blue."}, "images": ["data:image/png;base64,..."], "model_options": {"variant": "turbo"}}}
+```
+
+See [Fibo loading, JSON examples and client](../../fibo_2/README.md).
+Availability requires an image with this backend and an HF token authorized
+for the gated checkpoints. Code/tests do not establish deployment or GPU support.
+
 ### Krea/Qwen guidance semantics and sampling
 
 Existing guidance behavior is preserved:
@@ -126,7 +161,7 @@ the request's seeded generator. Changing sampling options does not reload weight
 
 With `"max"`, the worker reads **total VRAM of the active CUDA device** and
 selects a budget from [`MEGAPIXEL_LIMITS`](../megapixels.py). There are separate
-rows for MOSS Base/Turbo, Qwen Base/Turbo and Krea FP8/INT8 ConvRot. Total CUDA memory is converted
+rows for MOSS Base/Turbo, Qwen Base/Turbo, Krea FP8/INT8 ConvRot and Fibo Base/Turbo. Total CUDA memory is converted
 from binary GiB to decimal GB and rounded up to the next whole GB before selecting
 the largest nominal GB tier not exceeding that capacity. For example, L40S
 reports 44.40 GiB / 47.68 GB and selects the 48 GB tier. Missing CUDA, unknown
@@ -145,7 +180,9 @@ the current lookup only considers model and total VRAM. Explicit numbers bypass 
 and GPU detection. Free/remaining VRAM is never used, so prior jobs do not alter
 the selected tier.
 
-The selected budget is divided equally among input references; unused shares
+For Fibo single-reference edits, the native processor aligns the reference to
+the canvas and may upscale it; see its contract above. For other cases,
+the selected budget is divided equally among input references; unused shares
 are not redistributed. References are only downscaled, with model-specific
 alignment. The automatic edit canvas gets the **full** selected area, independent
 of reference count, including upscaling small inputs. Its aspect comes from the

@@ -36,10 +36,11 @@ COPY workers/shared /app/workers/shared
 COPY workers/krea2 /app/workers/krea2
 COPY workers/qwen_image_21 /app/workers/qwen_image_21
 COPY workers/moss_image /app/workers/moss_image
+COPY workers/fibo_2 /app/workers/fibo_2
 COPY workers/image /app/workers/image
 COPY scripts /app/scripts
 
-ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/qwen_image_21:/app/workers/moss_image \
+ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/qwen_image_21:/app/workers/moss_image:/app/workers/fibo_2 \
     KREA_MODEL_DIR=/models/krea2 \
     KREA_LORA_DIR=/runpod-volume/krea2/loras \
     KREA_DIT_QUANT=int8_convrot \
@@ -51,6 +52,8 @@ ENV PYTHONPATH=/app/workers:/app/workers/image:/app/workers/krea2:/app/workers/q
     QWEN_VAE=texture-fix \
     MOSS_MODEL_DIR=/models/moss_image_sft \
     MOSS_OFFLOAD=cpu \
+    FIBO_MODEL_DIR=/models/fibo_2 \
+    FIBO_OFFLOAD=cpu \
     OFFLOAD=cpu \
     HF_HOME=/models/hf \
     LORA_CACHE_DIR=/models/lora_cache \

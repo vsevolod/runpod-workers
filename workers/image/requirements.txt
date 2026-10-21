@@ -1,7 +1,7 @@
-# Shared Krea 2 / Qwen Image 2.1 / MOSS runtime. CUDA Torch is installed separately.
+# Shared Krea 2 / Qwen Image 2.1 / MOSS / Fibo-2 runtime. CUDA Torch is installed separately.
 runpod>=1.7.9
 transformers==5.20.1
-diffusers @ git+https://github.com/huggingface/diffusers.git@da1d3829cf08d4f329b526d89e17cc035c049d8d
+diffusers @ git+https://github.com/huggingface/diffusers.git@de988b7ee77c393a63865d265d19e267ef9c7bf5
 accelerate>=1.10.0
 safetensors>=0.6.0
 pillow>=10.0.0

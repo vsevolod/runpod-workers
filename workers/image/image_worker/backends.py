@@ -5,10 +5,10 @@ from pathlib import Path
 import sys
 
 WORKERS = Path(__file__).resolve().parents[2]
-for directory in (WORKERS, WORKERS / 'krea2', WORKERS / 'qwen_image_21', WORKERS / 'moss_image'):
+for directory in (WORKERS, WORKERS / 'krea2', WORKERS / 'qwen_image_21', WORKERS / 'moss_image', WORKERS / 'fibo_2'):
     sys.path.insert(0, str(directory))
 
-from shared.api import KREA_API, MOSS_API, QWEN_API
+from shared.api import FIBO_API, KREA_API, MOSS_API, QWEN_API
 from shared.prefetch import PrefetchSession
 from krea2_infer import load_pipeline as load_krea_pipeline
 from krea2_infer.api import infer as infer_krea
@@ -23,6 +23,16 @@ from moss_image_infer.config import model_directory as moss_directory, offload_m
 from moss_image_infer.lora import LoRAError as MossLoRAError
 from moss_image_infer.request import normalize_job_input as normalize_moss
 from moss_image_infer.model_store import prefetch_model as prefetch_moss_model
+
+
+from fibo_2_infer.config import model_directory as fibo_directory, offload_mode as fibo_offload
+from fibo_2_infer.request import normalize_job_input as normalize_fibo
+from fibo_2_infer.model_store import prefetch_model as prefetch_fibo_model
+
+
+def load_fibo_pipeline(directory, *, variant):
+    from fibo_2_infer.pipeline import load_pipeline
+    return load_pipeline(directory, variant=variant)
 
 
 def load_moss_pipeline(directory, *, turbo=False):
@@ -118,4 +128,43 @@ class MossBackend:
             runtime.close()
 
 
-REGISTRY = {'krea2': KreaBackend, 'qwen_image_21': QwenBackend, 'moss_image': MossBackend}
+class FiboBackend:
+    profile = FIBO_API
+    normalize = staticmethod(normalize_fibo)
+    client_errors = ()
+    oom_message = 'CUDA out of memory. Use FIBO_OFFLOAD=cpu and reduce canvas/reference megapixels.'
+
+    def __init__(self):
+        self.runtime = None
+
+    def load(self, norm=None):
+        fibo_offload()
+        variant = norm.model_variant if norm is not None else 'base'
+        if self.runtime is not None:
+            if self.runtime.variant == variant:
+                return
+            self.close()
+            from .manager import release_memory
+            release_memory()
+        try:
+            directory = fibo_directory(variant)
+            with prefetch_fibo_model(directory, variant=variant) as pending:
+                self.runtime = load_fibo_pipeline(directory, variant=variant)
+                if pending is not None:
+                    pending.wait('all')
+        except BaseException:
+            self.close()
+            raise
+
+    def infer(self, norm, seed, raw_loras):
+        self.load(norm)
+        return self.runtime.run(norm, seed)
+
+    def close(self):
+        runtime, self.runtime = self.runtime, None
+        if runtime is not None:
+            runtime.close()
+
+
+REGISTRY = {'krea2': KreaBackend, 'qwen_image_21': QwenBackend,
+            'moss_image': MossBackend, 'fibo_2': FiboBackend}

@@ -9,11 +9,13 @@ on:
       - workers/image/**
       - workers/qwen_image_21/**
       - workers/moss_image/**
+      - workers/fibo_2/**
       - workers/krea2/**
       - workers/joycaption/**
       - scripts/krea2_image.py
       - scripts/qwen_image_21.py
       - scripts/moss_image.py
+      - scripts/fibo_2.py
   workflow_dispatch:
     inputs:
       publish:
@@ -63,6 +65,8 @@ jobs:
             docker run --rm --entrypoint python "$IMAGE" -u /app/workers/qwen_image_21/download_weights.py --help
             docker run --rm --entrypoint python "$IMAGE" -u /app/workers/moss_image/download_weights.py --help
             docker run --rm --entrypoint python "$IMAGE" -u /app/scripts/moss_image.py --help
+            docker run --rm --entrypoint python "$IMAGE" -u /app/workers/fibo_2/download_weights.py --help
+            docker run --rm --entrypoint python "$IMAGE" -u /app/scripts/fibo_2.py --help
           else
             docker run --rm --entrypoint python "$IMAGE" -u /app/download_weights.py --help
           fi
@@ -94,17 +98,18 @@ jobs:
               import runpy, runpod, transformers
               from image_worker.backends import REGISTRY
               from diffusers import AutoencoderKLQwenImage, QwenImage21Pipeline
+              from fibo_2_infer.pipeline import BriaFibo2Pipeline, BriaFibo2Transformer2DModel, AutoencoderKLFlux2
               from transformers import Qwen3VLForConditionalGeneration
               from moss_image_infer.pipeline import MOSSImagePipeline, MOSSImageTransformer
               from transformers import Qwen3_5Model
-              assert set(REGISTRY) == {"krea2", "qwen_image_21", "moss_image"}
+              assert set(REGISTRY) == {"krea2", "qwen_image_21", "moss_image", "fibo_2"}
               assert transformers.__version__ == "5.20.1", transformers.__version__
               assert "reference_resolution" in inspect.signature(QwenImage21Pipeline.__call__).parameters
               registered = []
               runpod.serverless.start = registered.append
               runpy.run_path("/app/workers/image/handler.py", run_name="image_startup_check")
               assert len(registered) == 1 and callable(registered[0]["handler"])
-              print("All three model backends and request-selected handler imported without weights")
+              print("All four model backends and request-selected handler imported without weights")
           print("Runtime imports OK; torch=" + torch.__version__ +
                 " torchvision=" + torchvision.__version__ + " cuda=" + torch.version.cuda)
           '
@@ -119,13 +124,14 @@ jobs:
         if: matrix.worker == 'image'
         shell: bash
         run: |
-          for suite in shared image krea2 qwen_image_21 moss_image; do
+          for suite in shared image krea2 qwen_image_21 moss_image fibo_2; do
             docker run --rm --entrypoint sh "$IMAGE" -c '
               # Model unit suites set generic paths in controlled fixtures.
               # Backend tests separately exercise the model-prefixed settings.
               unset QWEN_MODEL_DIR QWEN_BASE_MODEL_DIR QWEN_LORA_DIR QWEN_MODEL_ID QWEN_BASE_MODEL_ID
               unset KREA_MODEL_DIR KREA_LORA_DIR KREA_DIT_QUANT LORA_CACHE_DIR
               unset MOSS_MODEL_DIR MOSS_OFFLOAD
+              unset FIBO_MODEL_DIR FIBO_OFFLOAD
               exec python -m unittest discover -s "/app/workers/$1/tests" -p "test_*.py"
             ' sh "$suite"
           done

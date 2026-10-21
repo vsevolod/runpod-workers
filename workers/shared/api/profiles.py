@@ -5,6 +5,18 @@ import math
 from .contract import ModelAPI
 
 
+FIBO_API = ModelAPI(
+    name="fibo_2", max_steps=200, guidance_default=5.,
+    samplers=("euler",), size_multiple=16, max_side=4096, max_refs=4,
+    standard_cfg=True, structured_prompt=True,
+    steps_by_variant={"base": 30, "turbo": 4},
+    options={
+        "variant": {"type": str, "default": "base", "constraints": lambda v: v in ("base", "turbo")},
+    },
+    aliases={},
+)
+
+
 MOSS_API = ModelAPI(
     name="moss_image", max_steps=200, guidance_default=1.,
     samplers=("euler",), size_multiple=16, max_side=4096, max_refs=0,

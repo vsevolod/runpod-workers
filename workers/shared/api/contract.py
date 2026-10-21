@@ -32,6 +32,7 @@ class ModelAPI:
     max_image_bytes: int | None = None
     max_source_side: int | None = None
     steps_by_variant: dict[str, int] = field(default_factory=dict)
+    structured_prompt: bool = False
 
     def default_steps(self, options: dict) -> int:
         return self.steps_by_variant.get(options.get("variant"), 8)
@@ -40,8 +41,9 @@ class ModelAPI:
         side = lambda value: type(value) is int and 256 <= value <= self.max_side and value % self.size_multiple == 0
         return {
             "type": {"type": str, "required": False, "default": "image_generate", "constraints": lambda v: v in ("image_generate", "image_edit")},
-            "prompt": {"type": str, "required": True},
-            "negative_prompt": {"type": str, "required": False, "default": None, "nullable": True},
+            "prompt": {"type": dict if self.structured_prompt else str, "required": True},
+            "negative_prompt": {"type": dict if self.structured_prompt else str, "required": False,
+                                "default": None, "nullable": True},
             "width": {"type": int, "required": False, "default": 1024, "constraints": side},
             "height": {"type": int, "required": False, "default": 1024, "constraints": side},
             "seed": {"type": int, "required": False, "default": None, "nullable": True, "constraints": lambda v: -(2**63) <= v < 2**64},
@@ -147,8 +149,8 @@ def parse_job_input(job, profile: ModelAPI) -> ParsedInput:
 @dataclass(frozen=True)
 class CommonRequest:
     type: str
-    prompt: str
-    negative_prompt: str | None
+    prompt: str | dict
+    negative_prompt: str | dict | None
     seed: int | None
     num_inference_steps: int
     guidance_scale: float
@@ -169,9 +171,15 @@ def normalize_common_fields(values: dict, profile: ModelAPI, *, raw_keys=None, d
         if name == "num_inference_steps" and default_steps is not None and name not in (raw_keys or ()):
             value = default_steps
         common[name] = _validate_field(name, value, schema[name])
-    if not common["prompt"].strip():
-        raise RequestError("prompt must be a non-empty string")
-    common["prompt"] = common["prompt"].strip()
+    if profile.structured_prompt:
+        if not common["prompt"]:
+            raise RequestError("prompt must be a non-empty JSON object")
+        common["prompt"] = deepcopy(common["prompt"])
+        common["negative_prompt"] = deepcopy(common["negative_prompt"])
+    else:
+        if not common["prompt"].strip():
+            raise RequestError("prompt must be a non-empty string")
+        common["prompt"] = common["prompt"].strip()
     images = common["images"]
     if common["type"] == "image_generate":
         if images:
@@ -192,7 +200,7 @@ def normalize_common_fields(values: dict, profile: ModelAPI, *, raw_keys=None, d
     resolved = _validate_field("resolved_reference_megapixels", budget.megapixels, schema["reference_megapixels"])
     common.update(reference_megapixels=resolved, requested_reference_megapixels=requested,
                   vram_gib=budget.vram_gib)
-    if profile.standard_cfg:
+    if profile.standard_cfg and not profile.structured_prompt:
         negative = common["negative_prompt"]
         negative = negative.strip() or None if negative is not None else None
         if common["guidance_scale"] > 1 and negative is None:

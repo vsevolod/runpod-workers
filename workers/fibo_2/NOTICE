@@ -1,0 +1,14 @@
+Fibo-2 model integration
+-----------------------
+The native implementation is supplied by the Apache-2.0-licensed Diffusers
+package, pinned in workers/image/requirements.txt. No Bria model weights,
+bria-vgl code, or model repository executable code are vendored here.
+
+Checkpoints are downloaded at runtime from gated upstream repositories:
+https://huggingface.co/briaai/Fibo-2.0-dev
+https://huggingface.co/briaai/Fibo-2.0-edit-turbo
+Their upstream model access and license terms apply independently of this code.
+The integration does not accept model access or license agreements automatically.
+
+Runtime font downloads include their upstream notices:
+fonts/LICENSE-Aileron.txt and fonts/LICENSE-DejaVu.txt.

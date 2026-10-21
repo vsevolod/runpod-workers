@@ -2,10 +2,10 @@
 
 from .contract import CommonRequest, ModelAPI, RequestError, normalize_common_fields, parse_job_input
 from .handler import GenerationResult, handle_job, resolve_seed
-from .profiles import KREA_API, MOSS_API, QWEN_API
+from .profiles import FIBO_API, KREA_API, MOSS_API, QWEN_API
 
 __all__ = [
     "CommonRequest", "ModelAPI", "RequestError", "normalize_common_fields",
     "parse_job_input", "GenerationResult", "handle_job", "resolve_seed",
-    "KREA_API", "MOSS_API", "QWEN_API",
+    "FIBO_API", "KREA_API", "MOSS_API", "QWEN_API",
 ]
