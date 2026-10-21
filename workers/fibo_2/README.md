@@ -121,3 +121,6 @@ python -m unittest discover -s workers/fibo_2/tests -p 'test_*.py'
 Tests cover JSON input, routing, variant ownership, partial-file repair, pinned
 cache reuse and actual tiny local BF16 model loads with a controlled downloader
 subprocess. These tests do not establish production GPU image quality or capacity.
+
+The [2026-10-21 candidate verification](../../docs/validation/2026-10-21-fibo-2.md)
+records the published image digest, remote test results and gated GPU-test boundary.
