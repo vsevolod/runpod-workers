@@ -67,15 +67,18 @@ image URL. Input order is preserved. Krea converts references to RGB. Qwen keeps
 alpha when present, limits each decoded file to 25 MiB and each source side to
 8192 pixels, then downsizes references using the megapixel limit below.
 
-### MOSS generation contract
+### MOSS generation/edit contract
 
 MOSS uses the same envelope and response/delivery lifecycle. The Krea/Qwen
 table above describes their existing contracts; MOSS differences are:
 
-- Only `image_generate`; `images` must be empty and user `loras` must be empty/null.
-- `model_options.variant`: `turbo` (default) or `base`. Both use MOSS-Image-SFT;
+- `image_generate` requires empty `images`; `image_edit` requires 1..4 images
+  and `num_images == 1`. User `loras` must be empty/null in both modes.
+- `model_options.variant`: `turbo` (generation default) or `base` (edit default).
+  Both use MOSS-Image-SFT;
   Base here means SFT without the accelerator, not MOSS-Image-Base weights.
-- Default steps/CFG: Turbo 8/1; Base 50/3. Steps may be overridden in 1..200.
+- Default steps/CFG: Turbo generation 8/1; Base generation 50/3; Edit 30/4.
+  Steps may be overridden in 1..200. Explicit Turbo editing is rejected.
 - Only Euler. Base's negative branch runs when CFG differs from exactly 1;
   Turbo requires CFG exactly 1 and no nonblank negative prompt.
 - Dimensions: 256..4096, multiples of 16, area <= 4,194,304 pixels; default 1024x1024.
@@ -89,6 +92,16 @@ reported in response `loras` as diagnostic metadata, not as a user adapter to
 copy into the next input. Switching modes retains the SFT pipeline and removes
 the adapter after every Turbo call, including failures. The response includes
 `model_revision` and, for Turbo, `lora_revision`.
+
+Editing uses the pinned built-in community `chinoll/Moss-Image-Edit` adapter
+at strength 1, with request-scoped reference KV caching. It reuses the SFT
+pipeline and removes the adapter/cache after the call, including failures.
+Its response includes `edit_model_id`, `edit_model_revision` and the applied
+adapter in `loras`. Edit references use RGB, a 25 MiB / 8192-side input limit,
+and the shared total reference-area budget. For editing only, `"max"` resolves
+to a conservative 0.262144 MP total at every GPU tier (not GPU calibrated).
+Explicit numeric budgets can retain larger references. Generation's measured
+Base/Turbo budget rows are not used for Edit.
 
 `reference_megapixels` is accepted by the common parser but does not choose
 MOSS's generation canvas or establish a calibrated capacity. Plain prose,

@@ -1,4 +1,4 @@
-"""Generation-only MOSS defaults and invalid requests are resolved before loading."""
+"""MOSS generation/edit settings and invalid requests resolve before loading."""
 
 from pathlib import Path
 import sys
@@ -9,6 +9,40 @@ sys.path[:0] = [str(Path(__file__).parents[2]), str(Path(__file__).parents[1])]
 
 
 class RequestTests(unittest.TestCase):
+    def image(self, size=(768, 512)):
+        from PIL import Image
+        from shared.api.images import images_to_base64_data_urls
+        return images_to_base64_data_urls([Image.new('RGB', size, 'red')])[0]
+
+    def test_edit_defaults_select_sft_without_reusing_generation_capacity(self):
+        with patch('shared.megapixels.detect_vram_gib', return_value=47_665_709_056 / 1024**3):
+            norm = self.normalize(type='image_edit', images=[self.image()])
+        self.assertEqual((norm.model_variant, norm.num_inference_steps, norm.guidance_scale), ('base', 30, 4.))
+        self.assertEqual(norm.reference_megapixels, .262144)
+        self.assertEqual(norm.images[0].size, (768, 512))
+        self.assertEqual((norm.width, norm.height), (1024, 1024))
+        self.assertEqual(norm.uncond_skip_layers, (22,))
+
+    def test_edit_accepts_four_references_and_explicit_settings(self):
+        norm = self.normalize(type='image_edit', images=[self.image()] * 4,
+                              model_options={'variant': 'base', 'uncond_skip_layers': []},
+                              num_inference_steps=12, guidance_scale=2., reference_megapixels=.5,
+                              width=768, height=512)
+        self.assertEqual(len(norm.images), 4)
+        self.assertEqual((norm.num_inference_steps, norm.guidance_scale, norm.reference_megapixels), (12, 2., .5))
+        self.assertEqual(norm.uncond_skip_layers, ())
+
+    def test_edit_rejects_turbo_and_invalid_references_before_loading(self):
+        from shared.api import RequestError
+        image = self.image()
+        for values in (
+            {'images': []}, {'images': [image] * 5}, {'images': ['invalid']},
+            {'images': [image], 'num_images': 2},
+            {'images': [image], 'model_options': {'variant': 'turbo'}},
+        ):
+            with self.subTest(values={k: v for k, v in values.items() if k != 'images'}), self.assertRaises(RequestError):
+                self.normalize(type='image_edit', **values)
+
     def normalize(self, **values):
         from moss_image_infer.request import normalize_job_input
         from shared.api import MOSS_API, parse_job_input

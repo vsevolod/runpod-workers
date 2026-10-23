@@ -20,13 +20,15 @@ class MossIntegrationTests(unittest.TestCase):
         events = []
         from contextlib import contextmanager
         @contextmanager
-        def prepare(directory, *, turbo=False):
+        def prepare(directory, *, turbo=False, edit=False):
             self.assertTrue(turbo)
+            self.assertFalse(edit)
             events.append('downloader_started')
             yield SimpleNamespace(wait=lambda component: events.append(component))
             events.append('downloader_closed')
-        def load(directory, *, turbo=False):
+        def load(directory, *, turbo=False, edit=False):
             self.assertTrue(turbo)
+            self.assertFalse(edit)
             self.assertEqual(events, ['downloader_started'])
             events.append('pipeline_loaded')
             return object()
@@ -34,7 +36,7 @@ class MossIntegrationTests(unittest.TestCase):
             backends, 'load_moss_pipeline', new=load
         ):
             backend = backends.MossBackend()
-            backend.load(SimpleNamespace(model_variant='turbo'))
+            backend.load(SimpleNamespace(model_variant='turbo', type='image_generate'))
         self.assertEqual(events, ['downloader_started', 'pipeline_loaded', 'all', 'downloader_closed'])
 
     def test_warm_base_to_turbo_prepares_adapter_before_inference_and_propagates_download_failure(self):
@@ -50,21 +52,50 @@ class MossIntegrationTests(unittest.TestCase):
                     raise RuntimeError('adapter download failed')
                 events.append(component)
             yield SimpleNamespace(wait=wait)
-        runtime = SimpleNamespace(load_turbo=lambda: events.append('adapter_loaded'),
+        runtime = SimpleNamespace(load_turbo=lambda: events.append('adapter_loaded'), close=lambda: events.append('closed'),
                                   run=lambda *args: events.append('inference'))
         with patch.object(backends, 'prefetch_moss_model', new=prepare):
             backend = backends.MossBackend()
             backend.runtime = runtime
-            norm = SimpleNamespace(model_variant='turbo')
+            norm = SimpleNamespace(model_variant='turbo', type='image_generate')
             backend.infer(norm, 0, [])
             self.assertEqual(events, ['adapter_loaded', 'all', 'inference'])
             events.clear()
             failed = True
             with self.assertRaisesRegex(RuntimeError, 'adapter download failed'):
                 backend.infer(norm, 0, [])
-            self.assertEqual(events, ['adapter_loaded'])
+            self.assertEqual(events, ['adapter_loaded', 'closed'])
+            self.assertIsNone(backend.runtime)
 
-    def test_router_resolves_variant_defaults_and_rejects_edits_before_loading(self):
+    def test_edit_prefetches_selected_adapter_on_cold_and_warm_requests(self):
+        from image_worker import backends
+        from contextlib import contextmanager
+        events = []
+        @contextmanager
+        def prepare(directory, *, turbo=False, edit=False, lora_only=False):
+            self.assertFalse(turbo)
+            self.assertTrue(edit)
+            events.append('warm_download' if lora_only else 'cold_download')
+            yield SimpleNamespace(wait=lambda component: events.append(component))
+            events.append('downloader_exit')
+        runtime = SimpleNamespace(load_edit=lambda: events.append('adapter_loaded'),
+                                  run=lambda *args: events.append('inference'))
+        def load(directory, *, turbo=False, edit=False):
+            self.assertFalse(turbo)
+            self.assertTrue(edit)
+            self.assertEqual(events, ['cold_download'])
+            return runtime
+        with patch.object(backends, 'prefetch_moss_model', new=prepare), patch.object(
+            backends, 'load_moss_pipeline', new=load
+        ):
+            backend = backends.MossBackend()
+            norm = SimpleNamespace(model_variant='base', type='image_edit')
+            backend.load(norm)
+            backend.infer(norm, 0, [])
+        self.assertEqual(events, ['cold_download', 'all', 'downloader_exit', 'warm_download',
+                                  'adapter_loaded', 'all', 'downloader_exit', 'inference'])
+
+    def test_router_resolves_variants_and_requires_edit_references_before_loading(self):
         from image_worker.backends import REGISTRY
         from image_worker.api import generate_image
         from shared.api import GenerationResult
@@ -85,8 +116,56 @@ class MossIntegrationTests(unittest.TestCase):
                              ('moss_image', steps, cfg, 0))
         calls.clear()
         result = generate_image({'input': {'model': 'moss_image', 'prompt': 'fox', 'type': 'image_edit'}}, Manager())
-        self.assertIn('only image_generate', result['error'])
+        self.assertIn('image_edit requires', result['error'])
         self.assertEqual(calls, [])
+
+    def test_router_accepts_edit_with_decoded_references_and_preserves_seed_zero(self):
+        from image_worker.backends import REGISTRY
+        from image_worker.api import generate_image
+        from shared.api import GenerationResult
+        from shared.api.images import images_to_base64_data_urls
+        class Manager:
+            registry = REGISTRY
+            def close(manager):
+                raise AssertionError('Valid edit must not close the manager')
+            def infer(manager, model, norm, seed, loras):
+                self.assertEqual((model, seed, norm.model_variant), ('moss_image', 0, 'base'))
+                self.assertEqual(norm.images[0].getpixel((0, 0)), (255, 0, 0))
+                return GenerationResult([Image.new('RGB', (256, 256))], [], {'variant': norm.model_variant})
+        result = generate_image({'input': {'model': 'moss_image', 'type': 'image_edit', 'prompt': 'Make blue',
+                                           'seed': 0, 'images': images_to_base64_data_urls([Image.new('RGB', (64, 64), 'red')])}},
+                                Manager(), deliver=lambda *args: ['image'])
+        self.assertNotIn('error', result)
+        self.assertEqual((result['type'], result['num_refs'], result['num_inference_steps']), ('image_edit', 1, 30))
+
+    def test_cli_sends_edit_references_and_defaults_to_sft(self):
+        import tempfile
+        scripts = Path(__file__).parents[3] / 'scripts'
+        spec = importlib.util.spec_from_file_location('_moss_edit_client', scripts / 'moss_image.py')
+        client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(client)
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp) / 'ref.png'
+            Image.new('RGB', (32, 32), 'red').save(image)
+            args = client._build_parser().parse_args(['-i', str(image), '--prompt', 'make blue', '--seed', '0'])
+            with patch.object(client, '_submit_job', return_value='job') as submit, patch.object(
+                client, '_poll_job', return_value={}
+            ), patch.object(client, '_save_result', return_value=0):
+                self.assertEqual(client._run_generate(args, endpoint_id='common', api_key='key'), 0)
+            payload = submit.call_args.args[2]
+            self.assertEqual((payload['type'], payload['model_options'], payload['seed']),
+                             ('image_edit', {'variant': 'base'}, 0))
+            self.assertTrue(payload['images'][0].startswith('data:image/png;base64,'))
+
+    def test_cli_rejects_turbo_batch_and_excess_references_without_submitting(self):
+        scripts = Path(__file__).parents[3] / 'scripts'
+        spec = importlib.util.spec_from_file_location('_moss_edit_invalid_client', scripts / 'moss_image.py')
+        client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(client)
+        for flags in (['--variant', 'turbo'], ['--num-images', '2'], ['-i', 'other.png'] * 4):
+            args = client._build_parser().parse_args(['-i', 'ref.png', '--prompt', 'make blue', *flags])
+            with self.subTest(flags=flags), patch.object(client, '_submit_job', side_effect=AssertionError('Invalid edit submitted')):
+                self.assertEqual(client._run_generate(args, endpoint_id='common', api_key='key'), 1)
 
     def test_backend_defers_download_and_closes_runtime(self):
         from image_worker import backends

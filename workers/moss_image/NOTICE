@@ -9,3 +9,19 @@ Model weights are not included. MOSS-Image-SFT and the lodestones
 MOSS-Image-SFT-8-steps-dmd adapter are published under Apache-2.0.
 The unmerged adapter application in moss_image_infer/lora.py is a local
 implementation of the Kohya down/up/alpha format; no demo code is vendored.
+
+MOSS Image Edit reference branch
+-------------------------------
+Source: Chenkin-x/Moss-Image-Edit, moss_edit/model.py
+Revision: d735569c936ebbfaf274bee5cbff4297c533d133
+https://github.com/Chenkin-x/Moss-Image-Edit/blob/d735569c936ebbfaf274bee5cbff4297c533d133/moss_edit/model.py
+Author: chinoll / Chenkin-x
+Vendored as moss_image_infer/vendor/moss_edit_model.py, changing only the
+EDIT_CONTRACT import to the local config module. The code is GPLv3; see
+LICENSES/MOSS-Image-Edit-GPL-3.0.txt. The local edit.py integrates this branch
+with the worker's original MOSS pipeline, scoped LoRA loader and CPU offload.
+Base-model and third-party component licenses remain in effect.
+
+Edit weights are not included. The built-in chinoll/Moss-Image-Edit bundle
+is pinned to 3be9c40037e1b89b17aa85ff6f8ee805872aa558, with its published
+adapter_config.json and embedded metadata/checksum checked on local load.

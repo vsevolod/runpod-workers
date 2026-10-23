@@ -18,9 +18,10 @@ class PipelineTests(unittest.TestCase):
         torch.set_num_threads(1)
 
     def pipeline(self):
-        from moss_image_infer.vendor.pipeline_moss_image import MOSSImageTransformer, MOSSImagePipeline, MOSSImageScheduler
+        from moss_image_infer.vendor.pipeline_moss_image import MOSSImagePipeline, MOSSImageScheduler
+        from moss_image_infer.edit import MOSSImageEditTransformer
         from diffusers import AutoencoderKLFlux2
-        transformer = MOSSImageTransformer(dim=16, ffn_dim=32, num_heads=2, num_layers=1,
+        transformer = MOSSImageEditTransformer(dim=16, ffn_dim=32, num_heads=2, num_layers=1,
                                            text_dim=8, freq_dim=8)
         vae = AutoencoderKLFlux2(block_out_channels=(16, 16, 16, 16), layers_per_block=1,
                                 latent_channels=32, norm_num_groups=8)
@@ -32,13 +33,47 @@ class PipelineTests(unittest.TestCase):
         pipe.set_progress_bar_config(disable=True)
         return pipe
 
-    def norm(self, variant):
+    def norm(self, variant, **values):
         from shared.api import MOSS_API, parse_job_input
         from moss_image_infer.request import normalize_job_input
         parsed = parse_job_input({'input': {'prompt': 'fox', 'width': 256, 'height': 256,
                                             'num_inference_steps': 2, 'seed': 0,
-                                            'model_options': {'variant': variant, 'uncond_skip_layers': []}}}, MOSS_API)
+                                            'model_options': {'variant': variant, 'uncond_skip_layers': []}, **values}}, MOSS_API)
         return normalize_job_input(parsed.values, raw_keys=parsed.raw_keys)
+
+    def test_edit_encodes_references_and_restores_base_under_real_cpu_offload(self):
+        from moss_image_infer.pipeline import Runtime
+        from shared.api.images import images_to_base64_data_urls
+        from PIL import Image
+        from test_edit import save_edit_adapter
+        pipe = self.pipeline()
+        pipe.enable_model_cpu_offload(device='cpu')
+        original = pipe.transformer.layers[0].proj['q']
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'edit').mkdir()
+            save_edit_adapter(root / 'edit', pipe.transformer)
+            runtime = Runtime(pipe, root)
+            red = images_to_base64_data_urls([Image.new('RGB', (64, 48), 'red')])
+            blue = images_to_base64_data_urls([Image.new('RGB', (32, 48), 'blue')])
+            with patch('moss_image_infer.model_store.remote_files', side_effect=AssertionError('No Hub in inference')):
+                before = runtime.run(self.norm('base'), 0)
+                edited = runtime.run(self.norm('base', type='image_edit', images=red), 0)
+                other = runtime.run(self.norm('base', type='image_edit', images=blue + red), 0)
+                after = runtime.run(self.norm('base'), 0)
+            self.assertEqual(edited.images[0].size, (256, 256))
+            self.assertFalse(edited.images[0].tobytes() == other.images[0].tobytes())
+            self.assertTrue(before.images[0].tobytes() == after.images[0].tobytes())
+            self.assertEqual(edited.loras[0].as_dict()['name'], 'moss_image_edit')
+            self.assertEqual(edited.metadata['edit_model_id'], 'chinoll/Moss-Image-Edit')
+            self.assertIs(pipe.transformer.layers[0].proj['q'], original)
+            self.assertIsNone(pipe.transformer._edit_state)
+            with patch.object(pipe.vae, 'decode', side_effect=RuntimeError('decode failed')):
+                with self.assertRaisesRegex(RuntimeError, 'decode failed'):
+                    runtime.run(self.norm('base', type='image_edit', images=red), 0)
+            self.assertIsNone(pipe.transformer._edit_state)
+            self.assertIs(pipe.transformer.layers[0].proj['q'], original)
+            runtime.close()
 
     def test_base_turbo_base_decodes_and_restores_same_seed_output(self):
         from moss_image_infer.pipeline import Runtime
@@ -86,6 +121,9 @@ class PipelineTests(unittest.TestCase):
         from tokenizers import Tokenizer
         from tokenizers.models import WordLevel
         from transformers import PreTrainedTokenizerFast, Qwen3_5Config, Qwen3_5Model
+        from test_edit import save_edit_adapter
+        from shared.api.images import images_to_base64_data_urls
+        from PIL import Image
         pipe = self.pipeline()
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'MOSS_OFFLOAD': 'none'}):
             root = Path(tmp)
@@ -110,7 +148,12 @@ class PipelineTests(unittest.TestCase):
                 image_token_id=4, video_token_id=5, vision_start_token_id=6, vision_end_token_id=7,
             )
             Qwen3_5Model(config).save_pretrained(root / 'text_encoder')
-            runtime = load_pipeline(root, device='cpu')
+            (root / 'edit').mkdir()
+            save_edit_adapter(root / 'edit', pipe.transformer)
+            runtime = load_pipeline(root, device='cpu', edit=True)
             result = runtime.run(self.norm('base'), 0)
+            self.assertEqual(result.images[0].size, (256, 256))
+            refs = images_to_base64_data_urls([Image.new('RGB', (32, 48), 'red')])
+            result = runtime.run(self.norm('base', type='image_edit', images=refs), 0)
             self.assertEqual(result.images[0].size, (256, 256))
             runtime.close()

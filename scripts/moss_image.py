@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generate with MOSS-Image-SFT on the common RunPod endpoint, or fetch a job.
+"""Generate/edit with MOSS-Image-SFT on the common RunPod endpoint, or fetch a job.
 
 Examples:
   python scripts/moss_image.py --prompt 'A red fox' -o moss.png
   python scripts/moss_image.py --variant base --prompt 'A poster reading "HELLO"'
+  python scripts/moss_image.py -i source.png --prompt 'Make the jacket blue' -o edit.png
   python scripts/moss_image.py --request-id JOB_ID -o moss.png
 
 Environment: RUNPOD_API_KEY, optional ENDPOINT_ID override.
@@ -19,14 +20,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from qwen_image_21 import (
     DEFAULT_ENDPOINT_ID, _require_env, _prompt_line, _submit_job,
     _poll_job, _save_result, _run_fetch, _step_count,
+    _image_to_data_url,
 )
 
 
 def _build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--prompt')
-    parser.add_argument('--variant', choices=('base', 'turbo'), default='turbo',
-                        help='base: ordinary SFT (50 steps, CFG 3); turbo: SFT + DMD LoRA (8 steps, CFG 1)')
+    parser.add_argument('--variant', choices=('base', 'turbo'), default=None,
+                        help='Generation defaults to Turbo; edits use base + Edit LoRA (30 steps, CFG 4)')
+    parser.add_argument('-i', '--image', action='append', default=[], help='Edit reference image; repeat up to four times')
+    parser.add_argument('--reference-megapixels', type=lambda v: 'max' if v == 'max' else float(v), default='max')
     parser.add_argument('--width', type=int, default=1024)
     parser.add_argument('--height', type=int, default=1024)
     parser.add_argument('--seed', type=int)
@@ -47,7 +51,12 @@ def _run_generate(args, *, endpoint_id, api_key):
     if not prompt.strip():
         print('error: prompt is required', file=sys.stderr)
         return 1
-    options = {'variant': args.variant}
+    editing = bool(args.image)
+    variant = args.variant or ('base' if editing else 'turbo')
+    if len(args.image) > 4 or editing and (variant == 'turbo' or args.num_images != 1):
+        print('error: MOSS Edit requires 1..4 references, variant=base and num-images=1', file=sys.stderr)
+        return 1
+    options = {'variant': variant}
     if args.shift is not None:
         options['shift'] = args.shift
     if args.skip_layers is not None:
@@ -56,9 +65,12 @@ def _run_generate(args, *, endpoint_id, api_key):
         except ValueError:
             print('error: --skip-layers must be comma-separated integers', file=sys.stderr)
             return 1
-    values = {'model': 'moss_image', 'type': 'image_generate', 'prompt': prompt,
+    values = {'model': 'moss_image', 'type': 'image_edit' if editing else 'image_generate', 'prompt': prompt,
               'width': args.width, 'height': args.height, 'num_images': args.num_images,
               'model_options': options}
+    if editing:
+        values['images'] = [_image_to_data_url(Path(path)) for path in args.image]
+        values['reference_megapixels'] = args.reference_megapixels
     for name, value in (('seed', args.seed), ('num_inference_steps', args.steps),
                         ('guidance_scale', args.guidance_scale), ('negative_prompt', args.negative_prompt)):
         if value is not None:

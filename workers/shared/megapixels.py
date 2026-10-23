@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 # All other entries remain 1 MP placeholders, not measured hardware limits.
 # Protocol, raw measurements and scope: docs/benchmarks/image-megapixels.md.
 MEGAPIXEL_LIMITS = {
+    # Conservative total reference budget for MOSS Edit; not GPU calibrated.
+    "moss_image.edit": {0: .262144},
     # Fibo native 1024-square default; no GPU capacity calibration yet.
     "fibo_2.base": {0: 1.048576},
     "fibo_2.turbo": {0: 1.048576},

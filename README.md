@@ -9,7 +9,7 @@ Custom RunPod serverless workers.
 | [`workers/image`](workers/image/) | One request-selected image worker: Krea 2, Qwen Image 2.1 and MOSS SFT/Turbo |
 | [`workers/krea2`](workers/krea2/) | Krea inference backend, quantization and V2 edit adapters |
 | [`workers/qwen_image_21`](workers/qwen_image_21/) | Qwen inference backend, Base/Turbo and additional LoRAs |
-| [`workers/moss_image`](workers/moss_image/) | MOSS-Image-SFT generation backend, ordinary and eight-step DMD Turbo |
+| [`workers/moss_image`](workers/moss_image/) | MOSS SFT generation, eight-step DMD Turbo, and Edit with up to four references |
 | [`workers/fibo_2`](workers/fibo_2/) | Fibo-2 VGL JSON generation/editing, Base and Edit Turbo |
 | [`workers/joycaption`](workers/joycaption/) | Gliese Qwen3.5 9B captioning; existing caption API/image name |
 | [`workers/minimax_h3_comfy`](workers/minimax_h3_comfy/) | MiniMax H3 headless ComfyUI worker |
@@ -27,7 +27,7 @@ MiniMax H3 design/plan:
 Krea and Qwen share endpoint **`9zb0wyo61ck3wk`**, named `image-workers`.
 Select `input.model`: `krea2`, `qwen_image_21`, `moss_image` or `fibo_2`. Omitting it selects Krea.
 Qwen, MOSS and Fibo Base/Turbo use `model_options.variant`. MOSS requires deploying
-the candidate image with its backend; it supports generation only. Fibo accepts
+the candidate image with its backend; editing uses SFT + the pinned Edit adapter. Fibo accepts
 VGL JSON objects; Base generates/edits, Turbo edits only. Fibo needs gated HF
 access and a candidate image containing its backend.
 The [shared API](workers/shared/api/README.md) documents common fields,
@@ -79,7 +79,7 @@ All clients need `RUNPOD_API_KEY`.
 |---|---|---|
 | [`scripts/krea2_image.py`](scripts/krea2_image.py) | `9zb0wyo61ck3wk` | Krea generation/edit; sends `model=krea2` |
 | [`scripts/qwen_image_21.py`](scripts/qwen_image_21.py) | `9zb0wyo61ck3wk` | Qwen generation/edit; sends `model=qwen_image_21` |
-| [`scripts/moss_image.py`](scripts/moss_image.py) | `9zb0wyo61ck3wk` | MOSS SFT/Turbo generation; sends `model=moss_image` |
+| [`scripts/moss_image.py`](scripts/moss_image.py) | `9zb0wyo61ck3wk` | MOSS SFT/Turbo generation and Edit; sends `model=moss_image` |
 | [`scripts/fibo_2.py`](scripts/fibo_2.py) | `9zb0wyo61ck3wk` | Fibo VGL JSON generation/edit; sends `model=fibo_2` |
 | [`scripts/joycaption.py`](scripts/joycaption.py) | `yn0krhztuguxxm` | Caption images |
 | [`scripts/download_lora.py`](scripts/download_lora.py) | Set `ENDPOINT_ID` | Download adapters to the volume |

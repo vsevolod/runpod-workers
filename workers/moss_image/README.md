@@ -1,6 +1,6 @@
 # MOSS-Image backend
 
-Generation-only MOSS-Image-SFT in the common image worker. Select
+MOSS-Image-SFT generation and instruction-based editing in the common image worker. Select
 `input.model: "moss_image"`. This directory is an inference backend, not a
 standalone release image. See [the common worker](../image/README.md).
 
@@ -28,7 +28,7 @@ standalone release image. See [the common worker](../image/README.md).
 | Negative-branch skip layers | `[22]` | `[]` |
 | DMD adapter | None | `lora_latest.safetensors` at 0.7, unmerged |
 
-`base` means ordinary **SFT** without the accelerator; it does not select
+`base` means **SFT** without the DMD accelerator; it does not select
 MOSS-Image-Base weights. Switching variants retains the same pipeline and
 activates/removes the DMD adapter per request. The built-in adapter is listed
 in the Turbo response's `loras` with its effective strength.
@@ -54,10 +54,53 @@ other than 8 are experimental. Base accepts finite nonnegative CFG; exactly
 negative prompts and nonempty skip layers. JSON layouts can be supplied as
 the prompt string without an enhancer or rewrite stage.
 
-`image_edit`, nonempty `images`, and additional user `loras` are rejected
-before loading. Only the built-in DMD adapter is currently supported.
-Output delivery, errors, seed handling and `num_images` (1..4) follow the
+Additional user `loras` are rejected before loading. Only the built-in DMD
+and Edit adapters are supported. Output delivery, errors, seed handling and
+generation `num_images` (1..4) follow the
 [shared API](../shared/api/README.md).
+
+## Image editing
+
+Set `type: "image_edit"` and provide 1..4 base64 images. Omit the variant or
+choose `base`: both select SFT plus the pinned `chinoll/Moss-Image-Edit`
+community adapter at strength 1. Explicit `turbo` editing is rejected before
+loading; the Edit and DMD adapters are never combined. Editing defaults to
+30 steps, CFG 4, Euler/shift 5, and negative-branch skip layer 22. The shared
+step/CFG/negative-prompt overrides work as in ordinary SFT generation.
+
+```json
+{
+  "input": {
+    "model": "moss_image",
+    "type": "image_edit",
+    "prompt": "Make the jacket blue, preserving the person and background",
+    "images": ["data:image/png;base64,..."],
+    "width": 1024,
+    "height": 1024,
+    "seed": 42
+  }
+}
+```
+
+Edits require `num_images: 1`. Reference order is preserved; explain each
+reference's role in the instruction. Each input is limited to 25 MiB and
+8192 pixels per side, then converted to RGB. `reference_megapixels` limits
+the **total** reference area, divided among references, preserving aspect
+ratio without upscaling and rounding dimensions down to multiples of 16.
+For Edit, `"max"` resolves to a conservative **0.262144 MP total** on every
+GPU; this is a default, not a measured capacity. A single square reference
+therefore fits 512x512; four square references fit 256x256 each. Pass an
+explicit numeric budget to retain more reference detail. Generation's
+calibrated Base/Turbo rows do not apply to editing. Output size is independent
+of reference size and still defaults to 1024x1024.
+
+Reference latents use FLUX.2 posterior mode, 2x2 packing and FP32 batch-norm
+normalization. The pinned upstream Edit branch uses t=0 reference-only
+attention and caches reference K/V once across timesteps and CFG branches.
+The adapter and reference cache are scoped to one request and removed on
+success or failure; the CPU adapter weights remain cached until MOSS unloads.
+Response metadata includes `edit_model_id`, `edit_model_revision` and the
+`moss_image_edit` adapter in `loras`.
 
 ## Runtime and storage
 
@@ -73,6 +116,8 @@ Output delivery, errors, seed handling and `num_images` (1..4) follow the
   `OpenMOSS-Team/MOSS-Image-SFT`.
 - DMD revision: `f95df83b5e90ae91ea412434b3f9b7f1c8c6314f` in
   `lodestones/MOSS-Image-SFT-8-steps-dmd`.
+- Edit revision: `3be9c40037e1b89b17aa85ff6f8ee805872aa558` in
+  `chinoll/Moss-Image-Edit`; config and weights live together under `edit/`.
 
 The selected backend downloads only JSON/tokenizer/weight data for the five
 components. The source pipeline is vendored at the same immutable revision;
@@ -86,6 +131,12 @@ encoder with its tokenizer, then the VAE with its scheduler. The worker loads
 each ready component while later transfers continue. A cold Turbo request
 includes DMD in that same downloader; inference never fetches weights from the Hub.
 Validated component manifests allow retries to retain already downloaded files.
+A cold Edit request similarly fetches its config and adapter after SFT
+components. A warm switch fetches only the selected adapter through the same
+shared downloader. The worker waits for successful downloader exit before
+inference; a late download failure closes the loaded runtime. Edit bundles
+also validate the SHA-256, embedded config, attention contract, target shapes
+and finite tensor values before activation. No runtime Hub access is used.
 
 The DMD adapter downloads on the first Turbo request, under `turbo/` in the
 model directory. Its CPU cache is retained until MOSS unloads. Base requests
@@ -96,6 +147,9 @@ For explicit prefetch:
 
 ```bash
 python workers/moss_image/download_weights.py --output /models/moss_image_sft --turbo
+python workers/moss_image/download_weights.py --output /models/moss_image_sft --edit
+# Adapter only, when SFT is already prepared:
+python workers/moss_image/download_weights.py --output /models/moss_image_sft --edit --lora-only
 ```
 
 ## CLI and validation
@@ -103,6 +157,8 @@ python workers/moss_image/download_weights.py --output /models/moss_image_sft --
 ```bash
 python scripts/moss_image.py --prompt 'A red fox' -o moss.png
 python scripts/moss_image.py --variant base --prompt 'A poster reading "HELLO"' -o poster.png
+python scripts/moss_image.py -i source.png --prompt 'Make the jacket blue' -o edit.png
+python scripts/moss_image.py -i person.png -i outfit.png --prompt 'Put the person from image 1 in the outfit from image 2' -o combined.png
 python scripts/moss_image.py --request-id JOB_ID -o moss.png
 python -m unittest discover -s workers/moss_image/tests -p 'test_*.py'
 ```
@@ -111,6 +167,8 @@ The client uses the common endpoint and supports `ENDPOINT_ID` overrides.
 Deploy the candidate image before sending MOSS requests to an existing endpoint.
 CPU tests exercise a tiny real MOSS transformer, scheduler, text encoder and
 FLUX.2 VAE plus LoRA math/cleanup, local loading and request routing. They do
+exercise Edit reference conditioning, a dense-attention comparison, real CPU
+offload hooks, request cleanup and downloader subprocess barriers. They do
 not establish real-checkpoint image quality, GPU speed, 24 GB fit, or production
 model switching. Validate the exact CUDA image and follow the preserved
 [calibration procedure](../../docs/benchmarks/image-megapixels.md) before
@@ -133,5 +191,8 @@ This deployment check is separate from the subsequent
 - [Sampling guide](https://github.com/OpenMOSS/MOSS-Image/blob/main/USERGUIDE.md).
 - [DMD model](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd).
 - [DMD demo's current ordinary-Euler route](https://huggingface.co/spaces/hugging-apps/moss-image-8-step-dmd/blob/main/app.py).
+- [Community Edit weights](https://huggingface.co/chinoll/Moss-Image-Edit).
+- [Edit reference implementation](https://github.com/Chenkin-x/Moss-Image-Edit).
 
-See [NOTICE](NOTICE) and [the upstream license](LICENSES/MOSS-Image-APACHE-2.0.txt).
+See [NOTICE](NOTICE), [the MOSS license](LICENSES/MOSS-Image-APACHE-2.0.txt),
+and [the vendored Edit code's GPLv3 license](LICENSES/MOSS-Image-Edit-GPL-3.0.txt).

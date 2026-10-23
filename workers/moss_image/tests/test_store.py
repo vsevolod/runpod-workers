@@ -11,6 +11,48 @@ sys.path[:0] = [str(Path(__file__).parents[2]), str(Path(__file__).parents[1])]
 
 
 class StoreTests(unittest.TestCase):
+    def test_edit_bundle_is_pinned_complete_reused_and_repaired(self):
+        from moss_image_infer import model_store as store
+        files = {'adapter_config.json': b'config', 'adapter_model.safetensors': b'weights'}
+        fetched = []
+        def remote(repo, revision, token):
+            self.assertEqual(repo, 'chinoll/Moss-Image-Edit')
+            self.assertEqual(revision, '3be9c40037e1b89b17aa85ff6f8ee805872aa558')
+            return [SimpleNamespace(rfilename=p, size=len(b)) for p, b in files.items()]
+        interrupted = True
+        def download(session, repo, filename, *, revision):
+            fetched.append(filename)
+            path = session.output / filename
+            path.write_bytes(files[filename] if not interrupted else b'x')
+            return path
+        with tempfile.TemporaryDirectory() as tmp, patch.object(store, 'remote_files', side_effect=remote), patch(
+            'shared.model_download.ModelDownloader.file', new=download
+        ):
+            root = Path(tmp)
+            with self.assertRaisesRegex(ValueError, 'Incomplete'):
+                store.ensure_edit_lora(root)
+            self.assertFalse(store.edit_ready(root))
+            interrupted = False
+            directory = store.ensure_edit_lora(root)
+            self.assertTrue(store.edit_ready(root))
+            fetched.clear()
+            store.ensure_edit_lora(root)
+            self.assertEqual(fetched, [])
+            (directory / 'adapter_model.safetensors').write_bytes(b'x')
+            self.assertFalse(store.edit_ready(root))
+            store.ensure_edit_lora(root)
+            self.assertEqual(fetched, ['adapter_model.safetensors'])
+            self.assertTrue(store.edit_ready(root))
+
+    def test_edit_does_not_publish_an_incomplete_remote_bundle(self):
+        from moss_image_infer import model_store as store
+        with tempfile.TemporaryDirectory() as tmp, patch.object(store, 'remote_files', return_value=[
+            SimpleNamespace(rfilename='adapter_config.json', size=4)
+        ]):
+            with self.assertRaisesRegex(ValueError, 'Missing'):
+                store.ensure_edit_lora(Path(tmp))
+            self.assertFalse(store.edit_ready(Path(tmp)))
+
     def test_prefetch_uses_shared_downloader_and_selects_only_requested_accelerator(self):
         from moss_image_infer import model_store as store
         with tempfile.TemporaryDirectory() as tmp, patch.object(store, 'PrefetchSession') as session:

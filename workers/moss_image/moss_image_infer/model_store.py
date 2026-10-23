@@ -7,10 +7,12 @@ import sys
 
 from shared.model_download import ModelDownloader
 from shared.prefetch import PrefetchSession
-from .config import MODEL_ID, MODEL_REVISION, LORA_ID, LORA_REVISION, LORA_FILENAME
+from .config import (MODEL_ID, MODEL_REVISION, LORA_ID, LORA_REVISION, LORA_FILENAME,
+                     EDIT_ID, EDIT_REVISION, EDIT_FILES)
 
 MODEL_MANIFEST = '.moss-model.json'
 LORA_MANIFEST = '.moss-lora.json'
+EDIT_MANIFEST = '.moss-edit.json'
 COMPONENTS = {'transformer': ('transformer',),
               'text_encoder': ('text_encoder', 'tokenizer'), 'vae': ('vae', 'scheduler')}
 
@@ -48,10 +50,12 @@ def snapshot_ready(root):
     return data is not None and all(_matches(root, item) for item in data['files'])
 
 
-def _download(root, *, repo, revision, manifest, select, hf_home=None, token=None, publisher=None):
+def _download(root, *, repo, revision, manifest, select, hf_home=None, token=None, publisher=None, required=()):
     root = Path(root)
     previous = _manifest(root, manifest, repo, revision)
-    if previous and all(_matches(root, item) for item in previous['files']):
+    if previous and set(required) <= {item['path'] for item in previous['files']} and all(
+        _matches(root, item) for item in previous['files']
+    ):
         if publisher:
             for component in COMPONENTS:
                 publisher.ready(component, root / component)
@@ -61,6 +65,8 @@ def _download(root, *, repo, revision, manifest, select, hf_home=None, token=Non
                  for entry in remote_files(repo, revision, token) if select(entry.rfilename)]
         if not files or any(type(item['size']) is not int or item['size'] <= 0 for item in files):
             raise ValueError(f'Missing file sizes for pinned snapshot {repo}@{revision}')
+        if not set(required) <= {item['path'] for item in files}:
+            raise ValueError(f'Missing required files for pinned snapshot {repo}@{revision}')
         known = {item['path']: item for item in previous['files']} if previous else {}
         groups = COMPONENTS.items() if publisher else [(None, {item['path'].split('/')[0] for item in files})]
         for component, prefixes in groups:
@@ -115,15 +121,34 @@ def turbo_ready(root):
     return data is not None and all(_matches(root, item) for item in data['files'])
 
 
+def ensure_edit_lora(root, *, hf_home=None, token=None):
+    directory = Path(root) / 'edit'
+    _download(directory, repo=EDIT_ID, revision=EDIT_REVISION, manifest=EDIT_MANIFEST,
+              select=lambda path: path in EDIT_FILES, required=EDIT_FILES,
+              hf_home=hf_home, token=token)
+    return directory
+
+
+def edit_ready(root):
+    root = Path(root) / 'edit'
+    data = _manifest(root, EDIT_MANIFEST, EDIT_ID, EDIT_REVISION)
+    return (data is not None and {item['path'] for item in data['files']} == set(EDIT_FILES)
+            and all(_matches(root, item) for item in data['files']))
+
+
 @contextmanager
-def prefetch_model(root, *, turbo=False, lora_only=False):
-    if (lora_only or snapshot_ready(root)) and (not turbo or turbo_ready(root)):
+def prefetch_model(root, *, turbo=False, lora_only=False, edit=False):
+    if turbo and edit:
+        raise ValueError('MOSS Turbo and Edit adapters cannot be combined')
+    if (lora_only or snapshot_ready(root)) and (not turbo or turbo_ready(root)) and (not edit or edit_ready(root)):
         yield None
         return
     command = [sys.executable, '-u', str(Path(__file__).parents[1] / 'download_weights.py'), '--output', str(root)]
     if lora_only:
         command.append('--lora-only')
-    elif turbo:
+    if edit:
+        command.append('--edit')
+    elif turbo and not lora_only:
         command.append('--turbo')
     with PrefetchSession(command) as pending:
         yield pending

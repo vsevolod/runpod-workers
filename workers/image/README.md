@@ -60,7 +60,7 @@ python scripts/fibo_2.py --prompt-file scene.json -o fibo.png
 | `QWEN_VAE` | `texture-fix` | Qwen VAE profile |
 | `QWEN_DISABLE_MMAP` | `0` | Keep memory mapping enabled |
 | `OFFLOAD` | `cpu` | Qwen component offload for 24 GB GPUs |
-| `MOSS_MODEL_DIR` | `/models/moss_image_sft` | MOSS SFT components and lazy Turbo adapter |
+| `MOSS_MODEL_DIR` | `/models/moss_image_sft` | MOSS SFT components and lazy Turbo/Edit adapters |
 | `MOSS_OFFLOAD` | `cpu` | MOSS component offload; also supports `none` |
 | `FIBO_MODEL_DIR` | `/models/fibo_2` | Separate Base/Turbo snapshots |
 | `FIBO_OFFLOAD` | `cpu` | Fibo component offload; also supports `none` |
@@ -76,9 +76,11 @@ disk across model switches within the container lifetime.
 Krea switches release its DiT, encoder, VAE and adapter manager. Leaving Qwen
 also closes its Base/Turbo manager and retained VAE. Within Qwen, the existing
 variant manager reuses the shared VAE and repairs incomplete snapshots.
-MOSS variants share one SFT pipeline; Turbo adds an unmerged DMD LoRA only for
-the current request. MOSS currently supports generation only and rejects user
-adapters. See [MOSS settings and pinned sources](../moss_image/README.md).
+MOSS variants share one SFT pipeline. Turbo generation adds an unmerged DMD
+LoRA; `image_edit` uses SFT plus its community Edit adapter and 1..4 references.
+Both adapters are scoped to their requests and downloaded only when selected.
+MOSS rejects additional user adapters and Turbo editing.
+See [MOSS settings and pinned sources](../moss_image/README.md).
 
 Fibo accepts a VGL JSON object in `prompt`. Base supports generation/editing;
 Turbo supports editing only. Both reject additional adapters. Its separate

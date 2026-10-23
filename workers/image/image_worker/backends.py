@@ -35,9 +35,9 @@ def load_fibo_pipeline(directory, *, variant):
     return load_pipeline(directory, variant=variant)
 
 
-def load_moss_pipeline(directory, *, turbo=False):
+def load_moss_pipeline(directory, *, turbo=False, edit=False):
     from moss_image_infer.pipeline import load_pipeline
-    return load_pipeline(directory, turbo=turbo)
+    return load_pipeline(directory, turbo=turbo, edit=edit)
 
 
 def krea_quantization():
@@ -108,18 +108,38 @@ class MossBackend:
         moss_offload()  # Validate configuration before any transfer.
         directory = moss_directory()
         turbo = norm is not None and norm.model_variant == 'turbo'
-        with prefetch_moss_model(directory, turbo=turbo) as pending:
-            self.runtime = load_moss_pipeline(directory, turbo=turbo)
-            if pending is not None:
-                pending.wait('all')
-
-    def infer(self, norm, seed, raw_loras):
-        if norm.model_variant == 'turbo':
-            # Base -> Turbo on a resident SFT still uses the CPU-only downloader.
-            with prefetch_moss_model(moss_directory(), turbo=True, lora_only=True) as pending:
-                self.runtime.load_turbo()
+        edit = norm is not None and norm.type == 'image_edit'
+        try:
+            with prefetch_moss_model(directory, turbo=turbo, edit=edit) as pending:
+                self.runtime = load_moss_pipeline(directory, turbo=turbo, edit=edit)
                 if pending is not None:
                     pending.wait('all')
+        except BaseException:
+            self.close()
+            raise
+
+    def infer(self, norm, seed, raw_loras):
+        if self.runtime is None:
+            self.load(norm)
+        if norm.model_variant == 'turbo':
+            # Base -> Turbo on a resident SFT still uses the CPU-only downloader.
+            try:
+                with prefetch_moss_model(moss_directory(), turbo=True, lora_only=True) as pending:
+                    self.runtime.load_turbo()
+                    if pending is not None:
+                        pending.wait('all')
+            except BaseException:
+                self.close()
+                raise
+        elif norm.type == 'image_edit':
+            try:
+                with prefetch_moss_model(moss_directory(), edit=True, lora_only=True) as pending:
+                    self.runtime.load_edit()
+                    if pending is not None:
+                        pending.wait('all')
+            except BaseException:
+                self.close()
+                raise
         return self.runtime.run(norm, seed)
 
     def close(self):
