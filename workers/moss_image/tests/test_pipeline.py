@@ -125,7 +125,7 @@ class PipelineTests(unittest.TestCase):
         from shared.api.images import images_to_base64_data_urls
         from PIL import Image
         pipe = self.pipeline()
-        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'MOSS_OFFLOAD': 'none'}):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'MOSS_OFFLOAD': 'none'}), torch.inference_mode():
             root = Path(tmp)
             pipe.transformer.save_pretrained(root / 'transformer')
             pipe.vae.save_pretrained(root / 'vae')
@@ -156,4 +156,40 @@ class PipelineTests(unittest.TestCase):
             refs = images_to_base64_data_urls([Image.new('RGB', (32, 48), 'red')])
             result = runtime.run(self.norm('base', type='image_edit', images=refs), 0)
             self.assertEqual(result.images[0].size, (256, 256))
+            runtime.close()
+
+    def test_real_handler_inference_mode_allows_warm_edit_adapter_and_cache(self):
+        import runpy
+        import runpod
+        from moss_image_infer.pipeline import Runtime
+        from shared.api.images import images_to_base64_data_urls
+        from PIL import Image
+        from test_edit import save_edit_adapter
+        sys.path.insert(0, str(Path(__file__).parents[2] / 'image'))
+        pipe = self.pipeline()
+        pipe.enable_model_cpu_offload(device='cpu')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'edit').mkdir()
+            save_edit_adapter(root / 'edit', pipe.transformer)
+            runtime = Runtime(pipe, root)
+            # Mirror the warm backend: adapter loading happens before run().
+            with torch.inference_mode():
+                runtime.load_edit()
+            with patch.object(runpod.serverless, 'start'):
+                handler = runpy.run_path(str(Path(__file__).parents[2] / 'image' / 'handler.py'))
+            def infer(model, norm, seed, loras):
+                self.assertTrue(torch.is_inference_mode_enabled())
+                return runtime.run(norm, seed)
+            images = images_to_base64_data_urls([Image.new('RGB', (32, 48), 'red')])
+            with patch.object(handler['MODELS'], 'infer', new=infer):
+                output = handler['generate_image']({'input': {
+                    'model': 'moss_image', 'type': 'image_edit', 'prompt': 'make blue',
+                    'images': images, 'seed': 0, 'width': 256, 'height': 256,
+                    'num_inference_steps': 2, 'guidance_scale': 2.,
+                    'model_options': {'uncond_skip_layers': []},
+                }})
+            self.assertNotIn('error', output)
+            self.assertEqual((output['type'], output['num_refs'], output['width']), ('image_edit', 1, 256))
+            self.assertIsNone(pipe.transformer._edit_state)
             runtime.close()

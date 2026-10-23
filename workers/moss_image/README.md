@@ -108,6 +108,10 @@ Response metadata includes `edit_model_id`, `edit_model_revision` and the
   Transformers 5.20.1 and the common image's pinned Diffusers commit/patch.
 - BF16 DiT and Qwen3.5-9B encoder; FP32 FLUX.2 small VAE, noise and Euler
   updates, following the upstream pipeline.
+- MOSS loading, adapter preparation and sampling use `torch.no_grad()` inside
+  the common handler's `torch.inference_mode()` boundary. This retains tensor
+  version counters required by Edit's reference-KV validation; gradients stay
+  disabled and model precision/offload settings are preserved.
 - `MOSS_MODEL_DIR`: `/models/moss_image_sft` on container disk.
 - `MOSS_OFFLOAD`: `cpu` (default, component offload) or `none` (all CUDA).
   This is independent of Qwen's `OFFLOAD` setting.

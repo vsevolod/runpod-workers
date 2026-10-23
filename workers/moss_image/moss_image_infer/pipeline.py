@@ -41,6 +41,8 @@ class Runtime:
         self._turbo_state = None
         self._edit_weights = None
 
+    @torch.inference_mode(False)
+    @torch.no_grad()
     def load_turbo(self):
         if self._turbo_state is not None:
             return
@@ -50,6 +52,8 @@ class Runtime:
             self._turbo_state = {key: value.to(torch.bfloat16) if key.endswith('.weight') else value
                                  for key, value in state.items()}
 
+    @torch.inference_mode(False)
+    @torch.no_grad()
     def load_edit(self):
         if self._edit_weights is not None:
             return
@@ -57,6 +61,8 @@ class Runtime:
         with loading_component('edit_lora'):
             self._edit_weights = load_edit_adapter(directory, self.pipe.transformer)
 
+    @torch.inference_mode(False)
+    @torch.no_grad()
     def run(self, norm, seed):
         turbo = norm.model_variant == 'turbo'
         editing = norm.type == 'image_edit'
@@ -106,6 +112,11 @@ class Runtime:
             pipe.remove_all_hooks()
 
 
+# The shared handler uses inference_mode. Edit cache validation needs normal
+# tensor version counters for weights, adapter buffers, references and KV.
+# Keep gradients disabled while preserving those counters throughout MOSS.
+@torch.inference_mode(False)
+@torch.no_grad()
 def load_pipeline(model_dir, *, device='cuda', turbo=False, edit=False):
     if turbo and edit:
         raise ValueError('MOSS Turbo and Edit adapters cannot be combined')
