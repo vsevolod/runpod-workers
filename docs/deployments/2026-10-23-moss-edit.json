@@ -1,0 +1,444 @@
+{
+  "endpoint_id": "9zb0wyo61ck3wk",
+  "release": {
+    "source_commit": "14b728f985c4bf056d7a223257c29f1a436fd7db",
+    "ci_run": 39952467127,
+    "ci_url": "https://github.com/vsevolod/runpod-workers/actions/runs/39952467127",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:ce56b138241f2355e8e23b880dd2c6414009569fde651717f23af754afd30cf4",
+    "image_created": "2026-10-23T12:24:56.289295163Z",
+    "compressed_bytes": 7183252833,
+    "anonymous_pull": true
+  },
+  "image_ci_suites": {
+    "shared": 46,
+    "image": 28,
+    "krea2": 187,
+    "qwen_image_21": 139,
+    "moss_image": 33,
+    "fibo_2": 18
+  },
+  "image_ci_tests": 451,
+  "prior_attempt": {
+    "source_commit": "386306faef02cd413d1933aa5bc696295530c3fb",
+    "ci_run": 39950376056,
+    "failed_job": "68302fb7-e362-4d7e-b8b9-4f918e0f1c18-e2",
+    "rollback_version": 57,
+    "cause": "RunPod inference_mode suppressed tensor version counters required by the Edit KV cache"
+  },
+  "worker": {
+    "dataCenterId": "EU-SE-1",
+    "gpuCount": 1,
+    "gpuTypeId": "NVIDIA RTX A5000",
+    "id": "f47taa0i804bts",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:ce56b138241f2355e8e23b880dd2c6414009569fde651717f23af754afd30cf4",
+    "isStale": false,
+    "startedAt": "2026-10-23T12:36:25.909Z",
+    "status": "RUNNING",
+    "uptimeSeconds": 660,
+    "version": 58
+  },
+  "cases": [
+    {
+      "delayTime": 319443,
+      "executionTime": 139382,
+      "id": "08425e72-8356-4c6a-a675-93d4e9186310-e2",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "edit_model_id": "chinoll/Moss-Image-Edit",
+        "edit_model_revision": "3be9c40037e1b89b17aa85ff6f8ee805872aa558",
+        "guidance_scale": 4,
+        "height": 1024,
+        "lora_revision": null,
+        "loras": [
+          {
+            "name": "moss_image_edit",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 30,
+        "num_refs": 1,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 0.262144,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.549072265625,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "800b1691ff6e2d0315137ef081460d69356abe7fefe5698499402dda6e92cb4a",
+      "image_bytes": 917158,
+      "channel_stddev": [
+        57.509093487640975,
+        51.762800118493715,
+        56.69487316015372
+      ],
+      "case": "edit-single",
+      "request": {
+        "model": "moss_image",
+        "type": "image_edit",
+        "seed": 42,
+        "prompt": "Change the red teapot to green. Preserve the blue cup, table, composition and lighting.",
+        "images": [
+          "sha256:1e39ac7823f6a43eec1f6065d48297243f062046450d3da124b13272779e0417"
+        ]
+      }
+    },
+    {
+      "delayTime": 91,
+      "executionTime": 33597,
+      "id": "f053eb19-3174-411f-b709-6380ba054c1a-e1",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "guidance_scale": 1,
+        "height": 512,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.549072265625,
+        "width": 512
+      },
+      "verified": true,
+      "image_sha256": "dba75d25b500a24f9bab2de97a194f8ac57b33d1a8a0408b4cd2ddf8aa4c56c4",
+      "image_bytes": 232706,
+      "channel_stddev": [
+        49.41659318802109,
+        68.98517033222028,
+        71.35122222918552
+      ],
+      "case": "turbo-before",
+      "request": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "seed": 42,
+        "width": 512,
+        "height": 512,
+        "prompt": "A red ceramic teapot and a blue cup on a pale wooden table, soft daylight, studio photograph.",
+        "model_options": {
+          "variant": "turbo"
+        }
+      }
+    },
+    {
+      "delayTime": 129,
+      "executionTime": 38933,
+      "id": "3d1c99b4-1c0e-4f5f-9685-c13298304711-e2",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "edit_model_id": "chinoll/Moss-Image-Edit",
+        "edit_model_revision": "3be9c40037e1b89b17aa85ff6f8ee805872aa558",
+        "guidance_scale": 4,
+        "height": 512,
+        "lora_revision": null,
+        "loras": [
+          {
+            "name": "moss_image_edit",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 30,
+        "num_refs": 2,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 0.262144,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.549072265625,
+        "width": 512
+      },
+      "verified": true,
+      "image_sha256": "fea94c13fc63063fbaa077f82817d10ce9c92f0f3ea5ba5948b646445c080b6a",
+      "image_bytes": 298922,
+      "channel_stddev": [
+        54.75376311099435,
+        52.80672976869176,
+        56.25617593189604
+      ],
+      "case": "edit-two",
+      "request": {
+        "model": "moss_image",
+        "type": "image_edit",
+        "seed": 42,
+        "width": 512,
+        "height": 512,
+        "prompt": "Use image 1 as the scene. Change the teapot to the green color in image 2. Preserve the blue cup, table and composition from image 1.",
+        "images": [
+          "sha256:1e39ac7823f6a43eec1f6065d48297243f062046450d3da124b13272779e0417",
+          "sha256:8251f8c103f48bb8cb972d498a3d6599d4559ac5ec36af4617b0ca276731bc3a"
+        ]
+      }
+    },
+    {
+      "delayTime": 123,
+      "executionTime": 43269,
+      "id": "26e6c9ee-f48e-4f10-9fe2-ff3b1cec095a-e2",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "edit_model_id": "chinoll/Moss-Image-Edit",
+        "edit_model_revision": "3be9c40037e1b89b17aa85ff6f8ee805872aa558",
+        "guidance_scale": 4,
+        "height": 512,
+        "lora_revision": null,
+        "loras": [
+          {
+            "name": "moss_image_edit",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 30,
+        "num_refs": 4,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 0.262144,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": 23.549072265625,
+        "width": 512
+      },
+      "verified": true,
+      "image_sha256": "02018894255a89776370342e36ce6f66dd40c3362980536cdd119b60136aa972",
+      "image_bytes": 195792,
+      "channel_stddev": [
+        33.15223902393207,
+        39.799927603585985,
+        36.942799996913834
+      ],
+      "case": "edit-four",
+      "request": {
+        "model": "moss_image",
+        "type": "image_edit",
+        "seed": 42,
+        "width": 512,
+        "height": 512,
+        "prompt": "Use image 1 as the main scene. Use the green teapot color from image 2, the lighting from image 3, and the blue cup from image 4. Keep the composition of image 1.",
+        "images": [
+          "sha256:1e39ac7823f6a43eec1f6065d48297243f062046450d3da124b13272779e0417",
+          "sha256:8251f8c103f48bb8cb972d498a3d6599d4559ac5ec36af4617b0ca276731bc3a",
+          "sha256:1d2e320f78aa21b77b2501989e213b10e15dd6fe97bcaa72058c03b8fa417e36",
+          "sha256:1e39ac7823f6a43eec1f6065d48297243f062046450d3da124b13272779e0417"
+        ]
+      }
+    },
+    {
+      "delayTime": 122,
+      "executionTime": 94649,
+      "id": "3af426d4-bc68-4b57-91b4-18b9b5c7c4d3-e2",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "edit_model_id": "chinoll/Moss-Image-Edit",
+        "edit_model_revision": "3be9c40037e1b89b17aa85ff6f8ee805872aa558",
+        "guidance_scale": 4,
+        "height": 1024,
+        "lora_revision": null,
+        "loras": [
+          {
+            "name": "moss_image_edit",
+            "strength": 1,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [
+            22
+          ],
+          "variant": "base"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "base",
+        "num_inference_steps": 30,
+        "num_refs": 1,
+        "reference_megapixels": 1.048576,
+        "resolved_reference_megapixels": 1.048576,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_edit",
+        "vram_gib": null,
+        "width": 1024
+      },
+      "verified": true,
+      "image_sha256": "f077a76e239f696445797227c0cdabda20da09c776940d4f853dfa3ed23ef76f",
+      "image_bytes": 1159789,
+      "channel_stddev": [
+        75.5684710954196,
+        57.22426989500097,
+        62.281471295976
+      ],
+      "case": "edit-detail",
+      "request": {
+        "model": "moss_image",
+        "type": "image_edit",
+        "seed": 42,
+        "prompt": "Change the red teapot to green. Preserve the blue cup, table, composition and lighting.",
+        "reference_megapixels": 1.048576,
+        "images": [
+          "sha256:1e39ac7823f6a43eec1f6065d48297243f062046450d3da124b13272779e0417"
+        ]
+      }
+    },
+    {
+      "delayTime": 94,
+      "executionTime": 27054,
+      "id": "5c52370d-c46f-4ad1-ab20-7eb356d4e1d8-e2",
+      "status": "COMPLETED",
+      "workerId": "f47taa0i804bts",
+      "output": {
+        "guidance_scale": 1,
+        "height": 512,
+        "lora_revision": "f95df83b5e90ae91ea412434b3f9b7f1c8c6314f",
+        "loras": [
+          {
+            "name": "moss_sft_dmd_8_steps",
+            "strength": 0.7,
+            "type": "lora"
+          }
+        ],
+        "model": "moss_image",
+        "model_id": "OpenMOSS-Team/MOSS-Image-SFT",
+        "model_options": {
+          "shift": 5,
+          "uncond_skip_layers": [],
+          "variant": "turbo"
+        },
+        "model_revision": "2c7954437269461767f533b006823e8f85973a60",
+        "model_variant": "turbo",
+        "num_inference_steps": 8,
+        "reference_megapixels": "max",
+        "resolved_reference_megapixels": 4.194304,
+        "sampler": "euler",
+        "scheduler": "moss_image",
+        "seed": 42,
+        "type": "image_generate",
+        "vram_gib": 23.549072265625,
+        "width": 512
+      },
+      "verified": true,
+      "image_sha256": "dba75d25b500a24f9bab2de97a194f8ac57b33d1a8a0408b4cd2ddf8aa4c56c4",
+      "image_bytes": 232706,
+      "channel_stddev": [
+        49.41659318802109,
+        68.98517033222028,
+        71.35122222918552
+      ],
+      "case": "turbo-after",
+      "request": {
+        "model": "moss_image",
+        "type": "image_generate",
+        "seed": 42,
+        "width": 512,
+        "height": 512,
+        "prompt": "A red ceramic teapot and a blue cup on a pale wooden table, soft daylight, studio photograph.",
+        "model_options": {
+          "variant": "turbo"
+        }
+      }
+    }
+  ],
+  "final_endpoint": {
+    "id": "9zb0wyo61ck3wk",
+    "name": "image-workers",
+    "version": 58,
+    "workersMin": 0,
+    "workersMax": 1,
+    "idleTimeout": 10,
+    "gpuIds": "AMPERE_24,ADA_24,-NVIDIA L4,-NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+    "image": "ghcr.io/vsevolod/runpod-workers-image@sha256:ce56b138241f2355e8e23b880dd2c6414009569fde651717f23af754afd30cf4",
+    "containerDiskInGb": 200
+  },
+  "final_health": {
+    "jobs": {
+      "completed": 1236,
+      "failed": 20,
+      "inProgress": 0,
+      "inQueue": 0,
+      "retried": 4
+    },
+    "workers": {
+      "idle": 0,
+      "initializing": 0,
+      "ready": 0,
+      "running": 1,
+      "throttled": 0,
+      "unhealthy": 0
+    }
+  },
+  "configuration_changed_paths": [
+    "template.imageName",
+    "version"
+  ],
+  "scope": "Functional default 1024x1024 single-reference edit, 512x512 two/four-reference edits and Turbo round trip. The fourth reference repeats the first. No multi-identity or capacity claim.",
+  "visual_observations": {
+    "edit-single": "Teapot became green and cup stayed blue, but scale, background and composition changed substantially with the 0.262144 MP reference and 1024-square output.",
+    "edit-two": "Green teapot and blue cup in a recognizable scene; framing and scale still changed.",
+    "edit-four": "Produced a framed version of the original red-teapot photo and did not follow the requested recoloring. Runtime accepts four references; semantic quality was weak in this case.",
+    "edit-detail": "With a 1.048576 MP reference and the same 1024-square output, teapot recoloring preserved the original composition substantially better. This is one controlled comparison, not a general quality guarantee."
+  }
+}
